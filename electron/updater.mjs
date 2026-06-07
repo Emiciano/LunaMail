@@ -1,5 +1,7 @@
 import { app } from "electron";
-import { autoUpdater } from "electron-updater";
+import updaterPackage from "electron-updater";
+
+const { autoUpdater } = updaterPackage;
 
 const STARTUP_CHECK_DELAY_MS = 8_000;
 
