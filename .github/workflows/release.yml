@@ -34,8 +34,18 @@ jobs:
             throw "Tag v$tagVersion passt nicht zur package.json-Version $packageVersion."
           }
 
-      - name: Windows-Installer veröffentlichen
-        run: npm run build:desktop:publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Windows-Installer bauen
+        run: npm run build:desktop
 
+      - name: GitHub-Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: |
+            release/LunaMail-Setup-*.exe
+            release/LunaMail-Setup-*.exe.blockmap
+            release/latest.yml
