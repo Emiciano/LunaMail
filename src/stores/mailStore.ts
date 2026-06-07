@@ -535,11 +535,16 @@ export const useMailStore = create<MailState>((set, get) => ({
         ? "Synchronisiere alle Konten..."
         : `Synchronisiere ${accountName ?? "Konto"}...`
     });
-    if (allAccounts) {
-      void mailService.syncAllMessages();
-    } else {
-      void mailService.syncAllMessages(accountId);
-    }
+    const request = allAccounts
+      ? mailService.syncAllMessages()
+      : mailService.syncAllMessages(accountId);
+    void request.catch((error) => {
+      setAccountSyncing(set, targetAccountIds, false);
+      set({
+        syncStatus: "Synchronisation fehlgeschlagen",
+        syncError: error instanceof Error ? error.message : String(error)
+      });
+    });
   },
   async realtimeSyncInboxes() {
     const accounts = get().accounts;
@@ -555,7 +560,13 @@ export const useMailStore = create<MailState>((set, get) => ({
       syncStatus: "Auto-Sync aktiv..."
     });
     for (const accountId of pendingAccountIds) {
-      void mailService.syncInbox(accountId);
+      void mailService.syncInbox(accountId).catch((error) => {
+        setAccountSyncing(set, [accountId], false);
+        set({
+          syncStatus: "Automatische Synchronisation fehlgeschlagen",
+          syncError: error instanceof Error ? error.message : String(error)
+        });
+      });
     }
   },
   handleSyncAccountComplete(report) {

@@ -65,7 +65,7 @@ function createTray() {
   tray.setToolTip("LunaMail");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "LunaMail öffnen", click: showWindow },
-    { label: "Jetzt synchronisieren", click: () => backend.invoke("sync_all_messages", {}) },
+    { label: "Jetzt synchronisieren", click: () => void backend.invoke("sync_all_messages", {}).catch(() => undefined) },
     { type: "separator" },
     { label: "Beenden", click: () => { quitting = true; app.quit(); } }
   ]));

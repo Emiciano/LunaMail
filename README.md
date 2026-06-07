@@ -28,7 +28,7 @@ npm run build:desktop
 Der NSIS-Installer wird hier erzeugt:
 
 ```text
-release\LunaMail-Setup-0.9.26.exe
+release\LunaMail-Setup-0.9.27.exe
 
 ## Updates über GitHub
 
@@ -39,7 +39,7 @@ Für ein neues Release:
 
 1. Version in `package.json` und `package-lock.json` erhöhen.
 2. Änderungen committen und pushen.
-3. Einen passenden Tag erstellen und pushen, zum Beispiel `v0.9.26`.
+3. Einen passenden Tag erstellen und pushen, zum Beispiel `v1.0.0`.
 
 Der GitHub-Workflow baut und veröffentlicht den Installer, die Blockmap und
 `latest.yml`. Diese Dateien müssen gemeinsam im GitHub-Release vorhanden sein.

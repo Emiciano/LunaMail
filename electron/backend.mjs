@@ -70,7 +70,7 @@ export class LunaBackend {
     this.autoSyncTimer = setInterval(() => {
       this.lastAutoSync = Date.now();
       for (const account of this.state.accounts) {
-        void this.syncAccount(account.id, 100);
+        void this.syncAccount(account.id, 100).catch(() => undefined);
       }
     }, AUTO_SYNC_INTERVAL_MS);
     this.autoSyncTimer.unref();
@@ -416,12 +416,13 @@ export class LunaBackend {
     const account = this.account(accountId);
     const folder = this.folder(folderId);
     const client = this.imapClient(account);
-    await client.connect();
-    const lock = await client.getMailboxLock(folder.remoteName);
+    let lock;
     try {
+      await client.connect();
+      lock = await client.getMailboxLock(folder.remoteName);
       return await action(client, folder);
     } finally {
-      lock.release();
+      lock?.release();
       await client.logout().catch(() => undefined);
     }
   }
@@ -692,7 +693,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.26",
+      version: "0.9.27",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,
@@ -734,13 +735,20 @@ export class LunaBackend {
   }
 
   imapClient(account) {
-    return new ImapFlow({
+    const client = new ImapFlow({
       host: account.imapHost,
       port: account.imapPort,
       secure: Boolean(account.imapSecure),
       auth: { user: account.username || account.email, pass: this.password(account.id, "imap") },
-      logger: false
+      logger: false,
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 45000
     });
+    // ImapFlow emits socket failures in addition to rejecting the active operation.
+    // A listener keeps late network errors from terminating Electron's main process.
+    client.on("error", () => undefined);
+    return client;
   }
 
   inferRole(name, specialUse) {
@@ -759,9 +767,10 @@ export class LunaBackend {
     if (this.syncing.has(id)) return { accountId: id, foldersSynced: 0, messagesSynced: 0, requestedMessages: 0, errors: [], newMessages: [] };
     this.syncing.add(id);
     const report = { accountId: id, foldersSynced: 0, messagesSynced: 0, requestedMessages: 0, errors: [], newMessages: [] };
+    let client;
     try {
       const account = this.account(id);
-      const client = this.imapClient(account);
+      client = this.imapClient(account);
       await client.connect();
       const mailboxes = await client.list();
       const listedFolderIds = new Set();
@@ -800,7 +809,6 @@ export class LunaBackend {
       for (const folder of accountFolders) {
         await this.syncFolderMessages(client, folder, limit, report, includeOlder);
       }
-      await client.logout();
       this.state.sync[id] = { lastSyncAt: new Date().toISOString(), lastSyncError: undefined };
       await this.persist();
       this.emit("sync-account-complete", report);
@@ -813,6 +821,7 @@ export class LunaBackend {
       this.emit("sync-account-error", { accountId: id, message });
       return report;
     } finally {
+      await client?.logout().catch(() => undefined);
       this.syncing.delete(id);
     }
   }
