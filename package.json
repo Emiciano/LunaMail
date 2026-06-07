@@ -8,7 +8,7 @@
     "dev": "node electron/dev.mjs",
     "dev:web": "vite",
     "build": "node scripts/build-frontend.mjs",
-    "build:desktop": "node scripts/clean-installers.mjs && npm run build && electron-builder --win nsis",
+    "build:desktop": "node scripts/clean-installers.mjs && npm run build && electron-builder --win nsis --publish never",
     "build:desktop:publish": "node scripts/clean-installers.mjs && npm run build && electron-builder --win nsis --publish always",
     "preview": "vite preview",
     "start:release": "electron ."
