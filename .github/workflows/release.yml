@@ -1,0 +1,41 @@
+name: Windows-Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Version des Tags prüfen
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}".TrimStart("v")
+          $packageVersion = (Get-Content package.json | ConvertFrom-Json).version
+          if ($tagVersion -ne $packageVersion) {
+            throw "Tag v$tagVersion passt nicht zur package.json-Version $packageVersion."
+          }
+
+      - name: Windows-Installer veröffentlichen
+        run: npm run build:desktop:publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

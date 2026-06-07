@@ -1,0 +1,16 @@
+node_modules/
+dist/
+release/
+
+*.log
+*.sqlite3
+*.sqlite3.*
+
+.env
+.env.*
+!.env.example
+
+src-tauri/target/
+src-tauri/target-local/
+codex-desktop-linux/
+

@@ -1,0 +1,1003 @@
+import { Info, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
+import { createPortal } from "react-dom";
+import { desktopDialog, isDesktop, listenDesktop, type AppUpdateStatus } from "../services/desktop";
+import { mailService } from "../services/mailService";
+import { useMailStore } from "../stores/mailStore";
+import type { AccentColor, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings } from "../types";
+import packageJson from "../../package.json";
+import { useShallow } from "zustand/react/shallow";
+
+type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "backup" | "about";
+
+const accentOptions: { value: AccentColor; label: string; className: string }[] = [
+  { value: "blue", label: "Blau", className: "bg-blue-600" },
+  { value: "green", label: "Grün", className: "bg-green-600" },
+  { value: "orange", label: "Orange", className: "bg-orange-500" },
+  { value: "red", label: "Rot", className: "bg-red-600" },
+  { value: "purple", label: "Lila", className: "bg-purple-600" },
+  { value: "teal", label: "Türkis", className: "bg-teal-500" },
+  { value: "pink", label: "Pink", className: "bg-pink-500" },
+  { value: "gray", label: "Grau", className: "bg-slate-600" }
+];
+
+const accentVars: Record<AccentColor, CSSProperties> = {
+  blue: { "--accent": "37 99 235", "--accent-soft": "239 246 255" } as CSSProperties,
+  green: { "--accent": "22 163 74", "--accent-soft": "240 253 244" } as CSSProperties,
+  orange: { "--accent": "234 88 12", "--accent-soft": "255 247 237" } as CSSProperties,
+  red: { "--accent": "220 38 38", "--accent-soft": "254 242 242" } as CSSProperties,
+  purple: { "--accent": "147 51 234", "--accent-soft": "245 243 255" } as CSSProperties,
+  teal: { "--accent": "13 148 136", "--accent-soft": "240 253 250" } as CSSProperties,
+  pink: { "--accent": "219 39 119", "--accent-soft": "253 242 248" } as CSSProperties,
+  gray: { "--accent": "71 85 105", "--accent-soft": "248 250 252" } as CSSProperties
+};
+
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const {
+    accounts,
+    rules,
+    contacts,
+    settings,
+    selectedAccountId,
+    selectedSpecialAccountId,
+    mailCountsAccountId,
+    mailCounts,
+    updateSettings,
+    loadRules,
+    saveRule,
+    deleteRule,
+    loadContacts,
+    saveContact,
+    deleteContact,
+    saveAccount,
+    deleteAccount,
+    testAccount,
+    sync,
+    syncError,
+    syncStatus
+  } = useMailStore(useShallow((state) => ({
+    accounts: state.accounts,
+    rules: state.rules,
+    contacts: state.contacts,
+    settings: state.settings,
+    selectedAccountId: state.selectedAccountId,
+    selectedSpecialAccountId: state.selectedSpecialAccountId,
+    mailCountsAccountId: state.mailCountsAccountId,
+    mailCounts: state.mailCounts,
+    updateSettings: state.updateSettings,
+    loadRules: state.loadRules,
+    saveRule: state.saveRule,
+    deleteRule: state.deleteRule,
+    loadContacts: state.loadContacts,
+    saveContact: state.saveContact,
+    deleteContact: state.deleteContact,
+    saveAccount: state.saveAccount,
+    deleteAccount: state.deleteAccount,
+    testAccount: state.testAccount,
+    sync: state.sync,
+    syncError: state.syncError,
+    syncStatus: state.syncStatus
+  })));
+  const [tab, setTab] = useState<Tab>("accounts");
+  const [draft, setDraft] = useState<Settings>(settings);
+  const [testNotificationStatus, setTestNotificationStatus] = useState<string | null>(null);
+  const [provider, setProvider] = useState<"custom" | "gmail">("custom");
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [message, setMessage] = useState("");
+  const [editingAccountId, setEditingAccountId] = useState<number | undefined>();
+  const [appVersion, setAppVersion] = useState<string>(packageJson.version);
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [diagnoseAccountId, setDiagnoseAccountId] = useState<number | undefined>();
+  const [diagnoseAccount, setDiagnoseAccount] = useState<DiagnoseAccountResult | undefined>();
+  const [diagnoseInbox, setDiagnoseInbox] = useState<DiagnoseInboxResult | undefined>();
+  const [serverMessages, setServerMessages] = useState<ServerMessageSummary[]>([]);
+  const [diagnoseBusy, setDiagnoseBusy] = useState(false);
+  const editingAccount = accounts.find((account) => account.id === editingAccountId);
+
+  useEffect(() => {
+    void loadRules(selectedAccountId);
+    void loadContacts();
+  }, [loadContacts, loadRules, selectedAccountId]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    void window.electronAPI?.getVersion().then(setAppVersion).catch(() => setAppVersion(packageJson.version));
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    let unsubscribe = () => {};
+    void listenDesktop<AppUpdateStatus>("app-update-status", ({ payload }) => {
+      setUpdateStatus(payload);
+      if (payload.status === "checking" || payload.status === "available" || payload.status === "downloaded") {
+        setUpdateBusy(true);
+      }
+      if (payload.status === "not-available" || payload.status === "error") {
+        setUpdateBusy(false);
+      }
+    }).then((removeListener) => {
+      unsubscribe = removeListener;
+    });
+    return () => unsubscribe();
+  }, []);
+
+  async function checkForAppUpdate() {
+    if (!isDesktop || !window.electronAPI?.checkForUpdates) {
+      setUpdateStatus({ status: "error", message: "Updates sind nur in der Desktop-App verfügbar." });
+      return;
+    }
+    setUpdateBusy(true);
+    setUpdateStatus({ status: "checking" });
+    try {
+      const result = await window.electronAPI.checkForUpdates() as { skipped?: boolean; reason?: string };
+      if (result?.skipped) {
+        setUpdateBusy(false);
+        setUpdateStatus({
+          status: "error",
+          message: result.reason === "development"
+            ? "Updates sind nur in der installierten Desktop-Version verfügbar."
+            : "Update-Prüfung wurde übersprungen."
+        });
+      }
+    } catch (error) {
+      setUpdateBusy(false);
+      setUpdateStatus({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  function formatUpdateStatus(status: AppUpdateStatus | null): string {
+    if (!status) return "Beim Start wird automatisch nach Updates gesucht.";
+    switch (status.status) {
+      case "checking":
+        return "Suche nach Updates...";
+      case "available":
+        return `Update ${status.version} gefunden. Download startet automatisch...`;
+      case "not-available":
+        return "LunaMail ist auf dem neuesten Stand.";
+      case "downloading":
+        return `Update wird heruntergeladen... ${Math.round(status.percent)}%`;
+      case "downloaded":
+        return `Update ${status.version} bereit. Der Installer startet gleich...`;
+      case "error":
+        return `Update fehlgeschlagen: ${status.message}`;
+      default:
+        return "";
+    }
+  }
+
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    if (!accounts.length) {
+      setDiagnoseAccountId(undefined);
+      return;
+    }
+    setDiagnoseAccountId((current) => current ?? accounts[0]?.id);
+  }, [accounts]);
+
+  async function saveSettings() {
+    await updateSettings(draft);
+    onClose();
+  }
+
+  function applySettings(nextSettings: Settings) {
+    setDraft(nextSettings);
+    void updateSettings(nextSettings).catch((error) => {
+      setMessage(`Einstellung konnte nicht gespeichert werden: ${String(error)}`);
+    });
+  }
+
+  async function submitAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setMessage("Konto wird gespeichert und synchronisiert...");
+    try {
+      await saveAccount({
+        displayName: String(form.get("displayName")),
+        email: String(form.get("email")).trim(),
+        provider,
+        username: String(form.get("username") || form.get("email")).trim(),
+        imapHost: String(form.get("imapHost")).trim(),
+        imapPort: Number(form.get("imapPort")),
+        imapSecure: form.get("imapSecure") === "on",
+        smtpHost: String(form.get("smtpHost")).trim(),
+        smtpPort: Number(form.get("smtpPort")),
+        smtpSecure: form.get("smtpSecure") === "on",
+        password: String(form.get("password")),
+        smtpPassword: String(form.get("smtpPassword") || form.get("password")),
+        isDefault: accounts.length === 0
+      });
+      formElement.reset();
+      setEditingAccountId(undefined);
+      setShowAccountForm(false);
+      setMessage("Konto gespeichert.");
+    } catch (error) {
+      setMessage(`Konto konnte nicht gespeichert werden: ${String(error)}`);
+    }
+  }
+
+  async function runDiagnoseAccount() {
+    if (!diagnoseAccountId) return;
+    setDiagnoseBusy(true);
+    try {
+      const result = await mailService.diagnoseAccount(diagnoseAccountId);
+      setDiagnoseAccount(result);
+    } catch (error) {
+      setMessage(`Diagnose fehlgeschlagen: ${String(error)}`);
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  }
+
+  async function runDiagnoseInbox() {
+    if (!diagnoseAccountId) return;
+    setDiagnoseBusy(true);
+    try {
+      const result = await mailService.diagnoseInbox(diagnoseAccountId);
+      setDiagnoseInbox(result);
+    } catch (error) {
+      setMessage(`Inbox-Diagnose fehlgeschlagen: ${String(error)}`);
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  }
+
+  async function runLatestServerMessages() {
+    if (!diagnoseAccountId) return;
+    setDiagnoseBusy(true);
+    try {
+      const result = await mailService.fetchLatestServerMessages(diagnoseAccountId, 10);
+      setServerMessages(result);
+    } catch (error) {
+      setMessage(`Server-Mails konnten nicht geladen werden: ${String(error)}`);
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  }
+
+  async function runForceFullInboxSync() {
+    if (!diagnoseAccountId) return;
+    setDiagnoseBusy(true);
+    try {
+      const report = await mailService.forceFullInboxSync(diagnoseAccountId, 50);
+      setMessage(`Vollständige Posteingangssynchronisierung: ${report.messagesSynced} Mails gespeichert.`);
+      await sync(false);
+      await runDiagnoseAccount();
+      await runDiagnoseInbox();
+    } catch (error) {
+      setMessage(`Vollständige Posteingangssynchronisierung fehlgeschlagen: ${String(error)}`);
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  }
+
+  async function runForceIncrementalSync() {
+    if (!diagnoseAccountId) return;
+    setDiagnoseBusy(true);
+    try {
+      const report = await mailService.forceIncrementalSync(diagnoseAccountId);
+      setMessage(`Synchronisierung neuer Nachrichten: ${report.messagesSynced} neue Mails.`);
+      await sync(false);
+      await runDiagnoseAccount();
+    } catch (error) {
+      setMessage(`Synchronisierung neuer Nachrichten fehlgeschlagen: ${String(error)}`);
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  }
+
+  async function createRule() {
+    const name = window.prompt("Regelname", "Neue Regel");
+    if (!name?.trim()) return;
+    const field = (window.prompt("Feld: sender | subject | to", "sender") ?? "sender") as MailRule["field"];
+    const value = window.prompt("Wert enthält", "") ?? "";
+    if (!value.trim()) return;
+    const actionType = (window.prompt("Aktion: tag | favorite | important | read | move", "tag") ?? "tag") as MailRule["actionType"];
+    const actionValue = window.prompt("Aktionswert (z.B. Tagname oder Ordner-ID/Rolle)", actionType === "tag" ? "Rechnung" : "");
+    await saveRule({
+      accountId: selectedAccountId,
+      name: name.trim(),
+      field,
+      operator: "contains",
+      value: value.trim(),
+      actionType,
+      actionValue: actionValue?.trim() || undefined,
+      enabled: true,
+      priority: 0
+    });
+  }
+
+  async function createContact() {
+    const email = window.prompt("E-Mail-Adresse");
+    if (!email?.trim()) return;
+    const name = window.prompt("Name", "") ?? "";
+    await saveContact({ name: name.trim(), email: email.trim(), isFavorite: false });
+  }
+
+  async function exportBackupToFile() {
+    const path = await desktopDialog.save({
+      title: "Backup exportieren",
+      defaultPath: `lunamail-backup-${new Date().toISOString().slice(0, 10)}.json`
+    });
+    if (!path) return;
+    await mailService.exportBackupToFile(path);
+    setMessage(`Backup exportiert: ${path}`);
+  }
+
+  async function importBackupFromFile() {
+    const file = await desktopDialog.open({
+      title: "Backup importieren",
+      multiple: false,
+      filters: [{ name: "JSON", extensions: ["json"] }]
+    });
+    if (!file || Array.isArray(file)) return;
+    await mailService.importBackupFromFile(String(file));
+    setMessage("Datensicherung importiert. Konten ohne Passwort bleiben unverändert.");
+    await sync(true);
+    await loadRules(selectedAccountId);
+    await loadContacts();
+  }
+
+  return createPortal(
+    <div
+      className="flex items-center justify-center bg-slate-950/28 p-4 backdrop-blur-[4px] dark:bg-black/58"
+      style={{ position: "fixed", inset: 0, zIndex: 2147483647, ...accentVars[draft.accentColor] }}
+    >
+      <section className="glass-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(960px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[22px]">
+        <header className="flex h-16 items-center justify-between border-b border-white/35 px-6 dark:border-white/[0.08]">
+          <div>
+            <h2 className="text-lg font-semibold">LunaMail Einstellungen</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Moderner E-Mail-Client für Windows</p>
+          </div>
+          <button className="rounded-lg p-2 transition-colors duration-150 hover:bg-white/45 dark:hover:bg-white/[0.12]" onClick={onClose} title="Schließen">
+            <X size={18} />
+          </button>
+        </header>
+        <div className="grid min-h-0 flex-1 grid-cols-[190px_1fr]">
+          <nav className="border-r border-white/35 p-4 dark:border-white/[0.08]">
+            <TabButton active={tab === "accounts"} onClick={() => setTab("accounts")} label="Konten" />
+            <TabButton active={tab === "general"} onClick={() => setTab("general")} label="Allgemein" />
+            <TabButton active={tab === "themes"} onClick={() => setTab("themes")} label="Design" />
+            <TabButton active={tab === "security"} onClick={() => setTab("security")} label="Sicherheit" />
+            <TabButton active={tab === "sync"} onClick={() => setTab("sync")} label="Synchronisierung" />
+            <TabButton active={tab === "rules"} onClick={() => setTab("rules")} label="Regeln" />
+            <TabButton active={tab === "contacts"} onClick={() => setTab("contacts")} label="Kontakte" />
+            <TabButton active={tab === "backup"} onClick={() => setTab("backup")} label="Datensicherung" />
+            <TabButton active={tab === "about"} onClick={() => setTab("about")} label="Über" />
+          </nav>
+          <div className="mail-scroll min-h-0 overflow-y-auto p-6">
+            {tab === "accounts" ? (
+              <div className="space-y-6">
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-300">Vorhandene Konten</h3>
+                  <div className="grid gap-3">
+                    {accounts.length === 0 ? (
+                      <div className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                        Noch kein Konto verbunden
+                      </div>
+                    ) : null}
+                    {accounts.map((account) => (
+                      <div key={account.id} className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold">{account.displayName}</div>
+                            <div className="text-sm text-slate-500 dark:text-slate-400">{account.email}</div>
+                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              {account.provider} · {account.imapHost}:{account.imapPort} · {account.smtpHost}:{account.smtpPort}
+                            </div>
+                            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={draft.accountNotifications?.[String(account.id)] ?? true}
+                                onChange={(event) =>
+                                  applySettings({
+                                    ...draft,
+                                    accountNotifications: {
+                                      ...draft.accountNotifications,
+                                      [String(account.id)]: event.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 accent-[rgb(var(--accent))]"
+                              />
+                              Benachrichtigungen für dieses Konto
+                            </label>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]"
+                              onClick={() => {
+                                setEditingAccountId(account.id);
+                                setProvider(account.provider === "gmail" ? "gmail" : "custom");
+                                setShowAccountForm(true);
+                                setMessage("Passwort neu eingeben und speichern, um den Keyring-Eintrag zu erneuern.");
+                              }}
+                              title="Bearbeiten"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]" onClick={() => void testAccount(account.id)}>
+                              Testen
+                            </button>
+                            <button className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-500/25 dark:hover:bg-red-500/10" onClick={() => void deleteAccount(account.id)} title="Löschen">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                {showAccountForm ? (
+                  <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Plus size={17} />
+                      <h3 className="font-semibold">{editingAccount ? "Konto bearbeiten" : "Neues Konto anlegen"}</h3>
+                    </div>
+                    <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">Anbieter</div>
+                    <div className="mb-4 grid grid-cols-2 gap-3">
+                      <button type="button" className={providerButton(provider === "custom")} onClick={() => setProvider("custom")}>IMAP</button>
+                      <button type="button" className={providerButton(provider === "gmail")} onClick={() => setProvider("gmail")}>Gmail hinzufügen</button>
+                    </div>
+                    {provider === "gmail" ? (
+                      <div className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
+                        Gmail nutzt hier stabil IMAP/SMTP mit Google App-Passwort. OAuth2 bleibt vorbereitet.
+                      </div>
+                    ) : null}
+                    <form key={editingAccount?.id ?? provider} onSubmit={submitAccount} className="grid grid-cols-2 gap-4">
+                      <Field name="displayName" label="Name" defaultValue={editingAccount?.displayName} required />
+                      <Field name="email" label="E-Mail" type="email" defaultValue={editingAccount?.email} required />
+                      <Field name="username" label="Benutzername (meist volle E-Mail)" defaultValue={editingAccount?.username ?? editingAccount?.email} />
+                      <Field name="imapHost" label="IMAP-Server" defaultValue={editingAccount?.imapHost ?? (provider === "gmail" ? "imap.gmail.com" : "")} required />
+                      <Field name="imapPort" label="IMAP Port" type="number" defaultValue={String(editingAccount?.imapPort ?? 993)} required />
+                      <CheckboxField name="imapSecure" label="IMAP SSL/TLS" defaultChecked={editingAccount?.imapSecure ?? true} />
+                      <Field name="smtpHost" label="SMTP-Server" defaultValue={editingAccount?.smtpHost ?? (provider === "gmail" ? "smtp.gmail.com" : "")} required />
+                      <Field name="smtpPort" label="SMTP Port" type="number" defaultValue={String(editingAccount?.smtpPort ?? 465)} required />
+                      <CheckboxField name="smtpSecure" label="SMTP SSL/TLS" defaultChecked={editingAccount?.smtpSecure ?? true} />
+                      <Field name="password" label={editingAccount ? "IMAP Passwort (neu eingeben)" : provider === "gmail" ? "Google App-Passwort" : "IMAP Passwort"} type="password" required />
+                      <Field name="smtpPassword" label="SMTP Passwort" type="password" />
+                      <div className="col-span-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/8"
+                          onClick={() => {
+                            setEditingAccountId(undefined);
+                            setShowAccountForm(false);
+                          }}
+                        >
+                          Abbrechen
+                        </button>
+                        <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110">Speichern</button>
+                      </div>
+                    </form>
+                  </section>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 px-4 py-4 text-left transition-colors hover:bg-slate-50 dark:border-white/[0.08] dark:bg-white/[0.025] dark:hover:bg-white/[0.055]"
+                    onClick={() => {
+                      setEditingAccountId(undefined);
+                      setProvider("custom");
+                      setShowAccountForm(true);
+                      setMessage("");
+                    }}
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[rgb(var(--accent)/0.14)] text-[rgb(var(--accent))]">
+                      <Plus size={17} />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold">Neues Konto anlegen</span>
+                      <span className="block text-xs text-slate-500 dark:text-slate-400">IMAP-/SMTP-Konto hinzufügen</span>
+                    </span>
+                  </button>
+                )}
+              </div>
+            ) : null}
+            {tab === "general" ? (
+              <div className="space-y-5">
+                <label className="block">
+                  <span className="mb-2 block">Schriftgröße: {draft.fontSize}px</span>
+                  <input type="range" min="14" max="22" value={draft.fontSize} onChange={(event) => setDraft({ ...draft, fontSize: Number(event.target.value) })} className="w-full" />
+                </label>
+                <SelectRow label="Standardaccount" value={String(draft.defaultAccountId ?? "")} onChange={(value) => setDraft({ ...draft, defaultAccountId: Number(value) })} options={accounts.map((account) => [String(account.id), account.email])} />
+                <SelectRow
+                  label="Darstellung"
+                  value={draft.layoutMode}
+                  onChange={(value) => applySettings({ ...draft, layoutMode: value as Settings["layoutMode"] })}
+                  options={[
+                    ["compact", "Kompakt"],
+                    ["standard", "Standard"],
+                    ["comfortable", "Komfortabel"]
+                  ]}
+                />
+                <SelectRow
+                  label="Externe Bilder"
+                  value={draft.externalImages}
+                  onChange={(value) => applySettings({ ...draft, externalImages: value as Settings["externalImages"] })}
+                  options={[
+                    ["never", "Nie laden"],
+                    ["ask", "Fragen"],
+                    ["always", "Immer laden"]
+                  ]}
+                />
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
+                  <span>Im Hintergrund weiterlaufen</span>
+                  <input
+                    type="checkbox"
+                    checked={draft.runInBackground ?? true}
+                    onChange={(event) => applySettings({ ...draft, runInBackground: event.target.checked })}
+                    className="h-4 w-4 accent-[rgb(var(--accent))]"
+                  />
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Wenn aktiv, bleibt LunaMail beim Schließen im Windows-Infobereich aktiv und synchronisiert weiter.
+                </p>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
+                  <span>Desktop-Benachrichtigungen</span>
+                  <input
+                    type="checkbox"
+                    checked={draft.notificationsEnabled}
+                    onChange={(event) => applySettings({ ...draft, notificationsEnabled: event.target.checked })}
+                    className="h-4 w-4 accent-[rgb(var(--accent))]"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
+                  <span>Benachrichtigungston</span>
+                  <input
+                    type="checkbox"
+                    checked={draft.notificationSound}
+                    onChange={(event) => applySettings({ ...draft, notificationSound: event.target.checked })}
+                    className="h-4 w-4 accent-[rgb(var(--accent))]"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
+                  <span>Vorschautext anzeigen</span>
+                  <input
+                    type="checkbox"
+                    checked={draft.notificationPreview}
+                    onChange={(event) => applySettings({ ...draft, notificationPreview: event.target.checked })}
+                    className="h-4 w-4 accent-[rgb(var(--accent))]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-slate-200/70 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                  onClick={() => {
+                    setTestNotificationStatus("Sende Test...");
+                    void mailService.testDesktopNotification()
+                      .then((message: string) => {
+                        setTestNotificationStatus(message);
+                      })
+                      .catch((error: unknown) => {
+                        setTestNotificationStatus(
+                          error instanceof Error ? error.message : String(error)
+                        );
+                      });
+                  }}
+                >
+                  Testbenachrichtigung senden
+                </button>
+                {testNotificationStatus ? (
+                  <p className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
+                    {testNotificationStatus}
+                  </p>
+                ) : null}
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Die Meldung erscheint im Windows-Benachrichtigungscenter. Prüfe bei Bedarf die
+                  Benachrichtigungseinstellungen für LunaMail.
+                </p>
+              </div>
+            ) : null}
+            {tab === "themes" ? (
+              <div className="space-y-6">
+                <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Dunkelmodus</h3>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Wechselt die Oberfläche sofort und speichert die Einstellung.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
+                        draft.theme === "dark" ? "bg-[rgb(var(--accent))]" : "bg-slate-300 dark:bg-white/16"
+                      }`}
+                      onClick={() => applySettings({ ...draft, theme: draft.theme === "dark" ? "light" : "dark" })}
+                      aria-pressed={draft.theme === "dark"}
+                    >
+                      <span
+                        className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+                          draft.theme === "dark" ? "translate-x-6" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </section>
+                <section>
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Akzentfarbe</h3>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {accentOptions.map((option) => {
+                      const active = draft.accentColor === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                            active
+                              ? "border-transparent bg-[rgb(var(--accent-soft))] shadow-none ring-1 ring-[rgb(var(--accent)/0.25)] dark:bg-[rgb(var(--accent)/0.16)]"
+                              : "border-slate-200/70 hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]"
+                          }`}
+                          onClick={() => applySettings({ ...draft, accentColor: option.value })}
+                        >
+                          <span className={`h-6 w-6 rounded-full ${option.className}`} />
+                          <span className="font-medium">{option.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</div>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white">Neue Mail</span>
+                    <span className="rounded-2xl bg-[rgb(var(--accent-soft))] px-4 py-3 text-sm shadow-[inset_3px_0_0_rgb(var(--accent))] dark:bg-[rgb(var(--accent)/0.16)]">
+                      Ausgewählte Mail
+                    </span>
+                  </div>
+                </section>
+              </div>
+            ) : null}
+            {tab === "security" ? (
+              <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                <div className="flex gap-3 rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <ShieldCheck size={20} />
+                  <div>Passwörter werden in der Windows-Anmeldeinformationsverwaltung gespeichert und niemals in SQLite abgelegt.</div>
+                </div>
+                <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div>
+                    <div className="font-medium text-slate-700 dark:text-slate-200">Lokalen Passwort-Fallback erlauben</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Wenn deaktiviert, werden Passwörter nur über den Windows-Benutzerschutz gelesen.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
+                      draft.allowLocalSecretFallback ? "bg-[rgb(var(--accent))]" : "bg-slate-300 dark:bg-white/16"
+                    }`}
+                    onClick={() => applySettings({ ...draft, allowLocalSecretFallback: !draft.allowLocalSecretFallback })}
+                    aria-pressed={draft.allowLocalSecretFallback}
+                  >
+                    <span
+                      className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+                        draft.allowLocalSecretFallback ? "translate-x-6" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </label>
+                <div>IMAP/SMTP erzwingen TLS. Zertifikate werden vom nativen TLS-Stack validiert.</div>
+                <div>Externe Bilder folgen der Einstellung (Nie/Fragen/Immer); HTML wird vor der Anzeige sanitisiert.</div>
+              </div>
+            ) : null}
+            {tab === "sync" ? (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
+                  <span>Automatische Synchronisierung</span>
+                  <span className="font-medium">Alle 30 Sekunden</span>
+                </div>
+                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div className="font-medium">Status</div>
+                  <div className="mt-1 whitespace-pre-wrap text-slate-500 dark:text-slate-400">{syncError || syncStatus || "Bereit"}</div>
+                </div>
+                <button
+                  className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/10"
+                  disabled={accounts.length === 0}
+                  onClick={() => void sync(true)}
+                >
+                  Sync starten
+                </button>
+                <section className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div className="mb-3 font-medium">Synchronisierungsdiagnose</div>
+                  <label className="mb-3 flex items-center justify-between gap-4">
+                    <span>Konto</span>
+                    <select
+                      className="min-w-56 rounded-xl border border-slate-200/70 bg-transparent px-3 py-2 dark:border-white/[0.08]"
+                      value={diagnoseAccountId ?? ""}
+                      onChange={(event) => setDiagnoseAccountId(Number(event.target.value))}
+                    >
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>{account.email}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseAccount()}>
+                      Sync testen
+                    </button>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseInbox()}>
+                      Posteingangs-UIDs prüfen
+                    </button>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runLatestServerMessages()}>
+                      Letzte 10 Server-Mails anzeigen
+                    </button>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceFullInboxSync()}>
+                      Vollständigen Posteingang synchronisieren
+                    </button>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceIncrementalSync()}>
+                      Neue Nachrichten synchronisieren
+                    </button>
+                  </div>
+                  {diagnoseAccount ? (
+                    <div className="grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Kontodiagnose</div>
+                      <DiagRow label="Konto-ID" value={String(diagnoseAccount.accountId)} />
+                      <DiagRow label="E-Mail" value={diagnoseAccount.email} />
+                      <DiagRow label="IMAP" value={`${diagnoseAccount.imapHost}:${diagnoseAccount.imapPort} · ${diagnoseAccount.imapSecure ? "TLS" : "Plain"}`} />
+                      <DiagRow label="Anmeldung" value={diagnoseAccount.loginStatus} />
+                      <DiagRow label="Posteingang" value={diagnoseAccount.inboxRemoteName ?? "—"} />
+                      <DiagRow label="Lokale UID" value={String(diagnoseAccount.lastKnownUid ?? "—")} />
+                      <DiagRow label="Server UID" value={String(diagnoseAccount.highestUidOnServer ?? "—")} />
+                      <DiagRow label="Lokale Posteingangsmails" value={String(diagnoseAccount.localInboxMails)} />
+                      <DiagRow label="Letzte Synchronisierung" value={diagnoseAccount.lastSyncAt ?? "—"} />
+                      <DiagRow label="Letzter Fehler" value={diagnoseAccount.lastSyncError ?? "—"} />
+                      <div className="mt-1 flex gap-2">
+                        <DiagBadge label="IDLE" active={diagnoseAccount.idleActive} />
+                        <DiagBadge label="Polling" active={diagnoseAccount.pollingActive} />
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Smart-Counts Diagnose</div>
+                    <DiagRow label="Aktives Konto" value={String(selectedAccountId ?? "—")} />
+                    <DiagRow label="Konto der Spezialansicht" value={String(selectedSpecialAccountId ?? "—")} />
+                    <DiagRow label="Konto der Zähler" value={String(mailCountsAccountId ?? "—")} />
+                    <DiagRow label="Ungelesen / Anhang" value={`${mailCounts.unread} / ${mailCounts.withAttachments}`} />
+                    <DiagRow label="Heute / Diese Woche" value={`${mailCounts.today} / ${mailCounts.thisWeek}`} />
+                  </div>
+                  {diagnoseInbox ? (
+                    <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Posteingangsdiagnose</div>
+                      <DiagRow label="Posteingang" value={diagnoseInbox.inboxRemoteName ?? "—"} />
+                      <DiagRow label="Lokale UID" value={String(diagnoseInbox.lastKnownUid ?? "—")} />
+                      <DiagRow label="Server UID" value={String(diagnoseInbox.highestUidOnServer ?? "—")} />
+                      <DiagRow label="Lokale Posteingangsmails" value={String(diagnoseInbox.localInboxMails)} />
+                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mailboxen</div>
+                      <div className="mail-scroll max-h-32 overflow-auto rounded-lg border border-slate-200/70 bg-white/70 p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                        {diagnoseInbox.mailboxes.map((mailbox) => (
+                          <div key={mailbox.name} className="mb-1 last:mb-0">
+                            <div className="font-medium">{mailbox.name}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{mailbox.inferredRole}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {serverMessages.length > 0 ? (
+                    <div className="mt-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Letzte Server-Mails</div>
+                      <div className="mail-scroll max-h-40 overflow-auto rounded-lg border border-slate-200/70 bg-white/70 p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                        {serverMessages.map((mail) => (
+                          <div key={`${mail.uid}-${mail.messageId}`} className="mb-2 rounded-lg border border-slate-200/70 px-2 py-1.5 last:mb-0 dark:border-white/[0.08]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium">UID {mail.uid}</span>
+                              <DiagBadge label={mail.seen ? "Seen" : "Unseen"} active={!mail.seen} />
+                            </div>
+                            <div className="truncate text-[11px]">{mail.subject || "(Kein Betreff)"}</div>
+                            <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{mail.sender}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              </div>
+            ) : null}
+            {tab === "rules" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Regeln & Automatisierung</h3>
+                  <button className="rounded-xl bg-[rgb(var(--accent))] px-3 py-2 text-xs font-semibold text-white hover:brightness-110" onClick={() => void createRule()}>
+                    Regel hinzufügen
+                  </button>
+                </div>
+                {rules.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
+                    Noch keine Regeln vorhanden.
+                  </div>
+                ) : null}
+                <div className="grid gap-2">
+                  {rules.map((rule) => (
+                    <div key={rule.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-white/[0.08]">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium">{rule.name}</div>
+                        <button className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-500/25 dark:hover:bg-red-500/10" onClick={() => void deleteRule(rule.id)}>
+                          Löschen
+                        </button>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Wenn {rule.field} {rule.operator} &quot;{rule.value}&quot; → {rule.actionType}
+                        {rule.actionValue ? ` (${rule.actionValue})` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {tab === "contacts" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Kontakte</h3>
+                  <button className="rounded-xl bg-[rgb(var(--accent))] px-3 py-2 text-xs font-semibold text-white hover:brightness-110" onClick={() => void createContact()}>
+                    Kontakt hinzufügen
+                  </button>
+                </div>
+                {contacts.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
+                    Noch keine Kontakte gespeichert.
+                  </div>
+                ) : null}
+                <div className="grid gap-2">
+                  {contacts.map((contact) => (
+                    <div key={contact.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-white/[0.08]">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-medium">{contact.name || contact.email}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">{contact.email}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Letzter Kontakt: {contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleString() : "—"} · Nutzungen: {contact.usageCount}
+                          </div>
+                        </div>
+                        <button className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-500/25 dark:hover:bg-red-500/10" onClick={() => void deleteContact(contact.id)}>
+                          Löschen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {tab === "backup" ? (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Datensicherung und Wiederherstellung</h3>
+                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
+                  Exportiert Konten ohne Passwörter, Einstellungen, Regeln, Kontakte und Schlagwörter. Passwörter bleiben geschützt gespeichert.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110" onClick={() => void exportBackupToFile()}>
+                    Datensicherung exportieren
+                  </button>
+                  <button className="rounded-xl border border-slate-200/70 px-4 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" onClick={() => void importBackupFromFile()}>
+                    Datensicherung importieren
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {tab === "about" ? (
+              <div className="max-w-md rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                <div className="flex items-start gap-4">
+                  <img src="./icon.png" alt="" className="h-14 w-14 rounded-2xl shadow-sm" />
+                  <div>
+                    <div className="flex items-center gap-2 text-lg font-semibold">
+                      <Info size={18} />
+                      LunaMail
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Moderner E-Mail-Client für Windows</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
+                  Version: <span className="font-semibold text-slate-800 dark:text-white">{appVersion}</span>
+                </div>
+                {isDesktop ? (
+                  <div className="mt-4 space-y-3">
+                    <button
+                      type="button"
+                      className="w-full rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={updateBusy}
+                      onClick={() => void checkForAppUpdate()}
+                    >
+                      Auf Updates prüfen
+                    </button>
+                    <p className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
+                      {formatUpdateStatus(updateStatus)}
+                    </p>
+                    {updateStatus?.status === "downloading" ? (
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-[rgb(var(--accent))] transition-all duration-300"
+                          style={{ width: `${Math.min(100, Math.max(0, updateStatus.percent))}%` }}
+                        />
+                      </div>
+                    ) : null}
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Updates werden über GitHub Releases bereitgestellt. Wenn ein Update verfügbar ist, wird es
+                      automatisch heruntergeladen und der Installer gestartet.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {message ? <div className="mt-5 rounded-xl bg-[rgb(var(--accent-soft))] px-4 py-3 text-sm text-[rgb(var(--accent))] dark:bg-[rgb(var(--accent)/0.14)] dark:text-white">{message}</div> : null}
+            {syncError ? <div className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-100">{syncError}</div> : null}
+          </div>
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-white/35 px-6 py-4 dark:border-white/[0.08]">
+          <button className="rounded-xl px-4 py-2 text-sm transition-colors duration-150 hover:bg-white/45 dark:hover:bg-white/[0.12]" onClick={onClose}>Abbrechen</button>
+          <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110" onClick={() => void saveSettings()}>Speichern</button>
+        </footer>
+      </section>
+    </div>,
+    document.body
+  );
+}
+
+function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      className={`mb-1 h-10 w-full rounded-xl px-3 text-left text-sm ${
+        active
+          ? "glass-pill-active text-[rgb(var(--text-primary))] dark:text-white"
+          : "surface-text-primary transition-colors duration-150 hover:bg-white/45 dark:hover:bg-white/[0.1]"
+      }`}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
+function Field(props: { name: string; label: string; type?: string; defaultValue?: string; required?: boolean }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-300">{props.label}</span>
+      <input {...props} className="h-11 w-full rounded-xl border border-slate-200/70 bg-white px-3 text-sm outline-none focus:border-[rgb(var(--accent))] dark:border-white/[0.08] dark:bg-white/[0.045]" />
+    </label>
+  );
+}
+
+function CheckboxField(props: { name: string; label: string; defaultChecked?: boolean }) {
+  return (
+    <label className="flex h-11 items-center gap-3 rounded-xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 dark:border-white/[0.08] dark:bg-white/[0.045] dark:text-slate-200">
+      <input name={props.name} type="checkbox" defaultChecked={props.defaultChecked} className="h-4 w-4 accent-[rgb(var(--accent))]" />
+      <span>{props.label}</span>
+    </label>
+  );
+}
+
+function SelectRow({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
+  return (
+    <label className="flex items-center justify-between gap-4">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-w-56 rounded-xl border border-slate-200/70 bg-transparent px-3 py-2 dark:border-white/[0.08]">
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function providerButton(active: boolean) {
+  return `rounded-xl border px-4 py-3 text-left text-sm ${active ? "border-[rgb(var(--accent))] bg-[rgb(var(--accent-soft))] text-[rgb(var(--accent))] dark:bg-[rgb(var(--accent)/0.15)] dark:text-white" : "border-slate-200 dark:border-white/10"}`;
+}
+
+function DiagRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[150px_1fr] gap-2">
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="truncate">{value}</span>
+    </div>
+  );
+}
+
+function DiagBadge({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-slate-200/70 text-slate-700 dark:bg-white/[0.12] dark:text-slate-300"}`}>
+      {label}
+    </span>
+  );
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LunaMail",
+  "version": "0.9.21",
+  "identifier": "com.lunamail.app",
+  "mainBinaryName": "lunamail",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "LunaMail",
+        "width": 1320,
+        "height": 860,
+        "minWidth": 1040,
+        "minHeight": 680,
+        "resizable": true,
+        "decorations": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; form-action 'none'; img-src 'self' data: blob: cid: https:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "LunaMail",
+    "category": "Productivity",
+    "shortDescription": "Modern Mail Client",
+    "longDescription": "Moderne, minimalistische Desktop-Mail-App f\u00fcr Windows.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ]
+  }
+}
