@@ -6,7 +6,7 @@ import { cn } from "../lib/cn";
 import { useMailStore } from "../stores/mailStore";
 import type { Email } from "../types";
 
-const PAGE_SIZE = 80;
+const PAGE_SIZE = 40;
 
 export function MailList() {
   const { accounts, folders, emails, selectedEmail, selectedFolderId, selectedView, selectedEmailIds, selectedCategoryId, mailCounts, syncStatus, lastSyncAt, databaseSizeBytes, healthStatus, selectEmail, toggleEmailSelection, setEmailSelection, deleteSelected, markReadSelected, archiveSelected, quickAction, sync, loading, settings, hasSynced, syncError } = useMailStore(useShallow((state) => ({
@@ -39,6 +39,13 @@ export function MailList() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const selectedIdSet = useMemo(() => new Set(selectedEmailIds), [selectedEmailIds]);
   const visibleEmails = useMemo(() => emails.slice(0, visibleCount), [emails, visibleCount]);
+  const accountDetails = useMemo(() => new Map(accounts.map((account) => [
+    account.id,
+    {
+      label: account.displayName,
+      color: settings.accountAppearance?.[String(account.id)]?.color
+    }
+  ])), [accounts, settings.accountAppearance]);
   const selectedCount = selectedEmailIds.length;
   const allSelected = useMemo(() => emails.length > 0 && emails.every((email) => selectedIdSet.has(email.id)), [emails, selectedIdSet]);
   const compact = settings.layoutMode === "compact";
@@ -189,23 +196,26 @@ export function MailList() {
               {accounts.length === 0 ? "Noch kein Konto verbunden" : syncError ? "Synchronisation fehlgeschlagen." : hasSynced ? "Keine E-Mails gefunden" : "Noch nicht synchronisiert"}
             </div>
           ) : null}
-          {visibleEmails.map((email) => (
-            <MailListItem
-              key={email.id}
-              email={email}
-              active={selectedEmail?.id === email.id}
-              selected={selectedIdSet.has(email.id)}
-              fontSize={settings.fontSize - 1}
-              onSelect={selectEmail}
-              onToggleSelection={toggleEmailSelection}
-              onQuickAction={quickAction}
-              accountLabel={accounts.find((entry) => entry.id === email.accountId)?.displayName ?? ""}
-              accountColor={settings.accountAppearance?.[String(email.accountId)]?.color}
-              compact={compact}
-              comfortable={comfortable}
-              permanentlyDeletes={permanentlyDeletes}
-            />
-          ))}
+          {visibleEmails.map((email) => {
+            const account = accountDetails.get(email.accountId);
+            return (
+              <MailListItem
+                key={email.id}
+                email={email}
+                active={selectedEmail?.id === email.id}
+                selected={selectedIdSet.has(email.id)}
+                fontSize={settings.fontSize - 1}
+                onSelect={selectEmail}
+                onToggleSelection={toggleEmailSelection}
+                onQuickAction={quickAction}
+                accountLabel={account?.label ?? ""}
+                accountColor={account?.color}
+                compact={compact}
+                comfortable={comfortable}
+                permanentlyDeletes={permanentlyDeletes}
+              />
+            );
+          })}
           {visibleCount < emails.length ? (
             <div className="p-4">
               <button
@@ -255,13 +265,13 @@ const MailListItem = memo(function MailListItem({
   return (
     <button
       className={cn(
-        "mail-row group relative my-1.5 grid w-full grid-cols-[24px_56px_14px_1fr_auto] gap-3 overflow-visible rounded-2xl border pl-3 pr-3 text-left transition-colors duration-150 ease-out motion-reduce:transition-none",
+        "mail-row group relative my-1.5 grid w-full grid-cols-[24px_56px_14px_1fr_auto] gap-3 overflow-hidden rounded-2xl border pl-3 pr-3 text-left transition-colors duration-100 ease-out motion-reduce:transition-none",
         compact ? "py-2" : comfortable ? "py-3.5" : "py-2.5",
         active
-          ? "border-[rgb(var(--accent)/0.34)] bg-[rgb(var(--accent-soft))] shadow-[0_10px_20px_rgba(37,99,235,0.16),0_3px_8px_rgba(15,23,42,0.08)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-1 before:rounded-r-full before:bg-[rgb(var(--accent))] dark:border-[rgb(var(--accent)/0.45)] dark:bg-[rgb(var(--accent)/0.16)] dark:shadow-[0_4px_10px_rgba(0,0,0,0.22)]"
+          ? "border-[rgb(var(--accent)/0.34)] bg-[rgb(var(--accent-soft))] shadow-sm before:absolute before:bottom-3 before:left-0 before:top-3 before:w-1 before:rounded-r-full before:bg-[rgb(var(--accent))] dark:border-[rgb(var(--accent)/0.45)] dark:bg-[rgb(var(--accent)/0.16)]"
           : unread
-            ? "border-[rgb(var(--accent)/0.32)] bg-[linear-gradient(90deg,rgb(var(--accent)/0.13),rgba(255,255,255,0.94)_42%,rgba(255,255,255,0.9))] shadow-[0_8px_18px_rgba(37,99,235,0.12),0_2px_8px_rgba(15,23,42,0.06)] hover:border-[rgb(var(--accent)/0.44)] hover:bg-[linear-gradient(90deg,rgb(var(--accent)/0.17),rgba(255,255,255,0.97)_42%,rgba(255,255,255,0.94))] dark:border-[rgb(var(--accent)/0.38)] dark:bg-[linear-gradient(90deg,rgb(var(--accent)/0.24),rgba(30,36,46,0.96)_42%,rgba(25,30,38,0.96))] dark:shadow-[0_3px_12px_rgba(0,0,0,0.22)] dark:hover:border-[rgb(var(--accent)/0.5)]"
-            : "border-slate-200 bg-white shadow-[0_6px_16px_rgba(15,23,42,0.08),0_2px_6px_rgba(15,23,42,0.05)] hover:border-slate-300 hover:bg-white dark:border-white/[0.1] dark:bg-[#1a1f26] dark:shadow-[0_1px_6px_rgba(0,0,0,0.2)] dark:hover:bg-[#202630]"
+            ? "border-[rgb(var(--accent)/0.32)] bg-[rgb(var(--accent)/0.08)] hover:border-[rgb(var(--accent)/0.44)] hover:bg-[rgb(var(--accent)/0.11)] dark:border-[rgb(var(--accent)/0.38)] dark:bg-[rgb(var(--accent)/0.14)] dark:hover:border-[rgb(var(--accent)/0.5)]"
+            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-white/[0.1] dark:bg-[#1a1f26] dark:hover:bg-[#202630]"
       )}
       onClick={() => void onSelect(email)}
     >
@@ -295,7 +305,7 @@ const MailListItem = memo(function MailListItem({
         className={cn(
           "h-3.5 w-3.5 place-self-center rounded-full",
           unread
-            ? "bg-[rgb(var(--accent))] shadow-[0_0_0_4px_rgb(var(--accent)/0.14),0_0_16px_rgb(var(--accent)/0.42)]"
+            ? "bg-[rgb(var(--accent))] ring-4 ring-[rgb(var(--accent)/0.12)]"
             : "bg-transparent"
         )}
       />

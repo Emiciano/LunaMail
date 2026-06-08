@@ -693,7 +693,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.28",
+      version: "0.9.29",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,

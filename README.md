@@ -28,7 +28,7 @@ npm run build:desktop
 Der NSIS-Installer wird hier erzeugt:
 
 ```text
-release\LunaMail-Setup-0.9.28.exe
+release\LunaMail-Setup-0.9.29.exe
 
 ## Updates über GitHub
 

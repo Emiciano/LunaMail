@@ -61,7 +61,6 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: rgb(148 163 184 / 0.7) transparent;
   overscroll-behavior: contain;
-  will-change: scroll-position;
 }
 
 .mail-scroll::-webkit-scrollbar {
@@ -104,6 +103,7 @@ textarea {
 .mail-row {
   content-visibility: auto;
   contain-intrinsic-size: 74px;
+  contain: layout paint style;
 }
 
 .titlebar-drag {
@@ -159,8 +159,6 @@ textarea {
   background: rgb(var(--glass-bg));
   border: 1px solid rgb(var(--glass-border));
   box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   position: relative;
 }
 
