@@ -129,6 +129,13 @@ textarea {
   max-width: 100%;
   overflow-x: auto;
   overflow-wrap: anywhere;
+  color: #111827;
+  color-scheme: light;
+  background: #fff;
+}
+
+.reader-content :where(p, span, div, td, th, li, h1, h2, h3, h4, h5, h6, strong, em, b, i) {
+  color: inherit;
 }
 
 .reader-content img {

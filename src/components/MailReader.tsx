@@ -156,7 +156,7 @@ export function MailReader() {
             </div>
           ) : null}
           <div
-            className="reader-content w-full leading-8 text-slate-800 dark:text-slate-100"
+            className="reader-content w-full rounded-2xl border border-slate-200 bg-white p-5 leading-8 text-slate-900 shadow-sm dark:border-white/[0.08] dark:bg-white dark:text-slate-900"
             style={{ fontSize: settings.fontSize }}
             dangerouslySetInnerHTML={htmlView?.html ? { __html: htmlView.html } : undefined}
             onClick={handleReaderClick}
