@@ -693,7 +693,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.27",
+      version: "0.9.28",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,
@@ -743,7 +743,7 @@ export class LunaBackend {
       logger: false,
       connectionTimeout: 15000,
       greetingTimeout: 10000,
-      socketTimeout: 45000
+      socketTimeout: 300000
     });
     // ImapFlow emits socket failures in addition to rejecting the active operation.
     // A listener keeps late network errors from terminating Electron's main process.
@@ -807,7 +807,15 @@ export class LunaBackend {
         (folder) => folder.accountId === id && listedFolderIds.has(folder.id)
       );
       for (const folder of accountFolders) {
-        await this.syncFolderMessages(client, folder, limit, report, includeOlder);
+        try {
+          await this.syncFolderMessages(client, folder, limit, report, includeOlder);
+        } catch (error) {
+          if (!this.isImapConnectionError(error)) throw error;
+          await client.logout().catch(() => undefined);
+          client = this.imapClient(account);
+          await client.connect();
+          await this.syncFolderMessages(client, folder, limit, report, includeOlder);
+        }
       }
       this.state.sync[id] = { lastSyncAt: new Date().toISOString(), lastSyncError: undefined };
       await this.persist();
@@ -846,31 +854,40 @@ export class LunaBackend {
         return;
       }
 
-      const incremental = Number(folder.lastUid) > 0;
       const cachedUids = new Set(
         this.state.emails
           .filter((email) => email.folderId === folder.id && email.uid)
           .map((email) => email.uid)
       );
+      const cachedHighestUid = [...cachedUids].reduce(
+        (highest, uid) => Math.max(highest, uid),
+        0
+      );
+      const knownHighestUid = Math.max(Number(folder.lastUid) || 0, cachedHighestUid);
+      const incremental = knownHighestUid > 0;
       const missingUids = includeOlder
         ? (serverUids || []).filter((uid) => !cachedUids.has(uid)).slice(-limit)
         : [];
       if (includeOlder && missingUids.length === 0) {
         folder.lastUid = (serverUids || []).reduce(
           (highest, uid) => Math.max(highest, uid),
-          Number(folder.lastUid) || 0
+          knownHighestUid
         );
         return;
       }
-      if (!includeOlder && incremental && Number(folder.lastUid) + 1 >= uidNext) return;
+      if (!includeOlder && incremental && knownHighestUid + 1 >= uidNext) {
+        folder.lastUid = knownHighestUid;
+        return;
+      }
 
       const range = includeOlder
         ? missingUids
         : incremental
-          ? `${Number(folder.lastUid) + 1}:*`
+          ? `${knownHighestUid + 1}:*`
           : `${Math.max(1, count - limit + 1)}:*`;
       const fetchOptions = includeOlder || incremental ? { uid: true } : undefined;
-      let highestUid = Number(folder.lastUid) || 0;
+      let highestUid = knownHighestUid;
+      const pendingMessages = [];
 
       for await (const message of client.fetch(
         range,
@@ -887,52 +904,66 @@ export class LunaBackend {
           existing.isFavorite = message.flags?.has("\\Flagged") || false;
           continue;
         }
+        pendingMessages.push(message);
+      }
 
-        const sourceMessage = await client.fetchOne(message.uid, { source: true }, { uid: true });
-        if (!sourceMessage?.source) continue;
-        const parsed = await simpleParser(sourceMessage.source);
-        const email = {
-          id: this.next("email"),
-          accountId: folder.accountId,
-          folderId: folder.id,
-          uid: message.uid,
-          messageId: message.envelope?.messageId || parsed.messageId || `imap-${folder.accountId}-${folder.id}-${message.uid}`,
-          sender: parsed.from?.text || "",
-          recipients: parsed.to?.text || "",
-          cc: parsed.cc?.text || "",
-          bcc: parsed.bcc?.text || "",
-          subject: parsed.subject || "",
-          preview: (parsed.text || "").replace(/\s+/g, " ").slice(0, 240),
-          receivedAt: (parsed.date || message.internalDate || new Date()).toISOString(),
-          isRead: message.flags?.has("\\Seen") || false,
-          isFavorite: message.flags?.has("\\Flagged") || false,
-          isImportant: false,
-          hasAttachments: Boolean(parsed.attachments?.length),
-          updatedAt: new Date().toISOString()
-        };
-        email.bodyPath = await this.storeEmailBody(
-          email.id,
-          parsed.text || "",
-          typeof parsed.html === "string" ? parsed.html : ""
-        );
-        this.state.emails.push(email);
-        await this.storeParsedAttachments(email.id, parsed.attachments || []);
-        report.messagesSynced += 1;
-        if (folder.role === "inbox") {
-          report.newMessages.push({
-            emailId: email.id,
-            accountId: folder.accountId,
-            folderId: folder.id,
-            folderRole: folder.role,
-            sender: email.sender,
-            subject: email.subject,
-            isRead: email.isRead
-          });
+      if (pendingMessages.length) {
+        const messagesByUid = new Map(pendingMessages.map((message) => [message.uid, message]));
+        for await (const sourceMessage of client.fetch(
+          pendingMessages.map((message) => message.uid),
+          { uid: true, source: true },
+          { uid: true }
+        )) {
+          const message = messagesByUid.get(sourceMessage.uid);
+          if (!message || !sourceMessage.source) continue;
+          await this.storeSyncedMessage(folder, message, sourceMessage.source, report);
         }
       }
       folder.lastUid = highestUid;
     } finally {
       lock.release();
+    }
+  }
+
+  async storeSyncedMessage(folder, message, source, report) {
+    const parsed = await simpleParser(source);
+    const email = {
+      id: this.next("email"),
+      accountId: folder.accountId,
+      folderId: folder.id,
+      uid: message.uid,
+      messageId: message.envelope?.messageId || parsed.messageId || `imap-${folder.accountId}-${folder.id}-${message.uid}`,
+      sender: parsed.from?.text || "",
+      recipients: parsed.to?.text || "",
+      cc: parsed.cc?.text || "",
+      bcc: parsed.bcc?.text || "",
+      subject: parsed.subject || "",
+      preview: (parsed.text || "").replace(/\s+/g, " ").slice(0, 240),
+      receivedAt: (parsed.date || message.internalDate || new Date()).toISOString(),
+      isRead: message.flags?.has("\\Seen") || false,
+      isFavorite: message.flags?.has("\\Flagged") || false,
+      isImportant: false,
+      hasAttachments: Boolean(parsed.attachments?.length),
+      updatedAt: new Date().toISOString()
+    };
+    email.bodyPath = await this.storeEmailBody(
+      email.id,
+      parsed.text || "",
+      typeof parsed.html === "string" ? parsed.html : ""
+    );
+    this.state.emails.push(email);
+    await this.storeParsedAttachments(email.id, parsed.attachments || []);
+    report.messagesSynced += 1;
+    if (folder.role === "inbox") {
+      report.newMessages.push({
+        emailId: email.id,
+        accountId: folder.accountId,
+        folderId: folder.id,
+        folderRole: folder.role,
+        sender: email.sender,
+        subject: email.subject,
+        isRead: email.isRead
+      });
     }
   }
 
@@ -947,6 +978,18 @@ export class LunaBackend {
     this.state.attachments = this.state.attachments.filter(
       (attachment) => !removedIds.has(attachment.emailId)
     );
+  }
+
+  isImapConnectionError(error) {
+    const message = `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+    return [
+      "connection not available",
+      "socket timeout",
+      "econnreset",
+      "econnrefused",
+      "etimedout",
+      "connection closed"
+    ].some((value) => message.includes(value));
   }
 
   async storeParsedAttachments(emailId, attachments) {
@@ -973,9 +1016,9 @@ export class LunaBackend {
   force_full_inbox_sync({ accountId, limit = 50 }) { return this.syncAccount(accountId, limit, true); }
   force_incremental_sync({ accountId }) { return this.syncAccount(accountId, 100); }
   async sync_all_messages({ accountId } = {}) {
-    if (accountId) return this.syncAccount(accountId, 500, true);
+    if (accountId) return this.syncAccount(accountId, 100);
     const reports = [];
-    for (const account of this.state.accounts) reports.push(await this.syncAccount(account.id, 500, true));
+    for (const account of this.state.accounts) reports.push(await this.syncAccount(account.id, 100));
     return {
       accountId: 0,
       foldersSynced: reports.reduce((sum, item) => sum + item.foldersSynced, 0),
