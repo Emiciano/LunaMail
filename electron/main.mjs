@@ -143,7 +143,8 @@ app.whenReady().then(async () => {
   backend = new LunaBackend({
     dataDir: app.getPath("userData"),
     emit,
-    showWindow
+    showWindow,
+    openExternal: (url) => shell.openExternal(url)
   });
   await backend.init();
   registerIpc();

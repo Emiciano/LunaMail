@@ -51,6 +51,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     saveContact,
     deleteContact,
     saveAccount,
+    connectGoogleAccount,
     deleteAccount,
     testAccount,
     sync,
@@ -73,6 +74,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     saveContact: state.saveContact,
     deleteContact: state.deleteContact,
     saveAccount: state.saveAccount,
+    connectGoogleAccount: state.connectGoogleAccount,
     deleteAccount: state.deleteAccount,
     testAccount: state.testAccount,
     sync: state.sync,
@@ -85,6 +87,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState<"custom" | "gmail">("custom");
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [message, setMessage] = useState("");
+  const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<number | undefined>();
   const [appVersion, setAppVersion] = useState<string>(packageJson.version);
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
@@ -221,6 +224,27 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       setMessage("Konto gespeichert.");
     } catch (error) {
       setMessage(`Konto konnte nicht gespeichert werden: ${String(error)}`);
+    }
+  }
+
+  async function connectGoogle() {
+    const clientId = String(draft.googleOAuthClientId || "").trim();
+    if (!clientId) {
+      setMessage("Bitte zuerst die Google OAuth Desktop-Client-ID eintragen.");
+      return;
+    }
+    setGoogleAuthBusy(true);
+    setMessage("Google-Anmeldung wurde im Browser geöffnet...");
+    try {
+      await updateSettings({ ...draft, googleOAuthClientId: clientId });
+      await connectGoogleAccount(clientId);
+      setEditingAccountId(undefined);
+      setShowAccountForm(false);
+      setMessage("Google-Konto wurde erfolgreich verbunden.");
+    } catch (error) {
+      setMessage(`Google-Konto konnte nicht verbunden werden: ${String(error)}`);
+    } finally {
+      setGoogleAuthBusy(false);
     }
   }
 
@@ -418,7 +442,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                                 setEditingAccountId(account.id);
                                 setProvider(account.provider === "gmail" ? "gmail" : "custom");
                                 setShowAccountForm(true);
-                                setMessage("Passwort neu eingeben und speichern, um den Keyring-Eintrag zu erneuern.");
+                                setMessage(account.authType === "oauth2"
+                                  ? "Google-Konto erneut anmelden, um die Berechtigung zu erneuern."
+                                  : "Passwort neu eingeben und speichern, um den Keyring-Eintrag zu erneuern.");
                               }}
                               title="Bearbeiten"
                             >
@@ -448,23 +474,62 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       <button type="button" className={providerButton(provider === "gmail")} onClick={() => setProvider("gmail")}>Gmail hinzufügen</button>
                     </div>
                     {provider === "gmail" ? (
-                      <div className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
-                        Gmail nutzt hier stabil IMAP/SMTP mit Google App-Passwort. OAuth2 bleibt vorbereitet.
+                      <div className="space-y-4">
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-100">
+                          LunaMail öffnet die sichere Google-Anmeldung im Standardbrowser. E-Mail-Adresse, Passwort und Bestätigung werden ausschließlich bei Google eingegeben.
+                        </div>
+                        <label className="block">
+                          <span className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-300">Google OAuth Desktop-Client-ID</span>
+                          <input
+                            value={draft.googleOAuthClientId ?? ""}
+                            onChange={(event) => setDraft({ ...draft, googleOAuthClientId: event.target.value })}
+                            placeholder="123456789-abc.apps.googleusercontent.com"
+                            className="h-11 w-full rounded-xl border border-slate-200/70 bg-white px-3 text-sm outline-none focus:border-[rgb(var(--accent))] dark:border-white/[0.08] dark:bg-white/[0.045]"
+                          />
+                          <span className="mt-1.5 block text-xs text-slate-500 dark:text-slate-400">
+                            Einmalige App-Konfiguration aus der Google Cloud Console. Typ: Desktop-App.
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                          disabled={googleAuthBusy}
+                          onClick={() => void connectGoogle()}
+                        >
+                          <span className="text-xl font-bold text-blue-600">G</span>
+                          {googleAuthBusy ? "Google-Anmeldung läuft..." : editingAccount ? "Erneut mit Google anmelden" : "Mit Google anmelden"}
+                        </button>
                       </div>
-                    ) : null}
-                    <form key={editingAccount?.id ?? provider} onSubmit={submitAccount} className="grid grid-cols-2 gap-4">
-                      <Field name="displayName" label="Name" defaultValue={editingAccount?.displayName} required />
-                      <Field name="email" label="E-Mail" type="email" defaultValue={editingAccount?.email} required />
-                      <Field name="username" label="Benutzername (meist volle E-Mail)" defaultValue={editingAccount?.username ?? editingAccount?.email} />
-                      <Field name="imapHost" label="IMAP-Server" defaultValue={editingAccount?.imapHost ?? (provider === "gmail" ? "imap.gmail.com" : "")} required />
-                      <Field name="imapPort" label="IMAP Port" type="number" defaultValue={String(editingAccount?.imapPort ?? 993)} required />
-                      <CheckboxField name="imapSecure" label="IMAP SSL/TLS" defaultChecked={editingAccount?.imapSecure ?? true} />
-                      <Field name="smtpHost" label="SMTP-Server" defaultValue={editingAccount?.smtpHost ?? (provider === "gmail" ? "smtp.gmail.com" : "")} required />
-                      <Field name="smtpPort" label="SMTP Port" type="number" defaultValue={String(editingAccount?.smtpPort ?? 465)} required />
-                      <CheckboxField name="smtpSecure" label="SMTP SSL/TLS" defaultChecked={editingAccount?.smtpSecure ?? true} />
-                      <Field name="password" label={editingAccount ? "IMAP Passwort (neu eingeben)" : provider === "gmail" ? "Google App-Passwort" : "IMAP Passwort"} type="password" required />
-                      <Field name="smtpPassword" label="SMTP Passwort" type="password" />
-                      <div className="col-span-2 flex justify-end gap-2">
+                    ) : (
+                      <form key={editingAccount?.id ?? provider} onSubmit={submitAccount} className="grid grid-cols-2 gap-4">
+                        <Field name="displayName" label="Name" defaultValue={editingAccount?.displayName} required />
+                        <Field name="email" label="E-Mail" type="email" defaultValue={editingAccount?.email} required />
+                        <Field name="username" label="Benutzername (meist volle E-Mail)" defaultValue={editingAccount?.username ?? editingAccount?.email} />
+                        <Field name="imapHost" label="IMAP-Server" defaultValue={editingAccount?.imapHost ?? ""} required />
+                        <Field name="imapPort" label="IMAP Port" type="number" defaultValue={String(editingAccount?.imapPort ?? 993)} required />
+                        <CheckboxField name="imapSecure" label="IMAP SSL/TLS" defaultChecked={editingAccount?.imapSecure ?? true} />
+                        <Field name="smtpHost" label="SMTP-Server" defaultValue={editingAccount?.smtpHost ?? ""} required />
+                        <Field name="smtpPort" label="SMTP Port" type="number" defaultValue={String(editingAccount?.smtpPort ?? 465)} required />
+                        <CheckboxField name="smtpSecure" label="SMTP SSL/TLS" defaultChecked={editingAccount?.smtpSecure ?? true} />
+                        <Field name="password" label={editingAccount ? "IMAP Passwort (neu eingeben)" : "IMAP Passwort"} type="password" required />
+                        <Field name="smtpPassword" label="SMTP Passwort" type="password" />
+                        <div className="col-span-2 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/8"
+                            onClick={() => {
+                              setEditingAccountId(undefined);
+                              setShowAccountForm(false);
+                            }}
+                          >
+                            Abbrechen
+                          </button>
+                          <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110">Speichern</button>
+                        </div>
+                      </form>
+                    )}
+                    {provider === "gmail" ? (
+                      <div className="mt-4 flex justify-end">
                         <button
                           type="button"
                           className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/8"
@@ -475,9 +540,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         >
                           Abbrechen
                         </button>
-                        <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110">Speichern</button>
                       </div>
-                    </form>
+                    ) : null}
                   </section>
                 ) : (
                   <button

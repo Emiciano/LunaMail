@@ -44,6 +44,7 @@ type MailState = {
   settingsOpen: boolean;
   loadInitial: () => Promise<void>;
   saveAccount: (account: Parameters<typeof mailService.saveAccount>[0]) => Promise<void>;
+  connectGoogleAccount: (clientId: string) => Promise<void>;
   deleteAccount: (accountId: number) => Promise<void>;
   testAccount: (accountId: number) => Promise<void>;
   selectAccount: (accountId: number) => Promise<void>;
@@ -354,6 +355,21 @@ export const useMailStore = create<MailState>((set, get) => ({
       void get().sync(false);
     } catch (error) {
       set({ syncError: String(error), syncStatus: "Konto konnte nicht gespeichert werden" });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+  async connectGoogleAccount(clientId) {
+    set({ loading: true, syncError: undefined, syncStatus: "Google-Anmeldung wird geöffnet..." });
+    try {
+      const saved = await mailService.connectGoogleAccount(clientId);
+      set({ selectedAccountId: saved.id, syncStatus: "Google-Konto verbunden." });
+      await get().loadInitial();
+      set({ syncStatus: "Google-Konto verbunden. Initiale Synchronisation läuft im Hintergrund..." });
+      void get().sync(false);
+    } catch (error) {
+      set({ syncError: String(error), syncStatus: "Google-Konto konnte nicht verbunden werden" });
       throw error;
     } finally {
       set({ loading: false });

@@ -28,7 +28,19 @@ npm run build:desktop
 Der NSIS-Installer wird hier erzeugt:
 
 ```text
-release\LunaMail-Setup-0.9.30.exe
+release\LunaMail-Setup-0.9.31.exe
+```
+
+## Google-Konto verbinden
+
+Für die Google-Anmeldung benötigt LunaMail eine OAuth-Client-ID vom Typ **Desktop-App**:
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/auth/clients) ein Projekt und einen OAuth-Client vom Typ **Desktop-App** anlegen.
+2. Unter Datenzugriff den Scope `https://mail.google.com/` konfigurieren.
+3. Die erzeugte Client-ID in LunaMail unter **Einstellungen > Konten > Gmail hinzufügen** eintragen.
+4. Auf **Mit Google anmelden** klicken. Die Anmeldung findet im Standardbrowser statt.
+
+Für eine öffentliche Verteilung muss Google den eingeschränkten Gmail-Scope gegebenenfalls verifizieren.
 
 ## Updates über GitHub
 
@@ -43,7 +55,6 @@ Für ein neues Release:
 
 Der GitHub-Workflow baut und veröffentlicht den Installer, die Blockmap und
 `latest.yml`. Diese Dateien müssen gemeinsam im GitHub-Release vorhanden sein.
-```
 
 ## Architektur
 

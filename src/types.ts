@@ -21,6 +21,7 @@ export type Account = {
   smtpPort: number;
   smtpSecure: boolean;
   username: string;
+  authType?: "password" | "oauth2";
   isDefault: boolean;
 };
 
@@ -172,6 +173,7 @@ export type Settings = {
   runInBackground: boolean;
   accountNotifications: Record<string, boolean>;
   accountAppearance: Record<string, AccountAppearance>;
+  googleOAuthClientId?: string;
   defaultAccountId?: number;
 };
 
@@ -222,6 +224,7 @@ export type BackupAccount = {
   smtpPort: number;
   smtpSecure: boolean;
   username: string;
+  authType?: "password" | "oauth2";
   isDefault: boolean;
 };
 

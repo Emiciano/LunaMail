@@ -1,5 +1,7 @@
 import { Notification, safeStorage } from "electron";
+import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
+import http from "node:http";
 import path from "node:path";
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
@@ -24,6 +26,11 @@ const defaultSettings = {
   accountAppearance: {}
 };
 
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+const GOOGLE_MAIL_SCOPE = "https://mail.google.com/";
+
 const emptyState = () => ({
   counters: { account: 0, folder: 0, email: 0, attachment: 0, draft: 0, tag: 0, rule: 0, contact: 0 },
   accounts: [],
@@ -41,11 +48,12 @@ const emptyState = () => ({
 });
 
 export class LunaBackend {
-  constructor({ dataDir, emit, showWindow }) {
+  constructor({ dataDir, emit, showWindow, openExternal }) {
     this.dataDir = dataDir;
     this.file = path.join(dataDir, "lunamail.json");
     this.emit = emit;
     this.showWindow = showWindow;
+    this.openExternal = openExternal;
     this.state = emptyState();
     this.syncing = new Set();
     this.lastAutoSync = 0;
@@ -112,6 +120,14 @@ export class LunaBackend {
       ? safeStorage.encryptString(password)
       : Buffer.from(password, "utf8");
     this.state.secrets[`${accountId}:${protocol}`] = buffer.toString("base64");
+  }
+
+  secret(accountId, name) {
+    return this.password(accountId, name);
+  }
+
+  setSecret(accountId, name, value) {
+    this.setPassword(accountId, name, value);
   }
 
   publicAccount(account) {
@@ -214,6 +230,172 @@ export class LunaBackend {
     delete saved.smtpPassword;
     await this.persist();
     return this.publicAccount(saved);
+  }
+
+  async connect_google_account({ clientId }) {
+    const normalizedClientId = String(clientId || this.settings.googleOAuthClientId || "").trim();
+    if (!normalizedClientId.endsWith(".apps.googleusercontent.com")) {
+      throw new Error("Bitte zuerst eine gültige Google OAuth Desktop-Client-ID eintragen.");
+    }
+    if (!this.openExternal) throw new Error("Der Systembrowser ist nicht verfügbar.");
+
+    this.state.settings.googleOAuthClientId = normalizedClientId;
+    const authorization = await this.authorizeGoogle(normalizedClientId);
+    const account = await this.save_account({
+      account: {
+        displayName: authorization.name || authorization.email,
+        email: authorization.email,
+        provider: "gmail",
+        authType: "oauth2",
+        username: authorization.email,
+        imapHost: "imap.gmail.com",
+        imapPort: 993,
+        imapSecure: true,
+        smtpHost: "smtp.gmail.com",
+        smtpPort: 465,
+        smtpSecure: true,
+        password: "",
+        smtpPassword: "",
+        isDefault: this.state.accounts.length === 0
+      }
+    });
+    const stored = this.account(account.id);
+    stored.authType = "oauth2";
+    stored.oauthExpiresAt = Date.now() + authorization.expiresIn * 1000;
+    this.setSecret(stored.id, "oauth_access", authorization.accessToken);
+    this.setSecret(stored.id, "oauth_refresh", authorization.refreshToken);
+    await this.persist();
+    this.showWindow?.();
+    return this.publicAccount(stored);
+  }
+
+  async authorizeGoogle(clientId) {
+    const verifier = randomBytes(48).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const state = randomBytes(24).toString("base64url");
+    let callbackServer;
+    let timeout;
+
+    try {
+      const callback = new Promise((resolve, reject) => {
+        callbackServer = http.createServer((request, response) => {
+          const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
+          if (requestUrl.pathname !== "/oauth2callback") {
+            response.writeHead(404).end();
+            return;
+          }
+          const error = requestUrl.searchParams.get("error");
+          const returnedState = requestUrl.searchParams.get("state");
+          const code = requestUrl.searchParams.get("code");
+          if (returnedState !== state) {
+            response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+            response.end("<h2>Ungültiger Google-Rückruf.</h2><p>Bitte kehre zur laufenden Anmeldung zurück.</p>");
+            return;
+          }
+          if (error || !code) {
+            response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+            response.end("<h2>Google-Anmeldung fehlgeschlagen.</h2><p>Du kannst dieses Fenster schließen.</p>");
+            reject(new Error(error || "Ungültiger OAuth-Rückruf."));
+            return;
+          }
+          response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          response.end("<h2>Google-Konto verbunden.</h2><p>Du kannst dieses Fenster schließen und zu LunaMail zurückkehren.</p>");
+          resolve(code);
+        });
+        callbackServer.once("error", reject);
+        callbackServer.listen(0, "127.0.0.1");
+        timeout = setTimeout(() => reject(new Error("Google-Anmeldung wurde wegen Zeitüberschreitung abgebrochen.")), 300000);
+      });
+
+      await new Promise((resolve, reject) => {
+        if (callbackServer.listening) resolve();
+        else {
+          callbackServer.once("listening", resolve);
+          callbackServer.once("error", reject);
+        }
+      });
+      const address = callbackServer.address();
+      const redirectUri = `http://127.0.0.1:${address.port}/oauth2callback`;
+      const authorizationUrl = new URL(GOOGLE_AUTH_URL);
+      authorizationUrl.search = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: `openid email profile ${GOOGLE_MAIL_SCOPE}`,
+        access_type: "offline",
+        prompt: "consent select_account",
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        state
+      }).toString();
+      await this.openExternal(authorizationUrl.toString());
+      const code = await callback;
+      const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          code,
+          code_verifier: verifier,
+          grant_type: "authorization_code",
+          redirect_uri: redirectUri
+        })
+      });
+      const tokens = await tokenResponse.json();
+      if (!tokenResponse.ok || !tokens.access_token || !tokens.refresh_token) {
+        throw new Error(tokens.error_description || tokens.error || "Google hat keine gültigen OAuth-Tokens zurückgegeben.");
+      }
+      const userResponse = await fetch(GOOGLE_USERINFO_URL, {
+        headers: { Authorization: `Bearer ${tokens.access_token}` }
+      });
+      const user = await userResponse.json();
+      if (!userResponse.ok || !user.email) {
+        throw new Error(user.error?.message || "Die Google-E-Mail-Adresse konnte nicht gelesen werden.");
+      }
+      return {
+        email: user.email,
+        name: user.name,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: Number(tokens.expires_in) || 3600
+      };
+    } finally {
+      clearTimeout(timeout);
+      callbackServer?.close();
+    }
+  }
+
+  async googleAccessToken(account) {
+    const expiresAt = Number(account.oauthExpiresAt) || 0;
+    if (expiresAt > Date.now() + 60000) return this.secret(account.id, "oauth_access");
+    const clientId = String(this.settings.googleOAuthClientId || "").trim();
+    if (!clientId) throw new Error("Google OAuth Client-ID fehlt. Bitte das Gmail-Konto neu verbinden.");
+    const response = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        refresh_token: this.secret(account.id, "oauth_refresh"),
+        grant_type: "refresh_token"
+      })
+    });
+    const tokens = await response.json();
+    if (!response.ok || !tokens.access_token) {
+      throw new Error(tokens.error_description || tokens.error || "Google-Zugriff konnte nicht erneuert werden.");
+    }
+    account.oauthExpiresAt = Date.now() + (Number(tokens.expires_in) || 3600) * 1000;
+    this.setSecret(account.id, "oauth_access", tokens.access_token);
+    await this.persist();
+    this.closeSmtpTransport(account.id);
+    return tokens.access_token;
+  }
+
+  async accountAuth(account, protocol = "imap") {
+    const user = account.username || account.email;
+    if (account.authType === "oauth2") {
+      return { user, accessToken: await this.googleAccessToken(account) };
+    }
+    return { user, pass: this.password(account.id, protocol) };
   }
 
   ensureDefaultFolders(accountId) {
@@ -415,7 +597,7 @@ export class LunaBackend {
   async withMailbox(accountId, folderId, action) {
     const account = this.account(accountId);
     const folder = this.folder(folderId);
-    const client = this.imapClient(account);
+    const client = await this.imapClient(account);
     let lock;
     try {
       await client.connect();
@@ -531,7 +713,7 @@ export class LunaBackend {
       account.smtpHost = smtpHost;
       await this.persist();
     }
-    const transporter = this.smtpTransport(account, smtpHost);
+    const transporter = await this.smtpTransport(account, smtpHost);
     const mailOptions = {
         from: account.email,
         to: draft.to,
@@ -570,7 +752,7 @@ export class LunaBackend {
       const composer = new MailComposer({ ...mailOptions, messageId });
       composer.compile().build((error, message) => error ? reject(error) : resolve(message));
     });
-    const client = this.imapClient(account);
+    const client = await this.imapClient(account);
     await client.connect();
     try {
       await client.append(sentFolder.remoteName, raw, ["\\Seen"], new Date());
@@ -580,8 +762,8 @@ export class LunaBackend {
     await this.syncAccount(account.id, 100);
   }
 
-  smtpTransport(account, smtpHost) {
-    const key = `${smtpHost}:${account.smtpPort}:${account.username || account.email}`;
+  async smtpTransport(account, smtpHost) {
+    const key = `${smtpHost}:${account.smtpPort}:${account.username || account.email}:${account.authType || "password"}:${account.oauthExpiresAt || ""}`;
     const cached = this.smtpTransports.get(account.id);
     if (cached?.key === key) return cached.transport;
     cached?.transport.close();
@@ -592,7 +774,9 @@ export class LunaBackend {
       host: smtpHost,
       port: account.smtpPort,
       secure: Boolean(account.smtpSecure),
-      auth: { user: account.username || account.email, pass: this.password(account.id, "smtp") },
+      auth: account.authType === "oauth2"
+        ? { type: "OAuth2", ...await this.accountAuth(account, "smtp") }
+        : await this.accountAuth(account, "smtp"),
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 30000
@@ -693,7 +877,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.30",
+      version: "0.9.31",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,
@@ -717,7 +901,7 @@ export class LunaBackend {
     const account = this.account(accountId);
     const result = { imapOk: false, smtpOk: false };
     try {
-      const client = this.imapClient(account);
+      const client = await this.imapClient(account);
       await client.connect();
       await client.logout();
       result.imapOk = true;
@@ -727,19 +911,21 @@ export class LunaBackend {
         host: account.smtpHost,
         port: account.smtpPort,
         secure: Boolean(account.smtpSecure),
-        auth: { user: account.username || account.email, pass: this.password(account.id, "smtp") }
+        auth: account.authType === "oauth2"
+          ? { type: "OAuth2", ...await this.accountAuth(account, "smtp") }
+          : await this.accountAuth(account, "smtp")
       }).verify();
       result.smtpOk = true;
     } catch (error) { result.smtpError = String(error); }
     return result;
   }
 
-  imapClient(account) {
+  async imapClient(account) {
     const client = new ImapFlow({
       host: account.imapHost,
       port: account.imapPort,
       secure: Boolean(account.imapSecure),
-      auth: { user: account.username || account.email, pass: this.password(account.id, "imap") },
+      auth: await this.accountAuth(account, "imap"),
       logger: false,
       connectionTimeout: 15000,
       greetingTimeout: 10000,
@@ -770,7 +956,7 @@ export class LunaBackend {
     let client;
     try {
       const account = this.account(id);
-      client = this.imapClient(account);
+      client = await this.imapClient(account);
       await client.connect();
       const mailboxes = await client.list();
       const listedFolderIds = new Set();
@@ -812,7 +998,7 @@ export class LunaBackend {
         } catch (error) {
           if (!this.isImapConnectionError(error)) throw error;
           await client.logout().catch(() => undefined);
-          client = this.imapClient(account);
+          client = await this.imapClient(account);
           await client.connect();
           await this.syncFolderMessages(client, folder, limit, report, includeOlder);
         }

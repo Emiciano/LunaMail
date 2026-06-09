@@ -73,6 +73,9 @@ const browserService = {
   saveAccount: async (): Promise<Account> => {
     throw new Error("Konten koennen nur in der Electron-Desktop-App gespeichert werden.");
   },
+  connectGoogleAccount: async (_clientId: string): Promise<Account> => {
+    throw new Error("Google-Konten koennen nur in der Electron-Desktop-App verbunden werden.");
+  },
   getFolders: async (_accountId?: number): Promise<Folder[]> => [],
   getEmails: async (_folderId?: number, _query?: string, _view?: "favorites" | "important" | "unified_inbox", _accountId?: number, _filters?: MailQueryFilters): Promise<Email[]> => [],
   getEmail: async (_id: number): Promise<Email> => {
@@ -176,6 +179,7 @@ const browserService = {
 const electronService = {
   getAccounts: () => invokeDesktop<Account[]>("get_accounts"),
   saveAccount: (account: AccountInput) => invokeDesktop<Account>("save_account", { account }),
+  connectGoogleAccount: (clientId: string) => invokeDesktop<Account>("connect_google_account", { clientId }),
   getFolders: (accountId?: number) => invokeDesktop<Folder[]>("get_folders", { accountId }),
   getEmails: (folderId?: number, query?: string, view?: "favorites" | "important" | "unified_inbox", accountId?: number, filters?: MailQueryFilters) => invokeDesktop<Email[]>("get_emails", { accountId, folderId, query, view, filters }),
   getEmail: (id: number) => invokeDesktop<Email>("get_email", { id }),
