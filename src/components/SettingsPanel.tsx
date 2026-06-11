@@ -12,13 +12,13 @@ import { useShallow } from "zustand/react/shallow";
 type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
-  { value: "blue", label: "Blau", className: "bg-blue-600" },
-  { value: "green", label: "Grün", className: "bg-green-600" },
-  { value: "orange", label: "Orange", className: "bg-orange-500" },
-  { value: "red", label: "Rot", className: "bg-red-600" },
-  { value: "purple", label: "Lila", className: "bg-purple-600" },
-  { value: "teal", label: "Türkis", className: "bg-teal-500" },
-  { value: "pink", label: "Pink", className: "bg-pink-500" },
+  { value: "blue", label: "Blau", className: "bg-white/80" },
+  { value: "green", label: "Grün", className: "bg-white/70" },
+  { value: "orange", label: "Orange", className: "bg-white/60" },
+  { value: "red", label: "Rot", className: "bg-white/50" },
+  { value: "purple", label: "Lila", className: "bg-white/45" },
+  { value: "teal", label: "Türkis", className: "bg-white/40" },
+  { value: "pink", label: "Pink", className: "bg-white/35" },
   { value: "gray", label: "Grau", className: "bg-slate-600" }
 ];
 
@@ -372,21 +372,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div
-      className="flex items-center justify-center bg-slate-950/28 p-4 backdrop-blur-[4px] dark:bg-black/58"
+      className="flex items-center justify-center bg-black/72 p-6"
       style={{ position: "fixed", inset: 0, zIndex: 2147483647, ...accentVars[draft.accentColor] }}
     >
-      <section className="glass-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(960px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[22px]">
-        <header className="flex h-16 items-center justify-between border-b border-white/35 px-6 dark:border-white/[0.08]">
+      <section className="tr-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(980px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[10px]">
+        <header className="flex h-16 items-center justify-between border-b border-white/[0.06] px-6">
           <div>
-            <h2 className="text-lg font-semibold">LunaMail Einstellungen</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Moderner E-Mail-Client für Windows</p>
+            <h2 className="text-lg font-semibold tracking-[-0.03em]">Einstellungen</h2>
+            <p className="text-xs text-white/45">LunaMail im minimalistischen Desktop-Stil</p>
           </div>
-          <button className="rounded-lg p-2 transition-colors duration-150 hover:bg-white/45 dark:hover:bg-white/[0.12]" onClick={onClose} title="Schließen">
+          <button className="rounded-lg p-2 text-white/55 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white" onClick={onClose} title="Schließen">
             <X size={18} />
           </button>
         </header>
-        <div className="grid min-h-0 flex-1 grid-cols-[190px_1fr]">
-          <nav className="border-r border-white/35 p-4 dark:border-white/[0.08]">
+        <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr]">
+          <nav className="border-r border-white/[0.06] bg-[#0B0B0B] p-4">
             <TabButton active={tab === "accounts"} onClick={() => setTab("accounts")} label="Konten" />
             <TabButton active={tab === "general"} onClick={() => setTab("general")} label="Allgemein" />
             <TabButton active={tab === "themes"} onClick={() => setTab("themes")} label="Design" />
@@ -397,7 +397,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <TabButton active={tab === "backup"} onClick={() => setTab("backup")} label="Datensicherung" />
             <TabButton active={tab === "about"} onClick={() => setTab("about")} label="Über" />
           </nav>
-          <div className="mail-scroll min-h-0 overflow-y-auto p-6">
+          <div className="mail-scroll min-h-0 overflow-y-auto bg-[#111] p-6 text-white">
             {tab === "accounts" ? (
               <div className="space-y-6">
                 <section>
@@ -453,7 +453,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                             <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]" onClick={() => void testAccount(account.id)}>
                               Testen
                             </button>
-                            <button className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-500/25 dark:hover:bg-red-500/10" onClick={() => void deleteAccount(account.id)} title="Löschen">
+                            <button className="rounded-lg border border-white/[0.06] px-3 py-2 text-sm text-white/55 hover:bg-white/[0.05] hover:text-white" onClick={() => void deleteAccount(account.id)} title="Löschen">
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -475,7 +475,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     </div>
                     {provider === "gmail" ? (
                       <div className="space-y-4">
-                        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-100">
+                        <div className="rounded-lg border border-white/[0.06] bg-[#151515] px-4 py-3 text-sm text-white/70">
                           LunaMail öffnet die sichere Google-Anmeldung im Standardbrowser. E-Mail-Adresse, Passwort und Bestätigung werden ausschließlich bei Google eingegeben.
                         </div>
                         <label className="block">
@@ -484,7 +484,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                             value={draft.googleOAuthClientId ?? ""}
                             onChange={(event) => setDraft({ ...draft, googleOAuthClientId: event.target.value })}
                             placeholder="123456789-abc.apps.googleusercontent.com"
-                            className="h-11 w-full rounded-xl border border-slate-200/70 bg-white px-3 text-sm outline-none focus:border-[rgb(var(--accent))] dark:border-white/[0.08] dark:bg-white/[0.045]"
+                            className="h-11 w-full rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white outline-none focus:border-white/[0.16]"
                           />
                           <span className="mt-1.5 block text-xs text-slate-500 dark:text-slate-400">
                             Einmalige App-Konfiguration aus der Google Cloud Console. Typ: Desktop-App.
@@ -492,11 +492,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         </label>
                         <button
                           type="button"
-                          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                          className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-white/[0.06] bg-white px-4 font-semibold text-[#0B0B0B] transition-colors hover:bg-white/90 disabled:cursor-wait disabled:opacity-60"
                           disabled={googleAuthBusy}
                           onClick={() => void connectGoogle()}
                         >
-                          <span className="text-xl font-bold text-blue-600">G</span>
+                          <span className="text-xl font-bold text-[#0B0B0B]">G</span>
                           {googleAuthBusy ? "Google-Anmeldung läuft..." : editingAccount ? "Erneut mit Google anmelden" : "Mit Google anmelden"}
                         </button>
                       </div>
@@ -524,7 +524,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                           >
                             Abbrechen
                           </button>
-                          <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110">Speichern</button>
+                          <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90">Speichern</button>
                         </div>
                       </form>
                     )}
@@ -554,7 +554,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       setMessage("");
                     }}
                   >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[rgb(var(--accent)/0.14)] text-[rgb(var(--accent))]">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.08] text-white">
                       <Plus size={17} />
                     </span>
                     <span>
@@ -671,7 +671,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     <button
                       type="button"
                       className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                        draft.theme === "dark" ? "bg-[rgb(var(--accent))]" : "bg-slate-300 dark:bg-white/16"
+                        draft.theme === "dark" ? "bg-white" : "bg-white/16"
                       }`}
                       onClick={() => applySettings({ ...draft, theme: draft.theme === "dark" ? "light" : "dark" })}
                       aria-pressed={draft.theme === "dark"}
@@ -710,8 +710,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
                   <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white">Neue Mail</span>
-                    <span className="rounded-2xl bg-[rgb(var(--accent-soft))] px-4 py-3 text-sm shadow-[inset_3px_0_0_rgb(var(--accent))] dark:bg-[rgb(var(--accent)/0.16)]">
+                    <span className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B]">Neue Mail</span>
+                    <span className="rounded-lg bg-white/[0.08] px-4 py-3 text-sm">
                       Ausgewählte Mail
                     </span>
                   </div>
@@ -734,7 +734,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                      draft.allowLocalSecretFallback ? "bg-[rgb(var(--accent))]" : "bg-slate-300 dark:bg-white/16"
+                      draft.allowLocalSecretFallback ? "bg-white" : "bg-white/16"
                     }`}
                     onClick={() => applySettings({ ...draft, allowLocalSecretFallback: !draft.allowLocalSecretFallback })}
                     aria-pressed={draft.allowLocalSecretFallback}
@@ -761,7 +761,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mt-1 whitespace-pre-wrap text-slate-500 dark:text-slate-400">{syncError || syncStatus || "Bereit"}</div>
                 </div>
                 <button
-                  className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/10"
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={accounts.length === 0}
                   onClick={() => void sync(true)}
                 >
@@ -867,7 +867,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Regeln & Automatisierung</h3>
-                  <button className="rounded-xl bg-[rgb(var(--accent))] px-3 py-2 text-xs font-semibold text-white hover:brightness-110" onClick={() => void createRule()}>
+                  <button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void createRule()}>
                     Regel hinzufügen
                   </button>
                 </div>
@@ -881,7 +881,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     <div key={rule.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-white/[0.08]">
                       <div className="flex items-center justify-between gap-2">
                         <div className="font-medium">{rule.name}</div>
-                        <button className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-500/25 dark:hover:bg-red-500/10" onClick={() => void deleteRule(rule.id)}>
+                        <button className="rounded-lg border border-white/[0.06] px-2 py-1 text-xs text-white/55 hover:bg-white/[0.05] hover:text-white" onClick={() => void deleteRule(rule.id)}>
                           Löschen
                         </button>
                       </div>
@@ -898,7 +898,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Kontakte</h3>
-                  <button className="rounded-xl bg-[rgb(var(--accent))] px-3 py-2 text-xs font-semibold text-white hover:brightness-110" onClick={() => void createContact()}>
+                  <button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void createContact()}>
                     Kontakt hinzufügen
                   </button>
                 </div>
@@ -918,7 +918,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                             Letzter Kontakt: {contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleString() : "—"} · Nutzungen: {contact.usageCount}
                           </div>
                         </div>
-                        <button className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-500/25 dark:hover:bg-red-500/10" onClick={() => void deleteContact(contact.id)}>
+                        <button className="rounded-lg border border-white/[0.06] px-2 py-1 text-xs text-white/55 hover:bg-white/[0.05] hover:text-white" onClick={() => void deleteContact(contact.id)}>
                           Löschen
                         </button>
                       </div>
@@ -934,7 +934,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   Exportiert Konten ohne Passwörter, Einstellungen, Regeln, Kontakte und Schlagwörter. Passwörter bleiben geschützt gespeichert.
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110" onClick={() => void exportBackupToFile()}>
+                  <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void exportBackupToFile()}>
                     Datensicherung exportieren
                   </button>
                   <button className="rounded-xl border border-slate-200/70 px-4 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" onClick={() => void importBackupFromFile()}>
@@ -962,7 +962,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mt-4 space-y-3">
                     <button
                       type="button"
-                      className="w-full rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={updateBusy}
                       onClick={() => void checkForAppUpdate()}
                     >
@@ -974,7 +974,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     {updateStatus?.status === "downloading" ? (
                       <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
                         <div
-                          className="h-full rounded-full bg-[rgb(var(--accent))] transition-all duration-300"
+                          className="h-full rounded-full bg-white transition-all duration-300"
                           style={{ width: `${Math.min(100, Math.max(0, updateStatus.percent))}%` }}
                         />
                       </div>
@@ -987,13 +987,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 ) : null}
               </div>
             ) : null}
-            {message ? <div className="mt-5 rounded-xl bg-[rgb(var(--accent-soft))] px-4 py-3 text-sm text-[rgb(var(--accent))] dark:bg-[rgb(var(--accent)/0.14)] dark:text-white">{message}</div> : null}
-            {syncError ? <div className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-100">{syncError}</div> : null}
+            {message ? <div className="mt-5 rounded-lg border border-white/[0.06] bg-[#151515] px-4 py-3 text-sm text-white/75">{message}</div> : null}
+            {syncError ? <div className="mt-5 rounded-lg border border-white/[0.12] bg-[#151515] px-4 py-3 text-sm text-white">{syncError}</div> : null}
           </div>
         </div>
-        <footer className="flex justify-end gap-2 border-t border-white/35 px-6 py-4 dark:border-white/[0.08]">
-          <button className="rounded-xl px-4 py-2 text-sm transition-colors duration-150 hover:bg-white/45 dark:hover:bg-white/[0.12]" onClick={onClose}>Abbrechen</button>
-          <button className="rounded-xl bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white hover:brightness-110" onClick={() => void saveSettings()}>Speichern</button>
+        <footer className="flex justify-end gap-2 border-t border-white/[0.06] bg-[#0B0B0B] px-6 py-4">
+          <button className="rounded-lg px-4 py-2 text-sm text-white/65 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white" onClick={onClose}>Abbrechen</button>
+          <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void saveSettings()}>Speichern</button>
         </footer>
       </section>
     </div>,
@@ -1004,10 +1004,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
-      className={`mb-1 h-10 w-full rounded-xl px-3 text-left text-sm ${
+      className={`mb-1 h-9 w-full rounded-md px-3 text-left text-[13px] ${
         active
-          ? "glass-pill-active text-[rgb(var(--text-primary))] dark:text-white"
-          : "surface-text-primary transition-colors duration-150 hover:bg-white/45 dark:hover:bg-white/[0.1]"
+          ? "bg-white/[0.08] text-white"
+          : "text-white/55 transition-colors duration-150 hover:bg-white/[0.05] hover:text-white"
       }`}
       onClick={onClick}
     >
@@ -1019,16 +1019,16 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
 function Field(props: { name: string; label: string; type?: string; defaultValue?: string; required?: boolean }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-300">{props.label}</span>
-      <input {...props} className="h-11 w-full rounded-xl border border-slate-200/70 bg-white px-3 text-sm outline-none focus:border-[rgb(var(--accent))] dark:border-white/[0.08] dark:bg-white/[0.045]" />
+      <span className="mb-1.5 block text-sm font-medium text-white/55">{props.label}</span>
+      <input {...props} className="h-11 w-full rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white outline-none focus:border-white/[0.16]" />
     </label>
   );
 }
 
 function CheckboxField(props: { name: string; label: string; defaultChecked?: boolean }) {
   return (
-    <label className="flex h-11 items-center gap-3 rounded-xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 dark:border-white/[0.08] dark:bg-white/[0.045] dark:text-slate-200">
-      <input name={props.name} type="checkbox" defaultChecked={props.defaultChecked} className="h-4 w-4 accent-[rgb(var(--accent))]" />
+    <label className="flex h-11 items-center gap-3 rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white/75">
+      <input name={props.name} type="checkbox" defaultChecked={props.defaultChecked} className="h-4 w-4 accent-white" />
       <span>{props.label}</span>
     </label>
   );
@@ -1038,7 +1038,7 @@ function SelectRow({ label, value, onChange, options }: { label: string; value: 
   return (
     <label className="flex items-center justify-between gap-4">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-w-56 rounded-xl border border-slate-200/70 bg-transparent px-3 py-2 dark:border-white/[0.08]">
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-w-56 rounded-lg border border-white/[0.06] bg-[#151515] px-3 py-2 text-white">
         {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
       </select>
     </label>
@@ -1046,7 +1046,7 @@ function SelectRow({ label, value, onChange, options }: { label: string; value: 
 }
 
 function providerButton(active: boolean) {
-  return `rounded-xl border px-4 py-3 text-left text-sm ${active ? "border-[rgb(var(--accent))] bg-[rgb(var(--accent-soft))] text-[rgb(var(--accent))] dark:bg-[rgb(var(--accent)/0.15)] dark:text-white" : "border-slate-200 dark:border-white/10"}`;
+  return `rounded-lg border px-4 py-3 text-left text-sm ${active ? "border-white/[0.14] bg-white/[0.08] text-white" : "border-white/[0.06] text-white/55 hover:bg-white/[0.04] hover:text-white"}`;
 }
 
 function DiagRow({ label, value }: { label: string; value: string }) {
@@ -1060,7 +1060,7 @@ function DiagRow({ label, value }: { label: string; value: string }) {
 
 function DiagBadge({ label, active }: { label: string; active: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-slate-200/70 text-slate-700 dark:bg-white/[0.12] dark:text-slate-300"}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-white text-[#0B0B0B]" : "bg-white/[0.08] text-white/65"}`}>
       {label}
     </span>
   );

@@ -2,32 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-  background: #eef3fb;
-  --accent: 37 99 235;
-  --accent-soft: 239 246 255;
-  --surface: 242 246 252;
-  --surface-elevated: 255 255 255;
-  --text-primary: 15 23 42;
-  --text-secondary: 71 85 105;
-  --glass-bg: 255 255 255 / 0.82;
-  --glass-border: 255 255 255 / 0.95;
-  --glass-shadow: 0 14px 32px rgba(15, 23, 42, 0.12), 0 3px 10px rgba(15, 23, 42, 0.08);
-  --glass-blur: 14px;
-}
-
+:root,
 :root.dark {
   color-scheme: dark;
-  background: #12151b;
-  --surface: 15 18 24;
-  --surface-elevated: 20 24 31;
-  --text-primary: 226 232 240;
-  --text-secondary: 148 163 184;
-  --glass-bg: 20 24 31 / 0.6;
-  --glass-border: 255 255 255 / 0.1;
-  --glass-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
-  --glass-blur: 12px;
+  background: #0b0b0b;
+  --accent: 255 255 255;
+  --accent-soft: 21 21 21;
+  --surface: 17 17 17;
+  --surface-elevated: 21 21 21;
+  --text-primary: 255 255 255;
+  --text-secondary: 255 255 255 / 0.55;
+  --glass-bg: 17 17 17 / 1;
+  --glass-border: 255 255 255 / 0.06;
+  --glass-shadow: none;
+  --glass-blur: 0px;
 }
 
 html,
@@ -38,13 +26,12 @@ body,
 
 body {
   margin: 0;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #0b0b0b;
+  color: #fff;
   -webkit-font-smoothing: antialiased;
-  background:
-    radial-gradient(circle at 8% -10%, rgb(191 219 254 / 0.45), transparent 28%),
-    radial-gradient(circle at 92% -5%, rgb(216 180 254 / 0.34), transparent 24%),
-    linear-gradient(180deg, #f4f7fc 0%, #edf2f9 100%);
+  text-rendering: geometricPrecision;
 }
 
 * {
@@ -53,13 +40,50 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+.tr-shell {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0b0b0b;
+}
+
+.tr-panel {
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tr-card {
+  background: #151515;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tr-card-hover {
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.tr-card-hover:hover {
+  background: #1b1b1b;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.tr-muted {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tr-faint {
+  color: rgba(255, 255, 255, 0.34);
 }
 
 .mail-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgb(148 163 184 / 0.7) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
   overscroll-behavior: contain;
 }
 
@@ -69,7 +93,7 @@ textarea {
 }
 
 .mail-scroll::-webkit-scrollbar-thumb {
-  background: rgb(148 163 184 / 0.55);
+  background: rgba(255, 255, 255, 0.22);
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
@@ -80,20 +104,24 @@ textarea {
   -webkit-appearance: none;
   display: inline-grid;
   place-content: center;
-  border: 1px solid rgb(255 255 255 / 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   background: transparent;
-  border-radius: 0.25rem;
+  border-radius: 4px;
 }
 
 .mail-checkbox::after {
   content: "";
   width: 0.3rem;
   height: 0.55rem;
-  border-right: 2px solid rgb(255 255 255 / 0.96);
-  border-bottom: 2px solid rgb(255 255 255 / 0.96);
+  border-right: 2px solid #0b0b0b;
+  border-bottom: 2px solid #0b0b0b;
   transform: rotate(45deg) scale(0);
   transform-origin: center;
-  transition: transform 120ms ease-out;
+}
+
+.mail-checkbox:checked {
+  background: #fff;
+  border-color: #fff;
 }
 
 .mail-checkbox:checked::after {
@@ -102,7 +130,7 @@ textarea {
 
 .mail-row {
   content-visibility: auto;
-  contain-intrinsic-size: 74px;
+  contain-intrinsic-size: 78px;
   contain: layout paint style;
 }
 
@@ -115,34 +143,36 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
-.reader-content :where(p, ul, ol, table, blockquote) {
-  margin-bottom: 1rem;
-}
-
-.reader-content a {
-  color: rgb(var(--accent));
-  text-decoration: underline;
-}
-
 .reader-content {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
   overflow-wrap: anywhere;
-  color: #111827;
-  color-scheme: light;
-  background: #fff;
+  color: #fff;
+  color-scheme: dark;
+  background: transparent;
+}
+
+.reader-content :where(p, ul, ol, table, blockquote) {
+  margin-bottom: 1rem;
 }
 
 .reader-content :where(p, span, div, td, th, li, h1, h2, h3, h4, h5, h6, strong, em, b, i) {
-  color: inherit;
+  color: inherit !important;
+  background: transparent !important;
+}
+
+.reader-content a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .reader-content img {
   max-width: 100% !important;
   width: auto !important;
   height: auto !important;
-  max-height: min(32vh, 280px) !important;
+  max-height: min(34vh, 300px) !important;
   object-fit: contain;
 }
 
@@ -162,48 +192,29 @@ textarea {
   word-break: break-word;
 }
 
-.glass-panel {
-  background: rgb(var(--glass-bg));
-  border: 1px solid rgb(var(--glass-border));
-  box-shadow: var(--glass-shadow);
-  position: relative;
-}
-
-:root:not(.dark) .glass-panel {
-  box-shadow:
-    0 16px 36px rgba(15, 23, 42, 0.12),
-    0 3px 12px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.96);
-}
-
+.glass-panel,
 .glass-subtle {
-  background: rgb(var(--surface-elevated) / 0.76);
-  border: 1px solid rgb(var(--glass-border));
-}
-
-:root:not(.dark) .glass-subtle {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 251, 255, 0.88));
-  border-color: rgb(226 232 240 / 0.75);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: none;
 }
 
 .glass-pill-active {
-  background: rgb(var(--accent) / 0.16);
-  border: 1px solid rgb(var(--accent) / 0.3);
+  background: #1d1d1d;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .surface-text-primary {
-  color: rgb(var(--text-primary));
+  color: #fff;
 }
 
 .surface-text-secondary {
-  color: rgb(var(--text-secondary));
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .motion-soft {
-  transition-duration: 150ms;
-  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-duration: 120ms;
+  transition-timing-function: ease;
 }
 
 .boot-progress {

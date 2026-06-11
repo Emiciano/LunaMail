@@ -154,7 +154,7 @@ export default function App() {
   }, [deleteSelected, openComposer, replyToSelected, selectedEmail]);
 
   return (
-    <main className="h-full bg-[#e9edf3] text-slate-950 transition-colors duration-150 dark:bg-[#0f1216] dark:text-slate-100">
+    <main className="h-full bg-[#0B0B0B] text-white">
       <ErrorBoundary>
         <AppLayout />
         {composer ? <Composer /> : null}
@@ -162,13 +162,13 @@ export default function App() {
         {settingsOpen ? <SettingsPanel onClose={closeSettings} /> : null}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {!bootReady ? (
-          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-[#0f1216]">
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-[#0B0B0B]">
             <div className="flex flex-col items-center gap-4">
-              <img src="./icon.png" alt="LunaMail" className="h-20 w-20 rounded-2xl shadow-none" />
-              <div className="text-sm font-medium text-slate-300">LunaMail wird gestartet...</div>
-              <div className="text-xs text-slate-400">{startupStatus ?? "Initialisiere..."}</div>
+              <img src="./icon.png" alt="LunaMail" className="h-16 w-16 rounded-xl shadow-none grayscale" />
+              <div className="text-sm font-medium text-white">LunaMail wird gestartet...</div>
+              <div className="text-xs text-white/45">{startupStatus ?? "Initialisiere..."}</div>
               <div className="relative mt-1 h-1.5 w-44 overflow-hidden rounded-full bg-white/10">
-                <div className="boot-progress absolute inset-y-0 left-0 w-1/3 rounded-full bg-[rgb(var(--accent))]" />
+                <div className="boot-progress absolute inset-y-0 left-0 w-1/3 rounded-full bg-white" />
               </div>
             </div>
           </div>

@@ -32,7 +32,7 @@ export function QuickLook({ email, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-8" onClick={onClose}>
-      <div className="grid h-[80vh] w-[80vw] grid-cols-[320px_1fr] gap-4 rounded-2xl border border-white/20 bg-[#11161d] p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="tr-panel grid h-[80vh] w-[80vw] grid-cols-[320px_1fr] gap-4 rounded-[10px] p-4 text-white" onClick={(event) => event.stopPropagation()}>
         <div className="overflow-auto rounded-xl border border-white/10 bg-white/[0.03] p-3">
           <div className="mb-2 text-sm font-semibold">Quick Look</div>
           <div className="mb-2 text-xs text-slate-400">{email.sender}</div>
