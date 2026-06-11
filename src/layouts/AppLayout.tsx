@@ -1,4 +1,4 @@
-import { MailPlus, Minus, Settings, Square, X } from "lucide-react";
+import { MailPlus, Minus, Square, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { MailList } from "../components/MailList";
 import { MailReader } from "../components/MailReader";
@@ -8,10 +8,9 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 
 export function AppLayout() {
-  const { accounts, openComposer, openSettings } = useMailStore(useShallow((state) => ({
+  const { accounts, openComposer } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
-    openComposer: state.openComposer,
-    openSettings: state.openSettings
+    openComposer: state.openComposer
   })));
   const hasAccounts = accounts.length > 0;
 
@@ -19,13 +18,6 @@ export function AppLayout() {
     <div className="relative flex h-full flex-col overflow-hidden bg-[#0B0B0B] p-2 text-white">
       <header className="titlebar-drag flex h-10 shrink-0 items-center justify-end">
         <div className="titlebar-no-drag flex items-center gap-2">
-          <button
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] bg-[#151515] text-white/70 hover:bg-[#1B1B1B]"
-            onClick={openSettings}
-            title="Einstellungen"
-          >
-            <Settings size={16} />
-          </button>
           {isDesktop ? (
             <>
               <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/55 hover:bg-white/[0.06]" onClick={() => void window.electronAPI?.window.minimize()} title="Minimieren">

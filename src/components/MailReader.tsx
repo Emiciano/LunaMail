@@ -1,9 +1,9 @@
 import DOMPurify from "dompurify";
 import { Archive, Clock3, Download, Forward, MoreHorizontal, Paperclip, Reply, ReplyAll, Trash2, X } from "lucide-react";
 import { useMemo } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { desktopDialog, invokeDesktop, isDesktop } from "../services/desktop";
+import { desktopDialog } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import { useShallow } from "zustand/react/shallow";
@@ -29,16 +29,6 @@ export function MailReader() {
   if (!selectedEmail) return null;
 
   const bodyFallback = selectedEmail.bodyText || selectedEmail.preview || "";
-
-  function handleReaderClick(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target as HTMLElement | null;
-    const link = target?.closest("a[href]") as HTMLAnchorElement | null;
-    const href = link?.getAttribute("href");
-    if (!href || !SAFE_LINK_SCHEME.test(href)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    void openExternalUrl(href);
-  }
 
   return createPortal(
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/76 p-6" onClick={closeEmail}>
@@ -77,20 +67,23 @@ export function MailReader() {
           </div>
         </header>
 
-        <section className="max-w-[760px] text-[14px] font-medium leading-8 text-white/90">
+        <section className="max-w-full text-[14px] font-medium leading-8 text-white/90">
           {selectedEmail.bodyHtml && selectedEmail.bodyHtml.length > MAX_HTML_LENGTH ? (
             <Notice>Sehr große HTML-Mail wird aus Performance-Gründen als Text angezeigt.</Notice>
           ) : null}
           {htmlView?.blockedRemoteImages ? (
             <Notice>{htmlView.blockedRemoteImages} externe Bilder wurden blockiert.</Notice>
           ) : null}
-          <div
-            className="reader-content"
-            dangerouslySetInnerHTML={htmlView?.html ? { __html: htmlView.html } : undefined}
-            onClick={handleReaderClick}
-          >
-            {!htmlView?.html ? <pre className="whitespace-pre-wrap font-sans">{bodyFallback}</pre> : null}
-          </div>
+          {htmlView?.document ? (
+            <iframe
+              className="h-[min(62vh,680px)] w-full rounded-md border border-white/[0.08] bg-white"
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              srcDoc={htmlView.document}
+              title={`E-Mail: ${selectedEmail.subject || "Ohne Betreff"}`}
+            />
+          ) : (
+            <pre className="max-w-[760px] whitespace-pre-wrap font-sans">{bodyFallback}</pre>
+          )}
         </section>
 
         {selectedEmail.attachments.length > 0 ? (
@@ -147,19 +140,11 @@ async function downloadAttachment(attachmentId: number, fileName: string) {
   await mailService.downloadAttachment(attachmentId, destinationPath);
 }
 
-async function openExternalUrl(href: string) {
-  if (!SAFE_LINK_SCHEME.test(href)) return;
-  if (isDesktop) {
-    await invokeDesktop("open_external_link", { url: href });
-    return;
-  }
-  window.open(href, "_blank", "noopener,noreferrer");
-}
-
-function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { html: string; blockedRemoteImages: number } {
+function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { document: string; blockedRemoteImages: number } {
   const clean = DOMPurify.sanitize(rawHtml, {
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "style", "link", "meta", "base"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "srcdoc", "style"],
+    WHOLE_DOCUMENT: true,
+    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "link", "meta", "base"],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "srcdoc"],
     ADD_ATTR: ["target", "rel"]
   });
   const doc = new DOMParser().parseFromString(clean, "text/html");
@@ -175,7 +160,14 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { htm
     link.setAttribute("rel", "noopener noreferrer");
   }
 
+  for (const element of doc.body.querySelectorAll("*")) {
+    for (const attribute of [...element.attributes]) {
+      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
+    }
+  }
+
   if (!allowExternalImages) {
+    const remoteCssUrl = /url\(\s*(['"]?)https?:\/\/.*?\1\s*\)/gi;
     for (const element of doc.body.querySelectorAll("*")) {
       for (const attr of ["src", "srcset", "poster", "background", "data", "xlink:href"]) {
         const value = element.getAttribute(attr);
@@ -185,10 +177,34 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { htm
           blockedRemoteImages += 1;
         }
       }
+      const inlineStyle = element.getAttribute("style");
+      if (inlineStyle && remoteCssUrl.test(inlineStyle)) {
+        element.setAttribute("style", inlineStyle.replace(remoteCssUrl, "none"));
+        blockedRemoteImages += 1;
+      }
+      remoteCssUrl.lastIndex = 0;
+    }
+    for (const style of doc.querySelectorAll("style")) {
+      const css = style.textContent ?? "";
+      const matches = css.match(remoteCssUrl);
+      if (matches?.length) {
+        style.textContent = css.replace(remoteCssUrl, "none");
+        blockedRemoteImages += matches.length;
+      }
+      remoteCssUrl.lastIndex = 0;
     }
   }
 
-  return { html: doc.body.innerHTML, blockedRemoteImages };
+  const safetyStyle = doc.createElement("style");
+  safetyStyle.textContent = `
+    html { color-scheme: light dark; }
+    body { margin: 0; min-height: 100%; overflow-wrap: anywhere; }
+    img { max-width: 100%; height: auto; }
+    table { max-width: 100%; }
+  `;
+  doc.head.appendChild(safetyStyle);
+
+  return { document: `<!doctype html>${doc.documentElement.outerHTML}`, blockedRemoteImages };
 }
 
 function initials(value: string) {

@@ -152,55 +152,6 @@ button {
   -webkit-app-region: no-drag;
 }
 
-.reader-content {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-wrap: anywhere;
-  color: #fff;
-  color-scheme: dark;
-  background: transparent;
-}
-
-.reader-content :where(p, ul, ol, table, blockquote) {
-  margin-bottom: 1rem;
-}
-
-.reader-content :where(p, span, div, td, th, li, h1, h2, h3, h4, h5, h6, strong, em, b, i) {
-  color: inherit !important;
-  background: transparent !important;
-}
-
-.reader-content a {
-  color: #fff;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.reader-content img {
-  max-width: 100% !important;
-  width: auto !important;
-  height: auto !important;
-  max-height: min(34vh, 300px) !important;
-  object-fit: contain;
-}
-
-.reader-content :where(table, tbody, tr, td, th, div) {
-  width: auto !important;
-  max-width: 100% !important;
-}
-
-.reader-content table {
-  width: 100% !important;
-  table-layout: fixed;
-  border-collapse: collapse;
-}
-
-.reader-content td,
-.reader-content th {
-  word-break: break-word;
-}
-
 .glass-panel,
 .glass-subtle {
   background: #111;

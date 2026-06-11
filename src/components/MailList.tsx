@@ -275,8 +275,12 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row group grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 border-b border-white/[0.035] px-5 py-3 text-left transition-colors",
-        active ? "bg-[rgb(var(--accent)/0.13)]" : email.isRead ? "hover:bg-[#111]" : "bg-white/[0.018] hover:bg-[#111]"
+        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 border-b px-5 py-3 text-left transition-colors",
+        active
+          ? "border-[rgb(var(--accent)/0.22)] bg-[rgb(var(--accent)/0.14)]"
+          : email.isRead
+            ? "border-white/[0.035] hover:bg-[#111]"
+            : "border-[rgb(var(--accent)/0.16)] bg-[rgb(var(--accent)/0.075)] before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-r-full before:bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accent)/0.11)]"
       )}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
@@ -293,12 +297,15 @@ const MailRow = memo(function MailRow({
         <QuickButton label="Favorit" active={email.isFavorite} alwaysVisible onClick={() => void onQuickAction(email.id, "favorite")}><Star size={13} /></QuickButton>
         <QuickButton label="Wichtig" active={email.isImportant} alwaysVisible onClick={() => void onQuickAction(email.id, "important")}><AlertCircle size={13} /></QuickButton>
       </span>
-      <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full", email.isRead ? "bg-transparent" : "bg-[rgb(var(--accent))]")} />
+      <span className={cn("mt-1.5 h-2 w-2 rounded-full", email.isRead ? "bg-transparent" : "bg-[rgb(var(--accent))] shadow-[0_0_0_4px_rgb(var(--accent)/0.12)]")} />
       <span className="min-w-0">
-        <span className={cn("block truncate text-[13px] text-white", email.isRead ? "font-medium" : "font-bold")}>{sender}</span>
-        <span className={cn("mt-1 block truncate text-[13px] text-white", email.isRead ? "font-normal" : "font-semibold")}>{email.subject || "(Kein Betreff)"}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={cn("truncate text-[13px] text-white", email.isRead ? "font-medium" : "font-bold")}>{sender}</span>
+          {!email.isRead ? <span className="shrink-0 rounded-full bg-[rgb(var(--accent))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0B0B0B]">Neu</span> : null}
+        </span>
+        <span className={cn("mt-1 block truncate text-[13px]", email.isRead ? "font-normal text-white/85" : "font-bold text-white")}>{email.subject || "(Kein Betreff)"}</span>
         <span className="mt-1 flex min-w-0 items-center gap-2">
-          <span className="truncate text-[12px] leading-5 text-white/45">{email.preview || "Keine Vorschau verfügbar"}</span>
+          <span className={cn("truncate text-[12px] leading-5", email.isRead ? "text-white/45" : "font-medium text-white/70")}>{email.preview || "Keine Vorschau verfügbar"}</span>
           {email.hasAttachments ? <Paperclip size={12} className="shrink-0 text-white/40" /> : null}
           {accountLabel ? (
             <span className="inline-flex shrink-0 items-center gap-1 text-[10px] text-white/35">
@@ -309,7 +316,7 @@ const MailRow = memo(function MailRow({
         </span>
       </span>
       <span className="flex items-center gap-2">
-        <time className="whitespace-nowrap text-[11px] font-medium text-white/60">{timeLabel}</time>
+        <time className={cn("whitespace-nowrap text-[11px]", email.isRead ? "font-medium text-white/60" : "font-bold text-white")}>{timeLabel}</time>
         <span className="hidden items-center gap-1 group-hover:flex">
           <QuickButton label="Gelesen" onClick={() => void onQuickAction(email.id, "read")}><CheckCheck size={13} /></QuickButton>
           <QuickButton label="Archivieren" onClick={() => void onQuickAction(email.id, "archive")}><Archive size={13} /></QuickButton>

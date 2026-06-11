@@ -1,4 +1,4 @@
-import { Activity, AlertCircle, Archive, ChevronDown, ChevronRight, Edit3, FileText, Folder, Inbox, LayoutDashboard, Moon, Send, ShieldAlert, Star, Trash2 } from "lucide-react";
+import { Activity, AlertCircle, Archive, ChevronDown, ChevronRight, Edit3, FileText, Folder, Inbox, LayoutDashboard, Moon, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -106,6 +106,7 @@ export function MailSidebar() {
           <SideButton active={selectedView === "dashboard"} icon={<LayoutDashboard size={16} />} label="Dashboard" onClick={openDashboard} />
           <SideButton active={selectedView === "unifiedInbox" && !selectedSpecialAccountId} icon={<Inbox size={16} />} label="Alle Posteingänge" count={mailCounts.unread} onClick={() => void openUnifiedInbox()} />
           <SideButton active={selectedView === "health"} icon={<Activity size={16} />} label="Systemstatus" onClick={() => void openHealth()} />
+          <SideButton active={false} icon={<Settings size={16} />} label="Einstellungen" onClick={openSettings} />
         </nav>
 
         <SectionTitle title="Konten" />
