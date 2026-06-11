@@ -28,7 +28,7 @@ npm run build:desktop
 Der NSIS-Installer wird hier erzeugt:
 
 ```text
-release\LunaMail-Setup-0.9.39.exe
+release\LunaMail-Setup-0.9.40.exe
 ```
 
 ## Google-Konto verbinden

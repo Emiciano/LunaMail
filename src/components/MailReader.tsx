@@ -197,8 +197,8 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { doc
 
   const safetyStyle = doc.createElement("style");
   safetyStyle.textContent = `
-    html { color-scheme: light dark; }
-    body { margin: 0; min-height: 100%; overflow-wrap: anywhere; }
+    html { color-scheme: light only !important; background: #fff; }
+    body { margin: 0; min-height: 100%; overflow-wrap: anywhere; background: #fff; color: #111; }
     img { max-width: 100%; height: auto; }
     table { max-width: 100%; }
   `;
