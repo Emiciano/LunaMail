@@ -85,7 +85,7 @@ export function MailSidebar() {
   }
 
   return (
-    <aside className="mr-2 flex min-h-0 flex-col rounded-r-xl border-r border-white/[0.08] bg-[#111111] px-3 py-4">
+    <aside className="mr-2 flex min-h-0 flex-col bg-[#111111] px-3 py-4">
       <div className="mb-4 flex items-center">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
           <img src="./icon.png" alt="" className="h-7 w-7 rounded-lg object-cover" />
