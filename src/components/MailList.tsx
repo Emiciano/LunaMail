@@ -71,8 +71,8 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex min-h-0 flex-col bg-[#0B0B0B]">
-      <header className="flex min-h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-5">
+    <section className="flex min-h-0 flex-col bg-[#111111] px-2 py-2">
+      <header className="flex min-h-14 shrink-0 items-center justify-between px-3">
         <div>
           <h1 className="text-[17px] font-semibold tracking-[-0.02em]">{viewTitle(selectedView, selectedCategoryId)}</h1>
           <p className="mt-0.5 text-[11px] text-white/40">
@@ -84,8 +84,8 @@ export function MailList() {
 
       {showsMailList ? (
         <>
-          <div className="shrink-0 border-b border-white/[0.06] px-4 py-3">
-            <label className="flex h-9 items-center gap-3 rounded-lg border border-white/[0.10] bg-[#111] px-3 text-white/45">
+          <div className="shrink-0 px-2 pb-2 pt-1">
+            <label className="flex h-9 items-center gap-3 rounded-lg border border-white/[0.08] bg-[#181818] px-3 text-white/45 focus-within:border-white/[0.14]">
               <Search size={15} />
               <input
                 id="mail-search-input"
@@ -97,14 +97,14 @@ export function MailList() {
               <span className="text-[11px]">Strg K</span>
             </label>
             {selectedView === "unifiedInbox" && categories.length > 0 ? (
-              <div className="scrollbar-hidden mt-3 flex gap-5 overflow-x-auto text-[11px] font-medium">
-                <button className={`border-b pb-2 ${!selectedCategoryId ? "border-[rgb(var(--accent))] text-white" : "border-transparent text-white/50"}`} onClick={() => void selectCategory(undefined)}>
+              <div className="scrollbar-hidden mt-2 flex gap-1 overflow-x-auto text-[11px] font-medium">
+                <button className={`rounded-md px-2.5 py-1.5 ${!selectedCategoryId ? "bg-white/[0.09] text-white" : "text-white/50 hover:bg-white/[0.045] hover:text-white"}`} onClick={() => void selectCategory(undefined)}>
                   Alle
                 </button>
                 {categories.map((category) => (
                   <button
                     key={category.id}
-                    className={`whitespace-nowrap border-b pb-2 ${selectedCategoryId === category.id ? "border-[rgb(var(--accent))] text-white" : "border-transparent text-white/50 hover:text-white"}`}
+                    className={`whitespace-nowrap rounded-md px-2.5 py-1.5 ${selectedCategoryId === category.id ? "bg-white/[0.09] text-white" : "text-white/50 hover:bg-white/[0.045] hover:text-white"}`}
                     onClick={() => void selectCategory(category.id)}
                   >
                     {category.label}
@@ -159,7 +159,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div
-            className="mail-scroll min-h-0 flex-1 overflow-y-auto pb-20"
+            className="mail-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1 pb-20 pt-1"
             onScroll={(event) => {
               const element = event.currentTarget;
               if (element.scrollTop + element.clientHeight >= element.scrollHeight - 240 && visibleCount < emails.length) {
@@ -188,7 +188,7 @@ export function MailList() {
               />
             ))}
           </div>
-          <footer className="flex h-9 shrink-0 items-center justify-between border-t border-white/[0.06] px-5 text-[11px] text-white/45">
+          <footer className="flex h-9 shrink-0 items-center justify-between px-3 text-[11px] text-white/40">
             <span>{emails.filter((email) => !email.isRead).length} ungelesen</span>
             <span>Neueste zuerst</span>
           </footer>
@@ -215,7 +215,7 @@ function ActionToolbar({
 }) {
   const disabled = selectedCount === 0;
   return (
-    <div className="scrollbar-hidden flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/[0.06] px-4">
+    <div className="scrollbar-hidden mx-2 flex h-11 shrink-0 items-center gap-2 overflow-x-auto rounded-lg bg-white/[0.025] px-2">
       <label className="mr-1 inline-flex shrink-0 items-center gap-2 text-[11px] text-white/55">
         <input type="checkbox" checked={allSelected} onChange={(event) => onSelectAll(event.target.checked)} className="mail-checkbox h-3.5 w-3.5" />
         Alle
@@ -275,12 +275,12 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 border-b px-5 py-3 text-left transition-colors",
+        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors",
         active
-          ? "border-[rgb(var(--accent)/0.22)] bg-[rgb(var(--accent)/0.14)]"
+          ? "bg-white/[0.105] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.025)]"
           : email.isRead
-            ? "border-white/[0.035] hover:bg-[#111]"
-            : "border-[rgb(var(--accent)/0.16)] bg-[rgb(var(--accent)/0.075)] before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-r-full before:bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accent)/0.11)]"
+            ? "hover:bg-white/[0.055]"
+            : "bg-[rgb(var(--accent)/0.06)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:bg-white/[0.07]"
       )}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
@@ -290,10 +290,10 @@ const MailRow = memo(function MailRow({
         checked={selected}
         onChange={(event) => onToggleSelection(email.id, event.target.checked)}
         onClick={(event) => event.stopPropagation()}
-        className="mail-checkbox mt-1 h-3.5 w-3.5"
+        className={cn("mail-checkbox mt-1 h-3.5 w-3.5 transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}
         aria-label="Mail auswählen"
       />
-      <span className="flex items-center gap-1">
+      <span className={cn("flex items-center gap-1 transition-opacity", email.isFavorite || email.isImportant ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}>
         <QuickButton label="Favorit" active={email.isFavorite} alwaysVisible onClick={() => void onQuickAction(email.id, "favorite")}><Star size={13} /></QuickButton>
         <QuickButton label="Wichtig" active={email.isImportant} alwaysVisible onClick={() => void onQuickAction(email.id, "important")}><AlertCircle size={13} /></QuickButton>
       </span>

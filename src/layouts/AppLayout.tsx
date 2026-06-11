@@ -34,7 +34,7 @@ export function AppLayout() {
         </div>
       </header>
 
-      <section className="tr-shell grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-[10px]">
+      <section className="tr-shell grid min-h-0 flex-1 grid-cols-[292px_minmax(0,1fr)] overflow-hidden rounded-[12px] bg-[#111111]">
         <MailSidebar />
         <MailList />
       </section>

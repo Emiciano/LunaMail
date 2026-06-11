@@ -88,7 +88,7 @@ export function MailSidebar() {
   }
 
   return (
-    <aside className="flex min-h-0 flex-col border-r border-white/[0.06] bg-[#0B0B0B] px-4 py-4">
+    <aside className="flex min-h-0 flex-col bg-[#111111] px-3 py-4">
       <div className="mb-4 flex items-center justify-between">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--accent))] text-white">
@@ -136,7 +136,7 @@ export function MailSidebar() {
                 </button>
 
                 {accountOpen ? (
-                  <nav className="ml-4 mt-1 space-y-1 border-l border-white/[0.06] pl-2">
+                  <nav className="ml-4 mt-1 space-y-1 pl-2">
                     <SideButton
                       active={selectedView === "favorites" && selectedSpecialAccountId === account.id}
                       icon={<Star size={15} />}
@@ -190,8 +190,8 @@ function SideButton({ active, icon, label, count, onClick }: { active: boolean; 
     <button
       className={`flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-[13px] font-medium ${
         active
-          ? "border border-[rgb(var(--accent)/0.35)] bg-[rgb(var(--accent)/0.14)] text-white"
-          : "text-white/82 hover:bg-white/[0.05]"
+          ? "bg-white/[0.10] text-white"
+          : "text-white/78 hover:bg-white/[0.055] hover:text-white"
       }`}
       onClick={onClick}
     >
@@ -203,7 +203,7 @@ function SideButton({ active, icon, label, count, onClick }: { active: boolean; 
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <div className="mb-3 mt-6 border-t border-white/[0.06] pt-4 text-[12px] font-medium text-white/45">{title}</div>;
+  return <div className="mb-2 mt-6 px-2 text-[12px] font-medium text-white/38">{title}</div>;
 }
 
 function FolderButton({ folder, active, onClick }: { folder: MailFolder; active: boolean; onClick: () => void }) {
