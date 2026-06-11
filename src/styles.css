@@ -99,6 +99,15 @@ button {
   background-clip: padding-box;
 }
 
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 .mail-checkbox {
   appearance: none;
   -webkit-appearance: none;

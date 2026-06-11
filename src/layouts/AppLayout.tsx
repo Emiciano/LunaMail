@@ -5,8 +5,8 @@ import { CalendarView } from "../components/CalendarView";
 import { MailList } from "../components/MailList";
 import { MailReader } from "../components/MailReader";
 import { MailSidebar } from "../components/MailSidebar";
-import { mailService } from "../services/mailService";
 import { isDesktop } from "../services/desktop";
+import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 
 export function AppLayout() {
@@ -19,11 +19,7 @@ export function AppLayout() {
 
   return (
     <div className="h-full overflow-hidden bg-[#0B0B0B] px-8 py-5 text-white">
-      <header className="titlebar-drag flex h-[64px] items-start justify-between">
-        <div>
-          <h1 className="text-[28px] font-bold leading-9 tracking-[-0.04em]">LunaMail - Trade Republic Style</h1>
-          <p className="mt-1 text-[15px] font-medium text-white/55">Schwarz. Weiß. Minimalistisch. Fokus auf das Wesentliche.</p>
-        </div>
+      <header className="titlebar-drag flex h-10 items-center justify-end">
         <div className="titlebar-no-drag flex items-center gap-2">
           <button
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] bg-[#151515] text-white/70 hover:bg-[#1B1B1B]"
@@ -48,11 +44,11 @@ export function AppLayout() {
         </div>
       </header>
 
-      <section className="tr-shell grid h-[calc(100%-88px)] min-h-[520px] grid-cols-[280px_450px_minmax(0,1fr)] overflow-hidden rounded-[10px] 2xl:h-[calc(100%-338px)]">
+      <section className="tr-shell grid h-[calc(100%-64px)] min-h-[520px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-[10px] 2xl:h-[calc(100%-314px)]">
         <MailSidebar />
         <MailList />
-        <MailReader />
       </section>
+      <MailReader />
 
       <section className="mt-6 hidden h-[250px] grid-cols-4 gap-6 2xl:grid">
         <PreviewComposer onCompose={() => openComposer()} disabled={!hasAccounts} />

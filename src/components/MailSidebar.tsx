@@ -1,5 +1,6 @@
-import { Archive, ChevronDown, Edit3, FileText, Folder, Inbox, Moon, Send, ShieldAlert, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, Edit3, FileText, Folder, Inbox, LayoutDashboard, Moon, Send, ShieldAlert, Trash2 } from "lucide-react";
 import { useMemo } from "react";
+import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useMailStore } from "../stores/mailStore";
 import type { Folder as MailFolder } from "../types";
@@ -22,7 +23,7 @@ const labels = [
 ] as const;
 
 export function MailSidebar() {
-  const { accounts, folders, selectedFolderId, selectedView, mailCounts, selectFolder, selectSpecialView, openComposer, openSettings } = useMailStore(useShallow((state) => ({
+  const { accounts, folders, selectedFolderId, selectedView, mailCounts, selectFolder, selectSpecialView, openComposer, openSettings, openDashboard } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
     selectedFolderId: state.selectedFolderId,
@@ -31,7 +32,8 @@ export function MailSidebar() {
     selectFolder: state.selectFolder,
     selectSpecialView: state.selectSpecialView,
     openComposer: state.openComposer,
-    openSettings: state.openSettings
+    openSettings: state.openSettings,
+    openDashboard: state.openDashboard
   })));
 
   const firstAccount = accounts[0];
@@ -44,7 +46,7 @@ export function MailSidebar() {
 
   return (
     <aside className="flex min-h-0 flex-col border-r border-white/[0.06] bg-[#0B0B0B] px-5 py-5">
-      <div className="mb-7 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#0B0B0B]">
             <Moon size={15} fill="currentColor" />
@@ -56,57 +58,55 @@ export function MailSidebar() {
         </button>
       </div>
 
-      <nav className="space-y-1">
-        {primaryRoles.map(({ role, label, icon: Icon }) => {
-          const folder = foldersByRole.get(role);
-          const active = selectedView === "folder" && selectedFolderId === folder?.id;
-          return (
-            <button
-              key={role}
-              className={`flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-[13px] font-medium ${active ? "bg-white/[0.08] text-white" : "text-white/82 hover:bg-white/[0.05]"}`}
-              onClick={() => folder && void selectFolder(folder.id)}
-            >
-              <Icon size={16} />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              {role === "inbox" && mailCounts.unread > 0 ? <span className="text-xs text-white/65">{mailCounts.unread}</span> : null}
-            </button>
-          );
-        })}
-      </nav>
+      <div className="scrollbar-hidden mail-scroll min-h-0 flex-1 overflow-y-auto pr-1">
+        <nav className="space-y-1">
+          <SideButton active={selectedView === "dashboard"} icon={<LayoutDashboard size={16} />} label="Dashboard" onClick={openDashboard} />
+          {primaryRoles.map(({ role, label, icon: Icon }) => {
+            const folder = foldersByRole.get(role);
+            return (
+              <SideButton
+                key={role}
+                active={selectedView === "folder" && selectedFolderId === folder?.id}
+                icon={<Icon size={16} />}
+                label={label}
+                count={role === "inbox" ? mailCounts.unread : undefined}
+                onClick={() => folder && void selectFolder(folder.id)}
+              />
+            );
+          })}
+        </nav>
 
-      <SectionTitle title="Ordner" />
-      <nav className="space-y-1">
-        {requestedFolders.map((name) => {
-          const folder = customFolders.find((item) => item.name.toLowerCase() === name.toLowerCase() || item.remoteName.toLowerCase().includes(name.toLowerCase()));
-          const active = selectedView === "folder" && selectedFolderId === folder?.id;
-          return (
-            <button
-              key={name}
-              className={`flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-left text-[13px] ${active ? "bg-white/[0.08] text-white" : "text-white/82 hover:bg-white/[0.05]"}`}
-              onClick={() => folder && void selectFolder(folder.id)}
-            >
-              <Folder size={15} />
-              <span className="truncate">{name}</span>
-            </button>
-          );
-        })}
-      </nav>
+        <SectionTitle title="Ordner" />
+        <nav className="space-y-1">
+          {requestedFolders.map((name) => {
+            const folder = customFolders.find((item) => item.name.toLowerCase() === name.toLowerCase() || item.remoteName.toLowerCase().includes(name.toLowerCase()));
+            return (
+              <SideButton
+                key={name}
+                active={selectedView === "folder" && selectedFolderId === folder?.id}
+                icon={<Folder size={15} />}
+                label={name}
+                onClick={() => folder && void selectFolder(folder.id)}
+              />
+            );
+          })}
+        </nav>
 
-      <SectionTitle title="Labels" />
-      <nav className="space-y-1">
-        {labels.map(([label, color]) => (
-          <button
-            key={label}
-            className="flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-left text-[13px] text-white/82 hover:bg-white/[0.05]"
-            onClick={() => label === "Wichtig" && firstAccount ? void selectSpecialView("important", firstAccount.id) : undefined}
-          >
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </nav>
+        <SectionTitle title="Labels" />
+        <nav className="space-y-1">
+          {labels.map(([label, color]) => (
+            <SideButton
+              key={label}
+              active={selectedView === "important" && label === "Wichtig"}
+              icon={<span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />}
+              label={label}
+              onClick={() => label === "Wichtig" && firstAccount ? void selectSpecialView("important", firstAccount.id) : undefined}
+            />
+          ))}
+        </nav>
+      </div>
 
-      <div className="mt-auto flex items-center gap-3 rounded-lg px-2.5 py-2">
+      <div className="mt-4 flex items-center gap-3 rounded-lg px-2.5 py-2">
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#151515] text-sm font-semibold">E</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium">{firstAccount?.displayName ?? "Emilio"}</span>
@@ -115,6 +115,23 @@ export function MailSidebar() {
         <ChevronDown size={15} className="text-white/55" />
       </div>
     </aside>
+  );
+}
+
+function SideButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
+  return (
+    <button
+      className={`flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-[13px] font-medium ${
+        active
+          ? "border border-[rgb(var(--accent)/0.35)] bg-[rgb(var(--accent)/0.14)] text-white"
+          : "text-white/82 hover:bg-white/[0.05]"
+      }`}
+      onClick={onClick}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {count && count > 0 ? <span className="text-xs text-white/65">{count}</span> : null}
+    </button>
   );
 }
 

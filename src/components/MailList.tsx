@@ -38,7 +38,7 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex min-h-0 flex-col border-r border-white/[0.06] bg-[#0B0B0B]">
+    <section className="flex min-h-0 flex-col bg-[#0B0B0B]">
       <div className="border-b border-white/[0.06] px-4 pb-0 pt-4">
         <label className="flex h-9 items-center gap-3 rounded-lg border border-white/[0.10] bg-[#111] px-3 text-white/45">
           <Search size={15} />
@@ -55,7 +55,7 @@ export function MailList() {
           {categories.map((category, index) => (
             <button
               key={category}
-              className={`h-full border-b px-0.5 ${index === 0 ? "border-white text-white" : "border-transparent text-white/55 hover:text-white"}`}
+              className={`h-full border-b px-0.5 ${index === 0 ? "border-[rgb(var(--accent))] text-white" : "border-transparent text-white/55 hover:text-white"}`}
             >
               {category}
             </button>
@@ -114,11 +114,11 @@ const MailRow = memo(function MailRow({
     <button
       className={cn(
         "mail-row grid w-full grid-cols-[14px_1fr_auto] gap-3 border-b border-white/[0.035] px-5 py-4 text-left transition-colors",
-        active ? "bg-[#151515]" : "hover:bg-[#111]"
+        active ? "bg-[rgb(var(--accent)/0.13)]" : "hover:bg-[#111]"
       )}
       onClick={() => void onSelect(email)}
     >
-      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-white/75" />
+      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent))]" />
       <span className="min-w-0">
         <span className="block truncate text-[13px] font-semibold text-white">{sender}</span>
         <span className="mt-1 block truncate text-[13px] font-medium text-white">{email.subject || "(Kein Betreff)"}</span>

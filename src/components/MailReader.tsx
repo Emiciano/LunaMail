@@ -1,7 +1,8 @@
 import DOMPurify from "dompurify";
-import { Archive, Clock3, Download, Forward, MoreHorizontal, Paperclip, Reply, ReplyAll, Trash2 } from "lucide-react";
+import { Archive, Clock3, Download, Forward, MoreHorizontal, Paperclip, Reply, ReplyAll, Trash2, X } from "lucide-react";
 import { useMemo } from "react";
 import type { MouseEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { desktopDialog, invokeDesktop, isDesktop } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
@@ -11,9 +12,10 @@ const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail, settings, replyToSelected, forwardSelected, deleteSelected } = useMailStore(useShallow((state) => ({
+  const { selectedEmail, settings, closeEmail, replyToSelected, forwardSelected, deleteSelected } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
     settings: state.settings,
+    closeEmail: state.closeEmail,
     replyToSelected: state.replyToSelected,
     forwardSelected: state.forwardSelected,
     deleteSelected: state.deleteSelected
@@ -24,21 +26,7 @@ export function MailReader() {
     return sanitizeEmailHtml(selectedEmail.bodyHtml, settings.externalImages === "always");
   }, [selectedEmail?.bodyHtml, settings.externalImages]);
 
-  if (!selectedEmail) {
-    return (
-      <section className="flex min-h-0 flex-col bg-[#0B0B0B]">
-        <div className="flex flex-1 items-center justify-center px-10 text-center">
-          <div>
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[#151515]">
-              <Paperclip size={20} className="text-white/45" />
-            </div>
-            <h2 className="text-[22px] font-semibold tracking-[-0.03em]">Keine Mail ausgewählt</h2>
-            <p className="mt-2 max-w-sm text-[13px] leading-6 text-white/45">Wähle links eine Nachricht aus, um sie im minimalistischen Lesebereich zu öffnen.</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  if (!selectedEmail) return null;
 
   const bodyFallback = selectedEmail.bodyText || selectedEmail.preview || "";
 
@@ -52,90 +40,96 @@ export function MailReader() {
     void openExternalUrl(href);
   }
 
-  return (
-    <article className="mail-scroll min-h-0 overflow-y-auto bg-[#0B0B0B] px-9 py-5">
-      <header className="mb-7 border-b border-white/[0.06] pb-5">
-        <div className="mb-8 flex items-center justify-between">
-          <button className="text-[12px] font-medium text-white/55 hover:text-white">‹ Zurück</button>
-          <div className="flex items-center gap-5 text-white/65">
-            <button title="Archivieren"><Archive size={17} /></button>
-            <button title="Löschen" onClick={() => void deleteSelected()}><Trash2 size={17} /></button>
-            <button title="Später"><Clock3 size={17} /></button>
-            <button title="Mehr"><MoreHorizontal size={18} /></button>
-          </div>
-        </div>
-        <h2 className="max-w-[760px] text-[22px] font-semibold leading-8 tracking-[-0.035em]">{selectedEmail.subject || "(Kein Betreff)"}</h2>
-        <div className="mt-6 flex items-start justify-between gap-6">
-          <div className="flex min-w-0 items-center gap-4">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[13px] font-semibold">
-              {initials(selectedEmail.sender)}
-            </span>
-            <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold">{selectedEmail.sender || "Unbekannter Absender"}</div>
-              <div className="truncate text-[12px] text-white/45">an {selectedEmail.recipients || "mich"} ˅</div>
+  return createPortal(
+    <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/76 p-6" onClick={closeEmail}>
+      <article
+        className="tr-shell mail-scroll max-h-[min(900px,calc(100vh-3rem))] w-[min(1080px,calc(100vw-3rem))] overflow-y-auto rounded-[10px] bg-[#0B0B0B] px-9 py-5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="mb-7 border-b border-white/[0.06] pb-5">
+          <div className="mb-8 flex items-center justify-between">
+            <button className="text-[12px] font-medium text-white/55 hover:text-white" onClick={closeEmail}>‹ Zurück</button>
+            <div className="flex items-center gap-5 text-white/65">
+              <button title="Archivieren"><Archive size={17} /></button>
+              <button title="Löschen" onClick={() => void deleteSelected()}><Trash2 size={17} /></button>
+              <button title="Später"><Clock3 size={17} /></button>
+              <button title="Mehr"><MoreHorizontal size={18} /></button>
+              <button title="Schließen" onClick={closeEmail}><X size={18} /></button>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-5 text-[12px] text-white/65">
-            <time>{new Date(selectedEmail.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
-            <button title="Antworten" onClick={replyToSelected}><Reply size={16} /></button>
-            <button title="Allen antworten" onClick={replyToSelected}><ReplyAll size={16} /></button>
-            <button title="Weiterleiten" onClick={forwardSelected}><Forward size={16} /></button>
-            <button title="Mehr"><MoreHorizontal size={16} /></button>
+          <h2 className="max-w-[760px] text-[22px] font-semibold leading-8 tracking-[-0.035em]">{selectedEmail.subject || "(Kein Betreff)"}</h2>
+          <div className="mt-6 flex items-start justify-between gap-6">
+            <div className="flex min-w-0 items-center gap-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--accent)/0.22)] text-[13px] font-semibold">
+                {initials(selectedEmail.sender)}
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-[13px] font-semibold">{selectedEmail.sender || "Unbekannter Absender"}</div>
+                <div className="truncate text-[12px] text-white/45">an {selectedEmail.recipients || "mich"} ˅</div>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-5 text-[12px] text-white/65">
+              <time>{new Date(selectedEmail.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+              <button title="Antworten" onClick={replyToSelected}><Reply size={16} /></button>
+              <button title="Allen antworten" onClick={replyToSelected}><ReplyAll size={16} /></button>
+              <button title="Weiterleiten" onClick={forwardSelected}><Forward size={16} /></button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <section className="max-w-[720px] text-[14px] font-medium leading-8 text-white/90">
-        {selectedEmail.bodyHtml && selectedEmail.bodyHtml.length > MAX_HTML_LENGTH ? (
-          <div className="mb-5 rounded-md border border-white/[0.06] bg-[#151515] px-4 py-3 text-[13px] text-white/65">
-            Sehr große HTML-Mail wird aus Performance-Gründen als Text angezeigt.
-          </div>
-        ) : null}
-        {htmlView?.blockedRemoteImages ? (
-          <div className="mb-5 rounded-md border border-white/[0.06] bg-[#151515] px-4 py-3 text-[13px] text-white/65">
-            {htmlView.blockedRemoteImages} externe Bilder wurden blockiert.
-          </div>
-        ) : null}
-        <div
-          className="reader-content"
-          dangerouslySetInnerHTML={htmlView?.html ? { __html: htmlView.html } : undefined}
-          onClick={handleReaderClick}
-        >
-          {!htmlView?.html ? <pre className="whitespace-pre-wrap font-sans">{bodyFallback}</pre> : null}
-        </div>
-      </section>
-
-      {selectedEmail.attachments.length > 0 ? (
-        <section className="mt-7 max-w-[720px] border-t border-white/[0.06] pt-4">
-          <div className="mb-3 text-[12px] font-medium text-white/55">{selectedEmail.attachments.length} Anhänge</div>
-          <div className="grid grid-cols-2 gap-3">
-            {selectedEmail.attachments.map((attachment) => (
-              <button
-                key={attachment.id}
-                className="tr-card tr-card-hover flex h-[58px] items-center gap-4 rounded-md px-4 text-left"
-                onClick={() => void downloadAttachment(attachment.id, attachment.fileName)}
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.08]">
-                  <Paperclip size={15} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12px] font-semibold">{attachment.fileName}</span>
-                  <span className="block text-[11px] text-white/45">{formatBytes(attachment.size)}</span>
-                </span>
-                <Download size={15} className="text-white/45" />
-              </button>
-            ))}
+        <section className="max-w-[760px] text-[14px] font-medium leading-8 text-white/90">
+          {selectedEmail.bodyHtml && selectedEmail.bodyHtml.length > MAX_HTML_LENGTH ? (
+            <Notice>Sehr große HTML-Mail wird aus Performance-Gründen als Text angezeigt.</Notice>
+          ) : null}
+          {htmlView?.blockedRemoteImages ? (
+            <Notice>{htmlView.blockedRemoteImages} externe Bilder wurden blockiert.</Notice>
+          ) : null}
+          <div
+            className="reader-content"
+            dangerouslySetInnerHTML={htmlView?.html ? { __html: htmlView.html } : undefined}
+            onClick={handleReaderClick}
+          >
+            {!htmlView?.html ? <pre className="whitespace-pre-wrap font-sans">{bodyFallback}</pre> : null}
           </div>
         </section>
-      ) : null}
 
-      <footer className="mt-7 flex gap-3">
-        <ActionButton icon={<Reply size={15} />} label="Antworten" onClick={replyToSelected} />
-        <ActionButton icon={<ReplyAll size={15} />} label="Allen antworten" onClick={replyToSelected} />
-        <ActionButton icon={<Forward size={15} />} label="Weiterleiten" onClick={forwardSelected} />
-      </footer>
-    </article>
+        {selectedEmail.attachments.length > 0 ? (
+          <section className="mt-7 max-w-[760px] border-t border-white/[0.06] pt-4">
+            <div className="mb-3 text-[12px] font-medium text-white/55">{selectedEmail.attachments.length} Anhänge</div>
+            <div className="grid grid-cols-2 gap-3">
+              {selectedEmail.attachments.map((attachment) => (
+                <button
+                  key={attachment.id}
+                  className="tr-card tr-card-hover flex h-[58px] items-center gap-4 rounded-md px-4 text-left"
+                  onClick={() => void downloadAttachment(attachment.id, attachment.fileName)}
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.08]">
+                    <Paperclip size={15} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12px] font-semibold">{attachment.fileName}</span>
+                    <span className="block text-[11px] text-white/45">{formatBytes(attachment.size)}</span>
+                  </span>
+                  <Download size={15} className="text-white/45" />
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <footer className="mt-7 flex gap-3">
+          <ActionButton icon={<Reply size={15} />} label="Antworten" onClick={replyToSelected} />
+          <ActionButton icon={<ReplyAll size={15} />} label="Allen antworten" onClick={replyToSelected} />
+          <ActionButton icon={<Forward size={15} />} label="Weiterleiten" onClick={forwardSelected} />
+        </footer>
+      </article>
+    </div>,
+    document.body
   );
+}
+
+function Notice({ children }: { children: ReactNode }) {
+  return <div className="mb-5 rounded-md border border-white/[0.06] bg-[#151515] px-4 py-3 text-[13px] text-white/65">{children}</div>;
 }
 
 function ActionButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
