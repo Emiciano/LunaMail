@@ -1,52 +1,95 @@
-import { Archive, ChevronDown, Edit3, FileText, Folder, Inbox, LayoutDashboard, Moon, Send, ShieldAlert, Trash2 } from "lucide-react";
-import { useMemo } from "react";
+import { Activity, AlertCircle, Archive, ChevronDown, ChevronRight, Edit3, FileText, Folder, Inbox, LayoutDashboard, Moon, Send, ShieldAlert, Star, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useMailStore } from "../stores/mailStore";
-import type { Folder as MailFolder } from "../types";
+import type { Account, Folder as MailFolder } from "../types";
 
-const primaryRoles: Array<{ role: MailFolder["role"]; label: string; icon: typeof Inbox }> = [
-  { role: "inbox", label: "Posteingang", icon: Inbox },
-  { role: "sent", label: "Gesendet", icon: Send },
-  { role: "drafts", label: "Entwürfe", icon: FileText },
-  { role: "archive", label: "Archiv", icon: Archive },
-  { role: "trash", label: "Papierkorb", icon: Trash2 },
-  { role: "spam", label: "Spam", icon: ShieldAlert }
-];
+const SIDEBAR_STORAGE_KEY = "lunamail.sidebar.expanded";
+const folderIcons: Record<MailFolder["role"], typeof Inbox> = {
+  inbox: Inbox,
+  sent: Send,
+  drafts: FileText,
+  archive: Archive,
+  trash: Trash2,
+  spam: ShieldAlert,
+  promotions: Folder,
+  custom: Folder
+};
 
-const requestedFolders = ["Arbeit", "Privat", "Projekte", "Rechnungen", "Newsletter"];
-const labels = [
-  ["Wichtig", "#FF6B57"],
-  ["Kunden", "#A6A6A6"],
-  ["Rechnungen", "#54C56E"],
-  ["Information", "#5D8CFF"]
-] as const;
+type ExpandedState = {
+  accounts: Record<number, boolean>;
+  customFolders: Record<number, boolean>;
+};
+
+function readExpandedState(): ExpandedState {
+  try {
+    const value = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    return value ? JSON.parse(value) as ExpandedState : { accounts: {}, customFolders: {} };
+  } catch {
+    return { accounts: {}, customFolders: {} };
+  }
+}
 
 export function MailSidebar() {
-  const { accounts, folders, selectedFolderId, selectedView, mailCounts, selectFolder, selectSpecialView, openComposer, openSettings, openDashboard } = useMailStore(useShallow((state) => ({
+  const {
+    accounts, folders, selectedAccountId, selectedFolderId, selectedView, selectedSpecialAccountId,
+    mailCounts, selectAccount, selectFolder, selectSpecialView, openUnifiedInbox, openHealth,
+    openComposer, openSettings, openDashboard
+  } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
+    selectedAccountId: state.selectedAccountId,
     selectedFolderId: state.selectedFolderId,
     selectedView: state.selectedView,
+    selectedSpecialAccountId: state.selectedSpecialAccountId,
     mailCounts: state.mailCounts,
+    selectAccount: state.selectAccount,
     selectFolder: state.selectFolder,
     selectSpecialView: state.selectSpecialView,
+    openUnifiedInbox: state.openUnifiedInbox,
+    openHealth: state.openHealth,
     openComposer: state.openComposer,
     openSettings: state.openSettings,
     openDashboard: state.openDashboard
   })));
+  const [expanded, setExpanded] = useState<ExpandedState>(readExpandedState);
 
-  const firstAccount = accounts[0];
-  const accountFolders = useMemo(
-    () => firstAccount ? folders.filter((folder) => folder.accountId === firstAccount.id) : folders,
-    [firstAccount, folders]
+  const foldersByAccount = useMemo(() => {
+    const grouped = new Map<number, MailFolder[]>();
+    for (const folder of folders) {
+      grouped.set(folder.accountId, [...(grouped.get(folder.accountId) ?? []), folder]);
+    }
+    return grouped;
+  }, [folders]);
+  const specialByAccount = useMemo(
+    () => new Map(mailCounts.perAccount.map((item) => [item.accountId, item])),
+    [mailCounts.perAccount]
   );
-  const foldersByRole = useMemo(() => new Map(accountFolders.map((folder) => [folder.role, folder])), [accountFolders]);
-  const customFolders = accountFolders.filter((folder) => folder.role === "custom");
+  const activeAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts[0];
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(expanded));
+  }, [expanded]);
+
+  function toggleAccount(account: Account) {
+    setExpanded((current) => ({
+      ...current,
+      accounts: { ...current.accounts, [account.id]: !(current.accounts[account.id] ?? true) }
+    }));
+    void selectAccount(account.id);
+  }
+
+  function toggleCustomFolders(accountId: number) {
+    setExpanded((current) => ({
+      ...current,
+      customFolders: { ...current.customFolders, [accountId]: !(current.customFolders[accountId] ?? true) }
+    }));
+  }
 
   return (
-    <aside className="flex min-h-0 flex-col border-r border-white/[0.06] bg-[#0B0B0B] px-5 py-5">
-      <div className="mb-5 flex items-center justify-between">
+    <aside className="flex min-h-0 flex-col border-r border-white/[0.06] bg-[#0B0B0B] px-4 py-4">
+      <div className="mb-4 flex items-center justify-between">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#0B0B0B]">
             <Moon size={15} fill="currentColor" />
@@ -61,59 +104,82 @@ export function MailSidebar() {
       <div className="scrollbar-hidden mail-scroll min-h-0 flex-1 overflow-y-auto pr-1">
         <nav className="space-y-1">
           <SideButton active={selectedView === "dashboard"} icon={<LayoutDashboard size={16} />} label="Dashboard" onClick={openDashboard} />
-          {primaryRoles.map(({ role, label, icon: Icon }) => {
-            const folder = foldersByRole.get(role);
-            return (
-              <SideButton
-                key={role}
-                active={selectedView === "folder" && selectedFolderId === folder?.id}
-                icon={<Icon size={16} />}
-                label={label}
-                count={role === "inbox" ? mailCounts.unread : undefined}
-                onClick={() => folder && void selectFolder(folder.id)}
-              />
-            );
-          })}
+          <SideButton active={selectedView === "unifiedInbox" && !selectedSpecialAccountId} icon={<Inbox size={16} />} label="Alle Posteingänge" count={mailCounts.unread} onClick={() => void openUnifiedInbox()} />
+          <SideButton active={selectedView === "health"} icon={<Activity size={16} />} label="Systemstatus" onClick={() => void openHealth()} />
         </nav>
 
-        <SectionTitle title="Ordner" />
-        <nav className="space-y-1">
-          {requestedFolders.map((name) => {
-            const folder = customFolders.find((item) => item.name.toLowerCase() === name.toLowerCase() || item.remoteName.toLowerCase().includes(name.toLowerCase()));
+        <SectionTitle title="Konten" />
+        <div className="space-y-2">
+          {accounts.length === 0 ? <p className="px-2 py-3 text-[12px] text-white/45">Noch kein Konto verbunden</p> : null}
+          {accounts.map((account) => {
+            const accountFolders = foldersByAccount.get(account.id) ?? [];
+            const primaryFolders = accountFolders.filter((folder) => folder.role !== "custom");
+            const customFolders = accountFolders.filter((folder) => folder.role === "custom");
+            const accountOpen = expanded.accounts[account.id] ?? true;
+            const customOpen = expanded.customFolders[account.id] ?? true;
+            const accountUnread = accountFolders.reduce((sum, folder) => sum + folder.unreadCount, 0);
+
             return (
-              <SideButton
-                key={name}
-                active={selectedView === "folder" && selectedFolderId === folder?.id}
-                icon={<Folder size={15} />}
-                label={name}
-                onClick={() => folder && void selectFolder(folder.id)}
-              />
+              <section key={account.id}>
+                <button
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${selectedAccountId === account.id ? "bg-white/[0.045]" : "hover:bg-white/[0.035]"}`}
+                  onClick={() => toggleAccount(account)}
+                >
+                  <ChevronRight size={14} className={`shrink-0 text-white/45 transition-transform ${accountOpen ? "rotate-90" : ""}`} />
+                  <AccountAvatar account={account} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12px] font-semibold">{account.displayName}</span>
+                    <span className="block truncate text-[10px] text-white/40">{account.email}</span>
+                  </span>
+                  {accountUnread > 0 ? <CountBadge count={accountUnread} /> : null}
+                </button>
+
+                {accountOpen ? (
+                  <nav className="ml-4 mt-1 space-y-1 border-l border-white/[0.06] pl-2">
+                    <SideButton
+                      active={selectedView === "favorites" && selectedSpecialAccountId === account.id}
+                      icon={<Star size={15} />}
+                      label="Favoriten"
+                      count={specialByAccount.get(account.id)?.favorites}
+                      onClick={() => void selectSpecialView("favorites", account.id)}
+                    />
+                    <SideButton
+                      active={selectedView === "important" && selectedSpecialAccountId === account.id}
+                      icon={<AlertCircle size={15} />}
+                      label="Wichtig"
+                      count={specialByAccount.get(account.id)?.important}
+                      onClick={() => void selectSpecialView("important", account.id)}
+                    />
+                    {primaryFolders.map((folder) => (
+                      <FolderButton key={folder.id} folder={folder} active={selectedView === "folder" && selectedFolderId === folder.id} onClick={() => void selectFolder(folder.id)} />
+                    ))}
+                    {customFolders.length > 0 ? (
+                      <>
+                        <button className="flex h-8 w-full items-center gap-2 px-2 text-left text-[11px] text-white/45 hover:text-white" onClick={() => toggleCustomFolders(account.id)}>
+                          <ChevronRight size={13} className={`transition-transform ${customOpen ? "rotate-90" : ""}`} />
+                          Unterordner
+                        </button>
+                        {customOpen ? customFolders.map((folder) => (
+                          <FolderButton key={folder.id} folder={folder} active={selectedView === "folder" && selectedFolderId === folder.id} onClick={() => void selectFolder(folder.id)} />
+                        )) : null}
+                      </>
+                    ) : null}
+                  </nav>
+                ) : null}
+              </section>
             );
           })}
-        </nav>
-
-        <SectionTitle title="Labels" />
-        <nav className="space-y-1">
-          {labels.map(([label, color]) => (
-            <SideButton
-              key={label}
-              active={selectedView === "important" && label === "Wichtig"}
-              icon={<span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />}
-              label={label}
-              onClick={() => label === "Wichtig" && firstAccount ? void selectSpecialView("important", firstAccount.id) : undefined}
-            />
-          ))}
-        </nav>
+        </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-3 rounded-lg px-2.5 py-2">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#151515] text-sm font-semibold">E</span>
+      <button className="mt-3 flex items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-white/[0.04]" onClick={openSettings}>
+        <AccountAvatar account={activeAccount} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium">{firstAccount?.displayName ?? "Emilio"}</span>
-          <span className="block truncate text-[11px] text-white/45">{firstAccount?.email ?? "emilio@lunamail.com"}</span>
+          <span className="block truncate text-[13px] font-medium">{activeAccount?.displayName ?? "LunaMail"}</span>
+          <span className="block truncate text-[11px] text-white/45">{activeAccount?.email ?? "Konto hinzufügen"}</span>
         </span>
         <ChevronDown size={15} className="text-white/55" />
-      </div>
+      </button>
     </aside>
   );
 }
@@ -130,16 +196,54 @@ function SideButton({ active, icon, label, count, onClick }: { active: boolean; 
     >
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {count && count > 0 ? <span className="text-xs text-white/65">{count}</span> : null}
+      {count && count > 0 ? <CountBadge count={count} /> : null}
     </button>
   );
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return (
-    <div className="mb-3 mt-7 flex items-center justify-between border-t border-white/[0.06] pt-4 text-[12px] font-medium text-white/45">
-      <span>{title}</span>
-      <span className="text-lg leading-none">+</span>
-    </div>
-  );
+  return <div className="mb-3 mt-6 border-t border-white/[0.06] pt-4 text-[12px] font-medium text-white/45">{title}</div>;
+}
+
+function FolderButton({ folder, active, onClick }: { folder: MailFolder; active: boolean; onClick: () => void }) {
+  const Icon = folderIcons[folder.role];
+  return <SideButton active={active} icon={<Icon size={15} />} label={folderLabel(folder)} count={folder.unreadCount} onClick={onClick} />;
+}
+
+function folderLabel(folder: MailFolder) {
+  const labels: Partial<Record<MailFolder["role"], string>> = {
+    inbox: "Posteingang",
+    sent: "Gesendet",
+    drafts: "Entwürfe",
+    archive: "Archiv",
+    trash: "Papierkorb",
+    spam: "Spam",
+    promotions: "Werbung"
+  };
+  return labels[folder.role] ?? translateFolderName(folder.name);
+}
+
+function translateFolderName(name: string) {
+  const labels: Record<string, string> = {
+    inbox: "Posteingang",
+    sent: "Gesendet",
+    "sent messages": "Gesendet",
+    "sent mail": "Gesendet",
+    drafts: "Entwürfe",
+    archive: "Archiv",
+    junk: "Spam",
+    trash: "Papierkorb",
+    deleted: "Papierkorb",
+    "deleted messages": "Papierkorb"
+  };
+  return labels[name.trim().toLowerCase()] ?? name;
+}
+
+function CountBadge({ count }: { count: number }) {
+  return <span className="min-w-5 rounded-full bg-[rgb(var(--accent)/0.16)] px-1.5 py-0.5 text-center text-[10px] text-[rgb(var(--accent))]">{count > 99 ? "99+" : count}</span>;
+}
+
+function AccountAvatar({ account }: { account?: Account }) {
+  const label = account?.displayName || account?.email || "L";
+  return <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#151515] text-[11px] font-semibold">{label.charAt(0).toUpperCase()}</span>;
 }
