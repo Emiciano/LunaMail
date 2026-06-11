@@ -4,15 +4,25 @@ export type AppUpdateStatus =
   | { status: "checking" }
   | { status: "available"; version: string; releaseNotes?: string }
   | { status: "not-available"; version?: string }
-  | { status: "downloading"; percent: number; transferred: number; total: number; bytesPerSecond: number }
+  | { status: "downloading"; version: string; percent: number; transferred: number; total: number; bytesPerSecond: number }
   | { status: "downloaded"; version: string }
   | { status: "error"; message: string };
+
+export type AppRelease = {
+  version: string;
+  name: string;
+  publishedAt?: string;
+  url: string;
+  prerelease: boolean;
+};
 
 type ElectronBridge = {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
   on<T>(event: string, callback: (payload: T) => void): () => void;
   getVersion(): Promise<string>;
   checkForUpdates(): Promise<unknown>;
+  downloadUpdate(): Promise<unknown>;
+  getReleaseHistory(): Promise<AppRelease[]>;
   openDialog(options: Record<string, unknown>): Promise<string | string[] | null>;
   saveDialog(options: Record<string, unknown>): Promise<string | null>;
   confirm(message: string, options?: Record<string, unknown>): Promise<boolean>;
@@ -41,6 +51,10 @@ export function invokeDesktop<T>(command: string, args: Record<string, unknown> 
     return Promise.reject(new Error("Desktop-Bridge ist nicht verfügbar."));
   }
   return window.electronAPI.invoke<T>(command, args);
+}
+
+export function openExternalLink(url: string) {
+  return invokeDesktop<void>("open_external_link", { url });
 }
 
 export function listenDesktop<T>(

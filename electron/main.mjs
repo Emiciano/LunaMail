@@ -127,6 +127,14 @@ function registerIpc() {
     if (!appUpdater) return { skipped: true, reason: "development" };
     return appUpdater.checkForUpdates();
   });
+  ipcMain.handle("lunamail:download-update", async () => {
+    if (!appUpdater) return { skipped: true, reason: "development" };
+    return appUpdater.downloadUpdate();
+  });
+  ipcMain.handle("lunamail:release-history", async () => {
+    if (!appUpdater) return [];
+    return appUpdater.getReleaseHistory();
+  });
   ipcMain.handle("lunamail:window", (_event, action, value) => {
     if (!mainWindow) return false;
     if (action === "minimize") mainWindow.minimize();

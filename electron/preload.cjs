@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   getVersion: () => ipcRenderer.invoke("lunamail:app-version"),
   checkForUpdates: () => ipcRenderer.invoke("lunamail:check-for-updates"),
+  downloadUpdate: () => ipcRenderer.invoke("lunamail:download-update"),
+  getReleaseHistory: () => ipcRenderer.invoke("lunamail:release-history"),
   openDialog: (options) => ipcRenderer.invoke("lunamail:open-dialog", options),
   saveDialog: (options) => ipcRenderer.invoke("lunamail:save-dialog", options),
   confirm: (message, options) => ipcRenderer.invoke("lunamail:confirm", message, options),

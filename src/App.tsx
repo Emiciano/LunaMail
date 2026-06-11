@@ -6,6 +6,7 @@ import { Composer } from "./components/Composer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { QuickLook } from "./components/QuickLook";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { useTheme } from "./hooks/useTheme";
 import { ensureNotificationPermission } from "./services/notifications";
 import { mailService } from "./services/mailService";
@@ -160,6 +161,7 @@ export default function App() {
         {composer ? <Composer /> : null}
         {quickLookOpen && selectedEmail ? <QuickLook email={selectedEmail} onClose={() => setQuickLookOpen(false)} /> : null}
         {settingsOpen ? <SettingsPanel onClose={closeSettings} /> : null}
+        <UpdatePrompt />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {!bootReady ? (
           <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-[#0B0B0B]">

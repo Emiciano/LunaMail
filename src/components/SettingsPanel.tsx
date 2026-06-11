@@ -1,8 +1,8 @@
-import { Info, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { ExternalLink, Info, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { desktopDialog, isDesktop, listenDesktop, type AppUpdateStatus } from "../services/desktop";
+import { desktopDialog, isDesktop, listenDesktop, openExternalLink, type AppRelease, type AppUpdateStatus } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import type { AccentColor, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings } from "../types";
@@ -94,6 +94,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [appVersion, setAppVersion] = useState<string>(packageJson.version);
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [releases, setReleases] = useState<AppRelease[]>([]);
+  const [releasesBusy, setReleasesBusy] = useState(false);
+  const [releasesError, setReleasesError] = useState<string | null>(null);
   const [diagnoseAccountId, setDiagnoseAccountId] = useState<number | undefined>();
   const [diagnoseAccount, setDiagnoseAccount] = useState<DiagnoseAccountResult | undefined>();
   const [diagnoseInbox, setDiagnoseInbox] = useState<DiagnoseInboxResult | undefined>();
@@ -114,19 +117,47 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!isDesktop) return;
     let unsubscribe = () => {};
+    let disposed = false;
     void listenDesktop<AppUpdateStatus>("app-update-status", ({ payload }) => {
       setUpdateStatus(payload);
-      if (payload.status === "checking" || payload.status === "available" || payload.status === "downloaded") {
+      if (payload.status === "checking" || payload.status === "downloading" || payload.status === "downloaded") {
         setUpdateBusy(true);
       }
-      if (payload.status === "not-available" || payload.status === "error") {
+      if (payload.status === "available" || payload.status === "not-available" || payload.status === "error") {
         setUpdateBusy(false);
       }
     }).then((removeListener) => {
+      if (disposed) {
+        removeListener();
+        return;
+      }
       unsubscribe = removeListener;
     });
-    return () => unsubscribe();
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (tab !== "about" || !isDesktop || !window.electronAPI?.getReleaseHistory) return;
+    let active = true;
+    setReleasesBusy(true);
+    setReleasesError(null);
+    void window.electronAPI.getReleaseHistory()
+      .then((items) => {
+        if (active) setReleases(items);
+      })
+      .catch((error) => {
+        if (active) setReleasesError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setReleasesBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab]);
 
   async function checkForAppUpdate() {
     if (!isDesktop || !window.electronAPI?.checkForUpdates) {
@@ -161,13 +192,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       case "checking":
         return "Suche nach Updates...";
       case "available":
-        return `Update ${status.version} gefunden. Download startet automatisch...`;
+        return `Version ${status.version} ist verfügbar. Bestätige die Installation im eingeblendeten Fenster.`;
       case "not-available":
         return "LunaMail ist auf dem neuesten Stand.";
       case "downloading":
         return `Update wird heruntergeladen... ${Math.round(status.percent)}%`;
       case "downloaded":
-        return `Update ${status.version} bereit. Der Installer startet gleich...`;
+        return `Update ${status.version} ist bereit. Der Installer startet gleich...`;
       case "error":
         return `Update fehlgeschlagen: ${status.message}`;
       default:
@@ -908,47 +939,89 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               </div>
             ) : null}
             {tab === "about" ? (
-              <div className="max-w-md rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">
-                <div className="flex items-start gap-4">
-                  <img src="./icon.png" alt="" className="h-14 w-14 rounded-2xl shadow-sm" />
-                  <div>
-                    <div className="flex items-center gap-2 text-lg font-semibold">
-                      <Info size={18} />
-                      LunaMail
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Moderner E-Mail-Client für Windows</p>
-                  </div>
-                </div>
-                <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
-                  Version: <span className="font-semibold text-slate-800 dark:text-white">{appVersion}</span>
-                </div>
-                {isDesktop ? (
-                  <div className="mt-4 space-y-3">
-                    <button
-                      type="button"
-                      className="accent-primary w-full rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={updateBusy}
-                      onClick={() => void checkForAppUpdate()}
-                    >
-                      Auf Updates prüfen
-                    </button>
-                    <p className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
-                      {formatUpdateStatus(updateStatus)}
-                    </p>
-                    {updateStatus?.status === "downloading" ? (
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-[rgb(var(--accent))] transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(0, updateStatus.percent))}%` }}
-                        />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div className="flex items-start gap-4">
+                    <img src="./icon.png" alt="" className="h-14 w-14 rounded-2xl shadow-sm" />
+                    <div>
+                      <div className="flex items-center gap-2 text-lg font-semibold">
+                        <Info size={18} />
+                        LunaMail
                       </div>
-                    ) : null}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Updates werden über GitHub Releases bereitgestellt. Wenn ein Update verfügbar ist, wird es
-                      automatisch heruntergeladen und der Installer gestartet.
-                    </p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Moderner E-Mail-Client für Windows</p>
+                    </div>
                   </div>
-                ) : null}
+                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
+                    Installierte Version: <span className="font-semibold text-slate-800 dark:text-white">{appVersion}</span>
+                  </div>
+                  {isDesktop ? (
+                    <div className="mt-4 space-y-3">
+                      <button
+                        type="button"
+                        className="accent-primary w-full rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={updateBusy}
+                        onClick={() => void checkForAppUpdate()}
+                      >
+                        {updateBusy ? "Update wird verarbeitet..." : "Auf Updates prüfen"}
+                      </button>
+                      <p className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
+                        {formatUpdateStatus(updateStatus)}
+                      </p>
+                      {updateStatus?.status === "downloading" ? (
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-[rgb(var(--accent))] transition-all duration-300"
+                            style={{ width: `${Math.min(100, Math.max(0, updateStatus.percent))}%` }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold">Versionsverlauf</h3>
+                      <p className="mt-1 text-xs text-white/45">Letzte veröffentlichte Versionen</p>
+                    </div>
+                    <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/55">{releases.length}</span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {releasesBusy ? (
+                      <div className="rounded-xl border border-white/[0.06] px-3 py-3 text-xs text-white/45">Versionen werden geladen...</div>
+                    ) : null}
+                    {releasesError ? (
+                      <div className="rounded-xl border border-white/[0.08] px-3 py-3 text-xs text-white/60">{releasesError}</div>
+                    ) : null}
+                    {!releasesBusy && !releasesError && releases.length === 0 ? (
+                      <div className="rounded-xl border border-white/[0.06] px-3 py-3 text-xs text-white/45">Keine Versionen gefunden.</div>
+                    ) : null}
+                    {releases.map((release) => (
+                      <button
+                        key={`${release.version}-${release.publishedAt}`}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-3 py-3 text-left transition-colors hover:bg-white/[0.04]"
+                        onClick={() => void openExternalLink(release.url)}
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">
+                            Version {release.version}
+                            {release.version === appVersion ? (
+                              <span className="ml-2 text-[10px] font-medium text-[rgb(var(--accent))]">Installiert</span>
+                            ) : null}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-white/45">
+                            {release.publishedAt
+                              ? new Date(release.publishedAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
+                              : "Datum unbekannt"}
+                          </span>
+                        </span>
+                        <ExternalLink size={14} className="shrink-0 text-white/35" />
+                      </button>
+                    ))}
+                  </div>
+                </section>
               </div>
             ) : null}
             {message ? <div className="mt-5 rounded-lg border border-white/[0.06] bg-[#151515] px-4 py-3 text-sm text-white/75">{message}</div> : null}
