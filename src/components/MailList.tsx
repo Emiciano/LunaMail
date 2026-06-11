@@ -71,7 +71,7 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex min-h-0 flex-col bg-[#111111] px-2 py-2">
+    <section className="flex min-h-0 flex-col rounded-xl border border-white/[0.06] bg-[#111111] px-2 py-2">
       <header className="flex min-h-14 shrink-0 items-center justify-between px-3">
         <div>
           <h1 className="text-[17px] font-semibold tracking-[-0.02em]">{viewTitle(selectedView, selectedCategoryId)}</h1>
@@ -275,12 +275,12 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors",
+        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
         active
-          ? "bg-white/[0.105] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.025)]"
+          ? "border-white/[0.10] bg-white/[0.105]"
           : email.isRead
-            ? "hover:bg-white/[0.055]"
-            : "bg-[rgb(var(--accent)/0.06)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:bg-white/[0.07]"
+            ? "border-white/[0.035] hover:border-white/[0.07] hover:bg-white/[0.055]"
+            : "border-[rgb(var(--accent)/0.12)] bg-[rgb(var(--accent)/0.06)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:border-white/[0.09] hover:bg-white/[0.07]"
       )}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
@@ -301,7 +301,7 @@ const MailRow = memo(function MailRow({
       <span className="min-w-0">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn("truncate text-[13px] text-white", email.isRead ? "font-medium" : "font-bold")}>{sender}</span>
-          {!email.isRead ? <span className="shrink-0 rounded-full bg-[rgb(var(--accent))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Neu</span> : null}
+          {!email.isRead ? <span className="shrink-0 rounded-full bg-[rgb(var(--accent))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[rgb(var(--accent-contrast))]">Neu</span> : null}
         </span>
         <span className={cn("mt-1 block truncate text-[13px]", email.isRead ? "font-normal text-white/85" : "font-bold text-white")}>{email.subject || "(Kein Betreff)"}</span>
         <span className="mt-1 flex min-w-0 items-center gap-2">

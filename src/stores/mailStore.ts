@@ -100,8 +100,8 @@ type MailState = {
 };
 
 const defaultSettings: Settings = {
-  theme: "light",
-  accentColor: "blue",
+  theme: "dark",
+  accentColor: "white",
   layoutMode: "standard",
   fontSize: 16,
   syncIntervalMinutes: 15,

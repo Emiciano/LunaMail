@@ -3,6 +3,7 @@ import { isDesktop } from "../services/desktop";
 import type { AccentColor, ThemeMode } from "../types";
 
 const accentValues: Record<AccentColor, string> = {
+  white: "255 255 255",
   blue: "37 99 235",
   orange: "234 88 12",
   purple: "147 51 234",
@@ -14,6 +15,7 @@ const accentValues: Record<AccentColor, string> = {
 };
 
 const accentSoftValues: Record<AccentColor, string> = {
+  white: "21 21 21",
   blue: "239 246 255",
   orange: "255 247 237",
   purple: "245 243 255",
@@ -29,6 +31,7 @@ export function useTheme(theme: ThemeMode, accentColor: AccentColor) {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.style.setProperty("--accent", accentValues[accentColor]);
     document.documentElement.style.setProperty("--accent-soft", accentSoftValues[accentColor]);
+    document.documentElement.style.setProperty("--accent-contrast", accentColor === "white" ? "11 11 11" : "255 255 255");
     if (isDesktop) {
       void window.electronAPI?.window.setTheme(theme);
     }

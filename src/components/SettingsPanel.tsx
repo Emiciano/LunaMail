@@ -1,6 +1,6 @@
 import { Info, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { desktopDialog, isDesktop, listenDesktop, type AppUpdateStatus } from "../services/desktop";
 import { mailService } from "../services/mailService";
@@ -12,6 +12,7 @@ import { useShallow } from "zustand/react/shallow";
 type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
+  { value: "white", label: "Weiß", className: "border border-white/20 bg-white" },
   { value: "blue", label: "Blau", className: "bg-blue-600" },
   { value: "green", label: "Grün", className: "bg-green-600" },
   { value: "orange", label: "Orange", className: "bg-orange-600" },
@@ -23,14 +24,15 @@ const accentOptions: { value: AccentColor; label: string; className: string }[] 
 ];
 
 const accentVars: Record<AccentColor, CSSProperties> = {
-  blue: { "--accent": "37 99 235", "--accent-soft": "239 246 255" } as CSSProperties,
-  green: { "--accent": "22 163 74", "--accent-soft": "240 253 244" } as CSSProperties,
-  orange: { "--accent": "234 88 12", "--accent-soft": "255 247 237" } as CSSProperties,
-  red: { "--accent": "220 38 38", "--accent-soft": "254 242 242" } as CSSProperties,
-  purple: { "--accent": "147 51 234", "--accent-soft": "245 243 255" } as CSSProperties,
-  teal: { "--accent": "13 148 136", "--accent-soft": "240 253 250" } as CSSProperties,
-  pink: { "--accent": "219 39 119", "--accent-soft": "253 242 248" } as CSSProperties,
-  gray: { "--accent": "71 85 105", "--accent-soft": "248 250 252" } as CSSProperties
+  white: { "--accent": "255 255 255", "--accent-soft": "21 21 21", "--accent-contrast": "11 11 11" } as CSSProperties,
+  blue: { "--accent": "37 99 235", "--accent-soft": "239 246 255", "--accent-contrast": "255 255 255" } as CSSProperties,
+  green: { "--accent": "22 163 74", "--accent-soft": "240 253 244", "--accent-contrast": "255 255 255" } as CSSProperties,
+  orange: { "--accent": "234 88 12", "--accent-soft": "255 247 237", "--accent-contrast": "255 255 255" } as CSSProperties,
+  red: { "--accent": "220 38 38", "--accent-soft": "254 242 242", "--accent-contrast": "255 255 255" } as CSSProperties,
+  purple: { "--accent": "147 51 234", "--accent-soft": "245 243 255", "--accent-contrast": "255 255 255" } as CSSProperties,
+  teal: { "--accent": "13 148 136", "--accent-soft": "240 253 250", "--accent-contrast": "255 255 255" } as CSSProperties,
+  pink: { "--accent": "219 39 119", "--accent-soft": "253 242 248", "--accent-contrast": "255 255 255" } as CSSProperties,
+  gray: { "--accent": "71 85 105", "--accent-soft": "248 250 252", "--accent-contrast": "255 255 255" } as CSSProperties
 };
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -496,7 +498,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                           disabled={googleAuthBusy}
                           onClick={() => void connectGoogle()}
                         >
-                          <span className="text-xl font-bold text-white">G</span>
+                          <span className="text-xl font-bold text-[rgb(var(--accent-contrast))]">G</span>
                           {googleAuthBusy ? "Google-Anmeldung läuft..." : editingAccount ? "Erneut mit Google anmelden" : "Mit Google anmelden"}
                         </button>
                       </div>
@@ -566,98 +568,60 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               </div>
             ) : null}
             {tab === "general" ? (
-              <div className="space-y-5">
-                <label className="block">
-                  <span className="mb-2 block">Schriftgröße: {draft.fontSize}px</span>
-                  <input type="range" min="14" max="22" value={draft.fontSize} onChange={(event) => setDraft({ ...draft, fontSize: Number(event.target.value) })} className="w-full" />
-                </label>
-                <SelectRow label="Standardaccount" value={String(draft.defaultAccountId ?? "")} onChange={(value) => setDraft({ ...draft, defaultAccountId: Number(value) })} options={accounts.map((account) => [String(account.id), account.email])} />
-                <SelectRow
-                  label="Darstellung"
-                  value={draft.layoutMode}
-                  onChange={(value) => applySettings({ ...draft, layoutMode: value as Settings["layoutMode"] })}
-                  options={[
-                    ["compact", "Kompakt"],
-                    ["standard", "Standard"],
-                    ["comfortable", "Komfortabel"]
-                  ]}
-                />
-                <SelectRow
-                  label="Externe Bilder"
-                  value={draft.externalImages}
-                  onChange={(value) => applySettings({ ...draft, externalImages: value as Settings["externalImages"] })}
-                  options={[
-                    ["never", "Nie laden"],
-                    ["ask", "Fragen"],
-                    ["always", "Immer laden"]
-                  ]}
-                />
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
-                  <span>Im Hintergrund weiterlaufen</span>
-                  <input
-                    type="checkbox"
+              <div className="space-y-6">
+                <SettingsSection title="Darstellung" description="Passe Lesbarkeit und Dichte der Oberfläche an.">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="rounded-xl border border-white/[0.07] bg-[#151515] p-4">
+                      <span className="flex items-center justify-between text-sm font-medium">
+                        Schriftgröße
+                        <span className="rounded-md bg-white/[0.07] px-2 py-1 text-xs text-white/65">{draft.fontSize}px</span>
+                      </span>
+                      <input
+                        type="range"
+                        min="14"
+                        max="22"
+                        value={draft.fontSize}
+                        onChange={(event) => setDraft({ ...draft, fontSize: Number(event.target.value) })}
+                        className="mt-4 w-full accent-[rgb(var(--accent))]"
+                      />
+                    </label>
+                    <div className="space-y-3">
+                      <ModernSelect label="Darstellung" value={draft.layoutMode} onChange={(value) => applySettings({ ...draft, layoutMode: value as Settings["layoutMode"] })} options={[["compact", "Kompakt"], ["standard", "Standard"], ["comfortable", "Komfortabel"]]} />
+                      <ModernSelect label="Externe Bilder" value={draft.externalImages} onChange={(value) => applySettings({ ...draft, externalImages: value as Settings["externalImages"] })} options={[["never", "Nie laden"], ["ask", "Fragen"], ["always", "Immer laden"]]} />
+                    </div>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection title="Konto & App" description="Lege das Standardkonto und das Verhalten beim Schließen fest.">
+                  <ModernSelect label="Standardkonto" value={String(draft.defaultAccountId ?? "")} onChange={(value) => setDraft({ ...draft, defaultAccountId: Number(value) })} options={accounts.map((account) => [String(account.id), account.email])} />
+                  <ModernToggle
+                    label="Im Hintergrund weiterlaufen"
+                    description="LunaMail bleibt im Windows-Infobereich aktiv und synchronisiert weiter."
                     checked={draft.runInBackground ?? true}
-                    onChange={(event) => applySettings({ ...draft, runInBackground: event.target.checked })}
-                    className="h-4 w-4 accent-[rgb(var(--accent))]"
+                    onChange={(checked) => applySettings({ ...draft, runInBackground: checked })}
                   />
-                </label>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Wenn aktiv, bleibt LunaMail beim Schließen im Windows-Infobereich aktiv und synchronisiert weiter.
-                </p>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
-                  <span>Desktop-Benachrichtigungen</span>
-                  <input
-                    type="checkbox"
-                    checked={draft.notificationsEnabled}
-                    onChange={(event) => applySettings({ ...draft, notificationsEnabled: event.target.checked })}
-                    className="h-4 w-4 accent-[rgb(var(--accent))]"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
-                  <span>Benachrichtigungston</span>
-                  <input
-                    type="checkbox"
-                    checked={draft.notificationSound}
-                    onChange={(event) => applySettings({ ...draft, notificationSound: event.target.checked })}
-                    className="h-4 w-4 accent-[rgb(var(--accent))]"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
-                  <span>Vorschautext anzeigen</span>
-                  <input
-                    type="checkbox"
-                    checked={draft.notificationPreview}
-                    onChange={(event) => applySettings({ ...draft, notificationPreview: event.target.checked })}
-                    className="h-4 w-4 accent-[rgb(var(--accent))]"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="w-full rounded-xl border border-slate-200/70 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-200 dark:hover:bg-white/[0.04]"
-                  onClick={() => {
-                    setTestNotificationStatus("Sende Test...");
-                    void mailService.testDesktopNotification()
-                      .then((message: string) => {
-                        setTestNotificationStatus(message);
-                      })
-                      .catch((error: unknown) => {
-                        setTestNotificationStatus(
-                          error instanceof Error ? error.message : String(error)
-                        );
-                      });
-                  }}
-                >
-                  Testbenachrichtigung senden
-                </button>
-                {testNotificationStatus ? (
-                  <p className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
-                    {testNotificationStatus}
-                  </p>
-                ) : null}
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Die Meldung erscheint im Windows-Benachrichtigungscenter. Prüfe bei Bedarf die
-                  Benachrichtigungseinstellungen für LunaMail.
-                </p>
+                </SettingsSection>
+
+                <SettingsSection title="Benachrichtigungen" description="Bestimme, welche Informationen Windows anzeigen darf.">
+                  <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-[#151515]">
+                    <ModernToggle label="Desktop-Benachrichtigungen" description="Zeigt neue Nachrichten im Windows-Benachrichtigungscenter." checked={draft.notificationsEnabled} onChange={(checked) => applySettings({ ...draft, notificationsEnabled: checked })} flat />
+                    <ModernToggle label="Benachrichtigungston" description="Spielt bei neuen Nachrichten einen kurzen Ton ab." checked={draft.notificationSound} onChange={(checked) => applySettings({ ...draft, notificationSound: checked })} flat />
+                    <ModernToggle label="Vorschautext anzeigen" description="Zeigt Absender und Betreff in der Benachrichtigung." checked={draft.notificationPreview} onChange={(checked) => applySettings({ ...draft, notificationPreview: checked })} flat />
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-3 w-full rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+                    onClick={() => {
+                      setTestNotificationStatus("Sende Test...");
+                      void mailService.testDesktopNotification()
+                        .then((message: string) => setTestNotificationStatus(message))
+                        .catch((error: unknown) => setTestNotificationStatus(error instanceof Error ? error.message : String(error)));
+                    }}
+                  >
+                    Testbenachrichtigung senden
+                  </button>
+                  {testNotificationStatus ? <p className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs text-white/60">{testNotificationStatus}</p> : null}
+                </SettingsSection>
               </div>
             ) : null}
             {tab === "themes" ? (
@@ -677,7 +641,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       aria-pressed={draft.theme === "dark"}
                     >
                       <span
-                        className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+                        className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-[rgb(var(--accent-contrast))] shadow-sm transition-transform duration-150 ${
                           draft.theme === "dark" ? "translate-x-6" : "translate-x-0"
                         }`}
                       />
@@ -710,7 +674,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
                   <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white">Neue Mail</span>
+                    <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-[rgb(var(--accent-contrast))]">Neue Mail</span>
                     <span className="rounded-lg bg-white/[0.08] px-4 py-3 text-sm">
                       Ausgewählte Mail
                     </span>
@@ -740,7 +704,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     aria-pressed={draft.allowLocalSecretFallback}
                   >
                     <span
-                      className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+                      className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-[rgb(var(--accent-contrast))] shadow-sm transition-transform duration-150 ${
                         draft.allowLocalSecretFallback ? "translate-x-6" : "translate-x-0"
                       }`}
                     />
@@ -1016,6 +980,41 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
   );
 }
 
+function SettingsSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <section>
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-white/40">{description}</p>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function ModernSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
+  return (
+    <label className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-white/[0.07] bg-[#151515] px-4 py-2.5">
+      <span className="text-sm font-medium text-white/80">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-w-52 rounded-lg border border-white/[0.07] bg-[#101010] px-3 py-2 text-sm text-white outline-none focus:border-[rgb(var(--accent)/0.45)]">
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function ModernToggle({ label, description, checked, onChange, flat = false }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void; flat?: boolean }) {
+  return (
+    <label className={`flex cursor-pointer items-center justify-between gap-5 px-4 py-3 ${flat ? "" : "rounded-xl border border-white/[0.07] bg-[#151515]"}`}>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-white/85">{label}</span>
+        <span className="mt-1 block text-xs leading-5 text-white/40">{description}</span>
+      </span>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mail-checkbox h-4 w-4 shrink-0" />
+    </label>
+  );
+}
+
 function Field(props: { name: string; label: string; type?: string; defaultValue?: string; required?: boolean }) {
   return (
     <label className="block min-w-0">
@@ -1030,17 +1029,6 @@ function CheckboxField(props: { name: string; label: string; defaultChecked?: bo
     <label className="flex h-11 items-center gap-3 rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white/75">
       <input name={props.name} type="checkbox" defaultChecked={props.defaultChecked} className="h-4 w-4 accent-white" />
       <span>{props.label}</span>
-    </label>
-  );
-}
-
-function SelectRow({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
-  return (
-    <label className="flex items-center justify-between gap-4">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-w-56 rounded-lg border border-white/[0.06] bg-[#151515] px-3 py-2 text-white">
-        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
-      </select>
     </label>
   );
 }
@@ -1060,7 +1048,7 @@ function DiagRow({ label, value }: { label: string; value: string }) {
 
 function DiagBadge({ label, active }: { label: string; active: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-white" : "bg-white/[0.08] text-white/65"}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "bg-white/[0.08] text-white/65"}`}>
       {label}
     </span>
   );

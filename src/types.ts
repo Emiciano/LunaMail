@@ -1,5 +1,5 @@
 export type ThemeMode = "light" | "dark";
-export type AccentColor = "blue" | "green" | "orange" | "red" | "purple" | "teal" | "pink" | "gray";
+export type AccentColor = "white" | "blue" | "green" | "orange" | "red" | "purple" | "teal" | "pink" | "gray";
 
 export type LayoutMode = "compact" | "standard" | "comfortable";
 

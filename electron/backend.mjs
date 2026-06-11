@@ -11,8 +11,8 @@ import { simpleParser } from "mailparser";
 const AUTO_SYNC_INTERVAL_MS = 30000;
 
 const defaultSettings = {
-  theme: "light",
-  accentColor: "blue",
+  theme: "dark",
+  accentColor: "white",
   layoutMode: "standard",
   fontSize: 16,
   syncIntervalMinutes: 15,
@@ -877,7 +877,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.37",
+      version: "0.9.38",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,

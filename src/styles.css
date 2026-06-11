@@ -8,6 +8,7 @@
   background: #0b0b0b;
   --accent: 255 255 255;
   --accent-soft: 21 21 21;
+  --accent-contrast: 11 11 11;
   --surface: 17 17 17;
   --surface-elevated: 21 21 21;
   --text-primary: 255 255 255;
@@ -122,8 +123,8 @@ button {
   content: "";
   width: 0.3rem;
   height: 0.55rem;
-  border-right: 2px solid #fff;
-  border-bottom: 2px solid #fff;
+  border-right: 2px solid rgb(var(--accent-contrast));
+  border-bottom: 2px solid rgb(var(--accent-contrast));
   transform: rotate(45deg) scale(0);
   transform-origin: center;
 }
@@ -139,7 +140,7 @@ button {
 
 .accent-primary {
   background: rgb(var(--accent));
-  color: #fff;
+  color: rgb(var(--accent-contrast));
 }
 
 .accent-primary:hover {

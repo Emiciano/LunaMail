@@ -1,4 +1,4 @@
-import { Activity, AlertCircle, Archive, ChevronDown, ChevronRight, Edit3, FileText, Folder, Inbox, LayoutDashboard, Moon, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
+import { Activity, AlertCircle, Archive, ChevronRight, FileText, Folder, Inbox, LayoutDashboard, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -35,7 +35,7 @@ export function MailSidebar() {
   const {
     accounts, folders, selectedAccountId, selectedFolderId, selectedView, selectedSpecialAccountId,
     mailCounts, selectAccount, selectFolder, selectSpecialView, openUnifiedInbox, openHealth,
-    openComposer, openSettings, openDashboard
+    openSettings, openDashboard
   } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
@@ -49,7 +49,6 @@ export function MailSidebar() {
     selectSpecialView: state.selectSpecialView,
     openUnifiedInbox: state.openUnifiedInbox,
     openHealth: state.openHealth,
-    openComposer: state.openComposer,
     openSettings: state.openSettings,
     openDashboard: state.openDashboard
   })));
@@ -66,8 +65,6 @@ export function MailSidebar() {
     () => new Map(mailCounts.perAccount.map((item) => [item.accountId, item])),
     [mailCounts.perAccount]
   );
-  const activeAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts[0];
-
   useEffect(() => {
     localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(expanded));
   }, [expanded]);
@@ -88,16 +85,11 @@ export function MailSidebar() {
   }
 
   return (
-    <aside className="flex min-h-0 flex-col bg-[#111111] px-3 py-4">
-      <div className="mb-4 flex items-center justify-between">
+    <aside className="mr-2 flex min-h-0 flex-col rounded-r-xl border-r border-white/[0.08] bg-[#111111] px-3 py-4">
+      <div className="mb-4 flex items-center">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--accent))] text-white">
-            <Moon size={15} fill="currentColor" />
-          </span>
+          <img src="./icon.png" alt="" className="h-7 w-7 rounded-lg object-cover" />
           <span className="text-[15px] font-semibold tracking-[-0.02em]">LunaMail</span>
-        </button>
-        <button className="rounded-md p-1.5 text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={() => openComposer()} title="Neue Nachricht">
-          <Edit3 size={16} />
         </button>
       </div>
 
@@ -129,8 +121,10 @@ export function MailSidebar() {
                   <ChevronRight size={14} className={`shrink-0 text-white/45 transition-transform ${accountOpen ? "rotate-90" : ""}`} />
                   <AccountAvatar account={account} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12px] font-semibold">{account.displayName}</span>
-                    <span className="block truncate text-[10px] text-white/40">{account.email}</span>
+                    <span className="block truncate text-[12px] font-semibold">{account.displayName || account.email}</span>
+                    {account.displayName && account.displayName.trim().toLowerCase() !== account.email.trim().toLowerCase()
+                      ? <span className="block truncate text-[10px] text-white/40">{account.email}</span>
+                      : null}
                   </span>
                   {accountUnread > 0 ? <CountBadge count={accountUnread} /> : null}
                 </button>
@@ -173,14 +167,6 @@ export function MailSidebar() {
         </div>
       </div>
 
-      <button className="mt-3 flex items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-white/[0.04]" onClick={openSettings}>
-        <AccountAvatar account={activeAccount} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium">{activeAccount?.displayName ?? "LunaMail"}</span>
-          <span className="block truncate text-[11px] text-white/45">{activeAccount?.email ?? "Konto hinzufügen"}</span>
-        </span>
-        <ChevronDown size={15} className="text-white/55" />
-      </button>
     </aside>
   );
 }
