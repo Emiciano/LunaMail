@@ -122,19 +122,28 @@ button {
   content: "";
   width: 0.3rem;
   height: 0.55rem;
-  border-right: 2px solid #0b0b0b;
-  border-bottom: 2px solid #0b0b0b;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
   transform: rotate(45deg) scale(0);
   transform-origin: center;
 }
 
 .mail-checkbox:checked {
-  background: #fff;
-  border-color: #fff;
+  background: rgb(var(--accent));
+  border-color: rgb(var(--accent));
 }
 
 .mail-checkbox:checked::after {
   transform: rotate(45deg) scale(1);
+}
+
+.accent-primary {
+  background: rgb(var(--accent));
+  color: #fff;
+}
+
+.accent-primary:hover {
+  background: rgb(var(--accent) / 0.88);
 }
 
 .mail-row {

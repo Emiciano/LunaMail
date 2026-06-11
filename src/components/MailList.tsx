@@ -301,7 +301,7 @@ const MailRow = memo(function MailRow({
       <span className="min-w-0">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn("truncate text-[13px] text-white", email.isRead ? "font-medium" : "font-bold")}>{sender}</span>
-          {!email.isRead ? <span className="shrink-0 rounded-full bg-[rgb(var(--accent))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0B0B0B]">Neu</span> : null}
+          {!email.isRead ? <span className="shrink-0 rounded-full bg-[rgb(var(--accent))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Neu</span> : null}
         </span>
         <span className={cn("mt-1 block truncate text-[13px]", email.isRead ? "font-normal text-white/85" : "font-bold text-white")}>{email.subject || "(Kein Betreff)"}</span>
         <span className="mt-1 flex min-w-0 items-center gap-2">

@@ -231,7 +231,7 @@ export function Composer() {
                 Signatur {signatureEnabled ? "an" : "aus"}
               </button>
             </div>
-            <button disabled={sending || accounts.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90 disabled:opacity-50">
+            <button disabled={sending || accounts.length === 0} className="accent-primary inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
               <Send size={16} />
               {sending ? "Sendet..." : "Senden"}
             </button>

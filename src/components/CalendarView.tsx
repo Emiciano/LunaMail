@@ -25,7 +25,7 @@ export function CalendarView() {
           {dates.map((date, index) => (
             <span
               key={`${date ?? "blank"}-${index}`}
-              className={`mx-auto inline-flex h-6 w-6 items-center justify-center rounded-full ${date === 15 ? "bg-white text-[#0B0B0B]" : "text-white"}`}
+              className={`mx-auto inline-flex h-6 w-6 items-center justify-center rounded-full ${date === 15 ? "bg-[rgb(var(--accent))] text-white" : "text-white"}`}
             >
               {date}
             </span>

@@ -12,13 +12,13 @@ import { useShallow } from "zustand/react/shallow";
 type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
-  { value: "blue", label: "Blau", className: "bg-white/80" },
-  { value: "green", label: "Grün", className: "bg-white/70" },
-  { value: "orange", label: "Orange", className: "bg-white/60" },
-  { value: "red", label: "Rot", className: "bg-white/50" },
-  { value: "purple", label: "Lila", className: "bg-white/45" },
-  { value: "teal", label: "Türkis", className: "bg-white/40" },
-  { value: "pink", label: "Pink", className: "bg-white/35" },
+  { value: "blue", label: "Blau", className: "bg-blue-600" },
+  { value: "green", label: "Grün", className: "bg-green-600" },
+  { value: "orange", label: "Orange", className: "bg-orange-600" },
+  { value: "red", label: "Rot", className: "bg-red-600" },
+  { value: "purple", label: "Lila", className: "bg-purple-600" },
+  { value: "teal", label: "Türkis", className: "bg-teal-600" },
+  { value: "pink", label: "Pink", className: "bg-pink-600" },
   { value: "gray", label: "Grau", className: "bg-slate-600" }
 ];
 
@@ -492,11 +492,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         </label>
                         <button
                           type="button"
-                          className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-white/[0.06] bg-white px-4 font-semibold text-[#0B0B0B] transition-colors hover:bg-white/90 disabled:cursor-wait disabled:opacity-60"
+                          className="accent-primary flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-[rgb(var(--accent)/0.45)] px-4 font-semibold transition-colors disabled:cursor-wait disabled:opacity-60"
                           disabled={googleAuthBusy}
                           onClick={() => void connectGoogle()}
                         >
-                          <span className="text-xl font-bold text-[#0B0B0B]">G</span>
+                          <span className="text-xl font-bold text-white">G</span>
                           {googleAuthBusy ? "Google-Anmeldung läuft..." : editingAccount ? "Erneut mit Google anmelden" : "Mit Google anmelden"}
                         </button>
                       </div>
@@ -524,7 +524,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                           >
                             Abbrechen
                           </button>
-                          <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90">Speichern</button>
+                          <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold">Speichern</button>
                         </div>
                       </form>
                     )}
@@ -671,7 +671,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     <button
                       type="button"
                       className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                        draft.theme === "dark" ? "bg-white" : "bg-white/16"
+                        draft.theme === "dark" ? "bg-[rgb(var(--accent))]" : "bg-white/16"
                       }`}
                       onClick={() => applySettings({ ...draft, theme: draft.theme === "dark" ? "light" : "dark" })}
                       aria-pressed={draft.theme === "dark"}
@@ -710,7 +710,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
                   <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B]">Neue Mail</span>
+                    <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-white">Neue Mail</span>
                     <span className="rounded-lg bg-white/[0.08] px-4 py-3 text-sm">
                       Ausgewählte Mail
                     </span>
@@ -734,7 +734,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                      draft.allowLocalSecretFallback ? "bg-white" : "bg-white/16"
+                      draft.allowLocalSecretFallback ? "bg-[rgb(var(--accent))]" : "bg-white/16"
                     }`}
                     onClick={() => applySettings({ ...draft, allowLocalSecretFallback: !draft.allowLocalSecretFallback })}
                     aria-pressed={draft.allowLocalSecretFallback}
@@ -761,7 +761,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mt-1 whitespace-pre-wrap text-slate-500 dark:text-slate-400">{syncError || syncStatus || "Bereit"}</div>
                 </div>
                 <button
-                  className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={accounts.length === 0}
                   onClick={() => void sync(true)}
                 >
@@ -867,7 +867,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Regeln & Automatisierung</h3>
-                  <button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void createRule()}>
+                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => void createRule()}>
                     Regel hinzufügen
                   </button>
                 </div>
@@ -898,7 +898,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Kontakte</h3>
-                  <button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void createContact()}>
+                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => void createContact()}>
                     Kontakt hinzufügen
                   </button>
                 </div>
@@ -934,7 +934,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   Exportiert Konten ohne Passwörter, Einstellungen, Regeln, Kontakte und Schlagwörter. Passwörter bleiben geschützt gespeichert.
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void exportBackupToFile()}>
+                  <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void exportBackupToFile()}>
                     Datensicherung exportieren
                   </button>
                   <button className="rounded-xl border border-slate-200/70 px-4 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" onClick={() => void importBackupFromFile()}>
@@ -962,7 +962,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mt-4 space-y-3">
                     <button
                       type="button"
-                      className="w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="accent-primary w-full rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={updateBusy}
                       onClick={() => void checkForAppUpdate()}
                     >
@@ -974,7 +974,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     {updateStatus?.status === "downloading" ? (
                       <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
                         <div
-                          className="h-full rounded-full bg-white transition-all duration-300"
+                          className="h-full rounded-full bg-[rgb(var(--accent))] transition-all duration-300"
                           style={{ width: `${Math.min(100, Math.max(0, updateStatus.percent))}%` }}
                         />
                       </div>
@@ -993,7 +993,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
         <footer className="flex justify-end gap-2 border-t border-white/[0.06] bg-[#0B0B0B] px-6 py-4">
           <button className="rounded-lg px-4 py-2 text-sm text-white/65 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white" onClick={onClose}>Abbrechen</button>
-          <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0B0B] hover:bg-white/90" onClick={() => void saveSettings()}>Speichern</button>
+          <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void saveSettings()}>Speichern</button>
         </footer>
       </section>
     </div>,
@@ -1060,7 +1060,7 @@ function DiagRow({ label, value }: { label: string; value: string }) {
 
 function DiagBadge({ label, active }: { label: string; active: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-white text-[#0B0B0B]" : "bg-white/[0.08] text-white/65"}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-white" : "bg-white/[0.08] text-white/65"}`}>
       {label}
     </span>
   );

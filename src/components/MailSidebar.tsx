@@ -91,7 +91,7 @@ export function MailSidebar() {
     <aside className="flex min-h-0 flex-col border-r border-white/[0.06] bg-[#0B0B0B] px-4 py-4">
       <div className="mb-4 flex items-center justify-between">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#0B0B0B]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--accent))] text-white">
             <Moon size={15} fill="currentColor" />
           </span>
           <span className="text-[15px] font-semibold tracking-[-0.02em]">LunaMail</span>

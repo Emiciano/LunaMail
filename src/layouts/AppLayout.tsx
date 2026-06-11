@@ -41,7 +41,7 @@ export function AppLayout() {
       <MailReader />
 
       <button
-        className="absolute bottom-5 right-5 z-30 inline-flex h-12 items-center gap-3 rounded-lg bg-white px-4 text-sm font-semibold text-[#0B0B0B] shadow-lg hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+        className="accent-primary absolute bottom-5 right-5 z-30 inline-flex h-12 items-center gap-3 rounded-lg px-4 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
         disabled={!hasAccounts}
         onClick={() => openComposer()}
       >
