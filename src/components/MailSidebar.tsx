@@ -98,7 +98,6 @@ export function MailSidebar() {
           <SideButton active={selectedView === "dashboard"} icon={<LayoutDashboard size={16} />} label="Dashboard" onClick={openDashboard} />
           <SideButton active={selectedView === "unifiedInbox" && !selectedSpecialAccountId} icon={<Inbox size={16} />} label="Alle Posteingänge" count={mailCounts.unread} onClick={() => void openUnifiedInbox()} />
           <SideButton active={selectedView === "health"} icon={<Activity size={16} />} label="Systemstatus" onClick={() => void openHealth()} />
-          <SideButton active={false} icon={<Settings size={16} />} label="Einstellungen" onClick={openSettings} />
         </nav>
 
         <SectionTitle title="Konten" />
@@ -167,6 +166,9 @@ export function MailSidebar() {
         </div>
       </div>
 
+      <div className="mt-3 shrink-0 border-t border-white/[0.06] pt-3">
+        <SideButton active={false} icon={<Settings size={16} />} label="Einstellungen" onClick={openSettings} />
+      </div>
     </aside>
   );
 }
