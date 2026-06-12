@@ -1,4 +1,4 @@
-import { AlertCircle, Archive, CheckCheck, Paperclip, RefreshCw, Search, Star, Trash2 } from "lucide-react";
+import { AlertCircle, Archive, CheckCheck, Paperclip, RefreshCw, Search, Star, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -14,7 +14,7 @@ export function MailList() {
     selectedCategoryId, categories, query, mailCounts, syncStatus, lastSyncAt, databaseSizeBytes,
     healthStatus, search, selectCategory, selectEmail, toggleEmailSelection, setEmailSelection,
     deleteSelected, markReadSelected, archiveSelected, toggleFavoriteSelected, toggleImportantSelected,
-    quickAction, sync, loading, hasSynced, syncError, settings
+    quickAction, sync, loading, hasSynced, syncError, settings, tags, searchFilters, setSearchFilters, setSelectedEmailTags
   } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
@@ -46,10 +46,16 @@ export function MailList() {
     loading: state.loading,
     hasSynced: state.hasSynced,
     syncError: state.syncError,
-    settings: state.settings
+    settings: state.settings,
+    tags: state.tags,
+    searchFilters: state.searchFilters,
+    setSearchFilters: state.setSearchFilters,
+    setSelectedEmailTags: state.setSelectedEmailTags
   })));
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [searchDraft, setSearchDraft] = useState(query);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const selectedIdSet = useMemo(() => new Set(selectedEmailIds), [selectedEmailIds]);
   const visibleEmails = useMemo(() => emails.slice(0, visibleCount), [emails, visibleCount]);
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
@@ -58,6 +64,20 @@ export function MailList() {
   const permanentlyDeletes = selectedView === "folder"
     && folders.some((folder) => folder.id === selectedFolderId && folder.role === "trash");
   const showsMailList = selectedView !== "dashboard" && selectedView !== "health";
+
+  function openTagPicker() {
+    const selectedEmails = emails.filter((email) => selectedIdSet.has(email.id));
+    const sharedTags = tags
+      .filter((tag) => selectedEmails.some((email) => email.tags.some((emailTag) => emailTag.id === tag.id)))
+      .map((tag) => tag.id);
+    setSelectedTagIds(sharedTags);
+    setTagPickerOpen(true);
+  }
+
+  async function applySelectedTags() {
+    await setSelectedEmailTags(selectedTagIds);
+    setTagPickerOpen(false);
+  }
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -112,6 +132,26 @@ export function MailList() {
                 ))}
               </div>
             ) : null}
+            {tags.length > 0 ? (
+              <div className="scrollbar-hidden mt-2 flex gap-1 overflow-x-auto text-[11px] font-medium">
+                <button
+                  className={`rounded-md px-2.5 py-1.5 ${!searchFilters.tagId ? "bg-white/[0.09] text-white" : "text-white/50 hover:bg-white/[0.045] hover:text-white"}`}
+                  onClick={() => void setSearchFilters({ ...searchFilters, tagId: undefined })}
+                >
+                  Alle Tags
+                </button>
+                {tags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 ${searchFilters.tagId === tag.id ? "bg-white/[0.09] text-white" : "text-white/50 hover:bg-white/[0.045] hover:text-white"}`}
+                    onClick={() => void setSearchFilters({ ...searchFilters, tagId: tag.id })}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <ActionToolbar
@@ -123,6 +163,7 @@ export function MailList() {
             onRead={() => void markReadSelected()}
             onFavorite={() => void toggleFavoriteSelected()}
             onImportant={() => void toggleImportantSelected()}
+            onTags={openTagPicker}
             onArchive={() => void archiveSelected()}
             onDelete={() => void deleteSelected()}
           />
@@ -194,13 +235,50 @@ export function MailList() {
           </footer>
         </>
       ) : null}
+
+      {tagPickerOpen ? (
+        <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/72 p-6" onClick={() => setTagPickerOpen(false)}>
+          <section className="w-[min(420px,calc(100vw-2rem))] rounded-xl border border-white/[0.08] bg-[#111] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold">Tags zuweisen</h2>
+                <p className="mt-1 text-xs text-white/45">{selectedCount} ausgewählte Nachrichten</p>
+              </div>
+              <button className="rounded-lg p-2 text-white/45 hover:bg-white/[0.06] hover:text-white" onClick={() => setTagPickerOpen(false)}>
+                <X size={17} />
+              </button>
+            </div>
+            <div className="mail-scroll mt-4 max-h-72 space-y-2 overflow-y-auto">
+              {tags.length === 0 ? (
+                <p className="rounded-lg border border-white/[0.06] px-3 py-4 text-sm text-white/45">Erstelle zuerst unter Einstellungen → Tags einen Tag.</p>
+              ) : null}
+              {tags.map((tag) => (
+                <label key={tag.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/[0.06] px-3 py-3 hover:bg-white/[0.04]">
+                  <input
+                    type="checkbox"
+                    className="mail-checkbox h-4 w-4"
+                    checked={selectedTagIds.includes(tag.id)}
+                    onChange={(event) => setSelectedTagIds((current) => event.target.checked ? [...current, tag.id] : current.filter((id) => id !== tag.id))}
+                  />
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                  <span className="text-sm font-medium">{tag.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="rounded-lg px-3 py-2 text-sm text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={() => setTagPickerOpen(false)}>Abbrechen</button>
+              <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void applySelectedTags()}>Tags anwenden</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
 
 function ActionToolbar({
   allSelected, selectedCount, permanentlyDeletes, onSelectAll, onRefresh, onRead,
-  onFavorite, onImportant, onArchive, onDelete
+  onFavorite, onImportant, onTags, onArchive, onDelete
 }: {
   allSelected: boolean;
   selectedCount: number;
@@ -210,6 +288,7 @@ function ActionToolbar({
   onRead: () => void;
   onFavorite: () => void;
   onImportant: () => void;
+  onTags: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
@@ -224,6 +303,7 @@ function ActionToolbar({
       <ToolbarButton label="Gelesen" icon={<CheckCheck size={13} />} onClick={onRead} disabled={disabled} />
       <ToolbarButton label="Favorisieren" icon={<Star size={13} />} onClick={onFavorite} disabled={disabled} />
       <ToolbarButton label="Wichtig" icon={<AlertCircle size={13} />} onClick={onImportant} disabled={disabled} />
+      <ToolbarButton label="Tags" icon={<TagIcon size={13} />} onClick={onTags} disabled={disabled} />
       <ToolbarButton label="Archivieren" icon={<Archive size={13} />} onClick={onArchive} disabled={disabled} />
       <ToolbarButton label={permanentlyDeletes ? "Endgültig löschen" : "Löschen"} icon={<Trash2 size={13} />} onClick={onDelete} disabled={disabled} danger />
     </div>
@@ -314,6 +394,17 @@ const MailRow = memo(function MailRow({
             </span>
           ) : null}
         </span>
+        {email.tags.length > 0 ? (
+          <span className="mt-2 flex flex-wrap gap-1.5">
+            {email.tags.slice(0, 3).map((tag) => (
+              <span key={tag.id} className="inline-flex items-center gap-1 rounded-full border border-white/[0.07] px-2 py-0.5 text-[10px] text-white/55">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                {tag.name}
+              </span>
+            ))}
+            {email.tags.length > 3 ? <span className="text-[10px] text-white/35">+{email.tags.length - 3}</span> : null}
+          </span>
+        ) : null}
       </span>
       <span className="flex items-center gap-2">
         <time className={cn("whitespace-nowrap text-[11px]", email.isRead ? "font-medium text-white/60" : "font-bold text-white")}>{timeLabel}</time>

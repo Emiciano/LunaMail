@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { Archive, Clock3, Download, Forward, MoreHorizontal, Paperclip, Reply, ReplyAll, Trash2, X } from "lucide-react";
+import { Archive, Check, Clock3, Download, Forward, MoreHorizontal, Paperclip, Reply, ReplyAll, Trash2, UserPlus, X } from "lucide-react";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -12,13 +12,15 @@ const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail, settings, closeEmail, replyToSelected, forwardSelected, deleteSelected } = useMailStore(useShallow((state) => ({
+  const { selectedEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
     settings: state.settings,
+    contacts: state.contacts,
     closeEmail: state.closeEmail,
     replyToSelected: state.replyToSelected,
     forwardSelected: state.forwardSelected,
-    deleteSelected: state.deleteSelected
+    deleteSelected: state.deleteSelected,
+    saveContact: state.saveContact
   })));
 
   const htmlView = useMemo(() => {
@@ -29,6 +31,8 @@ export function MailReader() {
   if (!selectedEmail) return null;
 
   const bodyFallback = selectedEmail.bodyText || selectedEmail.preview || "";
+  const senderContact = parseSender(selectedEmail.sender);
+  const senderSaved = Boolean(senderContact.email && contacts.some((contact) => contact.email.toLowerCase() === senderContact.email.toLowerCase()));
 
   return createPortal(
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/76 p-6" onClick={closeEmail}>
@@ -54,7 +58,19 @@ export function MailReader() {
                 {initials(selectedEmail.sender)}
               </span>
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold">{selectedEmail.sender || "Unbekannter Absender"}</div>
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-[13px] font-semibold">{selectedEmail.sender || "Unbekannter Absender"}</div>
+                  {senderContact.email ? (
+                    <button
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/[0.07] text-white/45 hover:bg-white/[0.06] hover:text-white disabled:cursor-default disabled:text-[rgb(var(--accent))]"
+                      disabled={senderSaved}
+                      title={senderSaved ? "Kontakt ist gespeichert" : "Als Kontakt speichern"}
+                      onClick={() => void saveContact({ name: senderContact.name, email: senderContact.email, isFavorite: false })}
+                    >
+                      {senderSaved ? <Check size={13} /> : <UserPlus size={13} />}
+                    </button>
+                  ) : null}
+                </div>
                 <div className="truncate text-[12px] text-white/45">an {selectedEmail.recipients || "mich"} ˅</div>
               </div>
             </div>
@@ -65,6 +81,16 @@ export function MailReader() {
               <button title="Weiterleiten" onClick={forwardSelected}><Forward size={16} /></button>
             </div>
           </div>
+          {selectedEmail.tags.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedEmail.tags.map((tag) => (
+                <span key={tag.id} className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] px-2.5 py-1 text-[11px] text-white/60">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </header>
 
         <section className="max-w-full text-[14px] font-medium leading-8 text-white/90">
@@ -210,6 +236,18 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { doc
 function initials(value: string) {
   const parts = value.replace(/<[^>]+>/g, "").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return (parts[0]?.[0] || "L").toUpperCase() + (parts[1]?.[0] || "M").toUpperCase();
+}
+
+function parseSender(value: string): { name: string; email: string } {
+  const match = value.match(/^(.*?)\s*<([^<>@\s]+@[^<>@\s]+)>$/);
+  if (match) {
+    return {
+      name: match[1].trim().replace(/^["']|["']$/g, ""),
+      email: match[2].trim()
+    };
+  }
+  const email = value.match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? "";
+  return { name: email ? value.replace(email, "").replace(/[<>"']/g, "").trim() : "", email };
 }
 
 function formatBytes(value: number): string {

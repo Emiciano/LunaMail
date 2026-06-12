@@ -829,17 +829,40 @@ export class LunaBackend {
 
   get_tags() { return [...this.state.tags].sort((a, b) => a.name.localeCompare(b.name)); }
   async create_tag({ name, color }) {
-    let tag = this.state.tags.find((item) => item.name.toLowerCase() === name.toLowerCase());
-    if (!tag) this.state.tags.push(tag = { id: this.next("tag"), name, color });
+    return this.save_tag({ tag: { name, color } });
+  }
+  async save_tag({ tag }) {
+    const name = String(tag?.name || "").trim();
+    const color = String(tag?.color || "#737373").trim();
+    if (!name) throw new Error("Der Tag benötigt einen Namen.");
+    const duplicate = this.state.tags.find((item) => item.id !== Number(tag.id) && item.name.toLowerCase() === name.toLowerCase());
+    if (duplicate) throw new Error(`Der Tag "${name}" existiert bereits.`);
+    let saved = this.state.tags.find((item) => item.id === Number(tag.id));
+    if (saved) Object.assign(saved, { name, color });
+    else this.state.tags.push(saved = { id: this.next("tag"), name, color });
     await this.persist();
-    return tag;
+    return saved;
   }
   async delete_tag({ id }) {
     this.state.tags = this.state.tags.filter((item) => item.id !== Number(id));
     for (const key of Object.keys(this.state.emailTags)) this.state.emailTags[key] = this.state.emailTags[key].filter((tagId) => tagId !== Number(id));
     await this.persist();
   }
-  async set_email_tags({ emailId, tagIds }) { this.state.emailTags[emailId] = tagIds.map(Number); await this.persist(); }
+  async set_email_tags({ emailId, tagIds }) {
+    const validTagIds = new Set(this.state.tags.map((tag) => tag.id));
+    this.state.emailTags[emailId] = [...new Set(tagIds.map(Number))].filter((tagId) => validTagIds.has(tagId));
+    await this.persist();
+  }
+  async set_emails_tags({ emailIds, tagIds }) {
+    const validTagIds = new Set(this.state.tags.map((tag) => tag.id));
+    const normalizedTagIds = [...new Set(tagIds.map(Number))].filter((tagId) => validTagIds.has(tagId));
+    for (const emailId of emailIds.map(Number)) {
+      if (this.state.emails.some((email) => email.id === emailId)) {
+        this.state.emailTags[emailId] = normalizedTagIds;
+      }
+    }
+    await this.persist();
+  }
   get_categories() {
     return [
       { id: 1, key: "attachments", label: "Mit Anhängen", count: this.state.emails.filter((item) => item.hasAttachments).length },
@@ -863,10 +886,16 @@ export class LunaBackend {
     return this.state.contacts.filter((item) => !term || `${item.name} ${item.email}`.toLowerCase().includes(term));
   }
   async save_contact({ contact }) {
-    let saved = this.state.contacts.find((item) => item.id === Number(contact.id)) || this.state.contacts.find((item) => item.email.toLowerCase() === contact.email.toLowerCase());
+    const email = String(contact?.email || "").trim().toLowerCase();
+    const name = String(contact?.name || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Bitte eine gültige E-Mail-Adresse eingeben.");
+    const duplicate = this.state.contacts.find((item) => item.id !== Number(contact.id) && item.email.toLowerCase() === email);
+    if (duplicate) throw new Error(`Für ${email} existiert bereits ein Kontakt.`);
+    let saved = this.state.contacts.find((item) => item.id === Number(contact.id));
     const now = new Date().toISOString();
-    if (saved) Object.assign(saved, contact, { updatedAt: now });
-    else this.state.contacts.push(saved = { usageCount: 0, isFavorite: false, createdAt: now, ...contact, id: this.next("contact"), updatedAt: now });
+    const values = { name, email, isFavorite: Boolean(contact.isFavorite) };
+    if (saved) Object.assign(saved, values, { updatedAt: now });
+    else this.state.contacts.push(saved = { usageCount: 0, createdAt: now, ...values, id: this.next("contact"), updatedAt: now });
     await this.persist();
     return saved;
   }
@@ -877,7 +906,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.42",
+      version: "0.9.43",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,

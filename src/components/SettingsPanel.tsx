@@ -1,15 +1,15 @@
-import { ExternalLink, Info, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { ExternalLink, Info, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { desktopDialog, isDesktop, listenDesktop, openExternalLink, type AppRelease, type AppUpdateStatus } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
-import type { AccentColor, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings } from "../types";
+import type { AccentColor, Contact, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings, Tag } from "../types";
 import packageJson from "../../package.json";
 import { useShallow } from "zustand/react/shallow";
 
-type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "backup" | "about";
+type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
   { value: "white", label: "Weiß", className: "border border-white/20 bg-white" },
@@ -40,6 +40,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     accounts,
     rules,
     contacts,
+    tags,
     settings,
     selectedAccountId,
     selectedSpecialAccountId,
@@ -52,6 +53,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     loadContacts,
     saveContact,
     deleteContact,
+    loadTags,
+    saveTag,
+    deleteTag,
     saveAccount,
     connectGoogleAccount,
     deleteAccount,
@@ -63,6 +67,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     accounts: state.accounts,
     rules: state.rules,
     contacts: state.contacts,
+    tags: state.tags,
     settings: state.settings,
     selectedAccountId: state.selectedAccountId,
     selectedSpecialAccountId: state.selectedSpecialAccountId,
@@ -75,6 +80,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     loadContacts: state.loadContacts,
     saveContact: state.saveContact,
     deleteContact: state.deleteContact,
+    loadTags: state.loadTags,
+    saveTag: state.saveTag,
+    deleteTag: state.deleteTag,
     saveAccount: state.saveAccount,
     connectGoogleAccount: state.connectGoogleAccount,
     deleteAccount: state.deleteAccount,
@@ -102,12 +110,24 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [diagnoseInbox, setDiagnoseInbox] = useState<DiagnoseInboxResult | undefined>();
   const [serverMessages, setServerMessages] = useState<ServerMessageSummary[]>([]);
   const [diagnoseBusy, setDiagnoseBusy] = useState(false);
+  const [contactFormOpen, setContactFormOpen] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<number | undefined>();
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactFavorite, setContactFavorite] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [tagFormOpen, setTagFormOpen] = useState(false);
+  const [editingTagId, setEditingTagId] = useState<number | undefined>();
+  const [tagName, setTagName] = useState("");
+  const [tagColor, setTagColor] = useState("#737373");
+  const [tagError, setTagError] = useState<string | null>(null);
   const editingAccount = accounts.find((account) => account.id === editingAccountId);
 
   useEffect(() => {
     void loadRules(selectedAccountId);
     void loadContacts();
-  }, [loadContacts, loadRules, selectedAccountId]);
+    void loadTags();
+  }, [loadContacts, loadRules, loadTags, selectedAccountId]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -372,11 +392,75 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     });
   }
 
-  async function createContact() {
-    const email = window.prompt("E-Mail-Adresse");
-    if (!email?.trim()) return;
-    const name = window.prompt("Name", "") ?? "";
-    await saveContact({ name: name.trim(), email: email.trim(), isFavorite: false });
+  function openContactForm(contact?: Contact) {
+    setEditingContactId(contact?.id);
+    setContactName(contact?.name ?? "");
+    setContactEmail(contact?.email ?? "");
+    setContactFavorite(contact?.isFavorite ?? false);
+    setContactError(null);
+    setContactFormOpen(true);
+  }
+
+  function closeContactForm() {
+    setContactFormOpen(false);
+    setEditingContactId(undefined);
+    setContactName("");
+    setContactEmail("");
+    setContactFavorite(false);
+    setContactError(null);
+  }
+
+  async function submitContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = contactEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setContactError("Bitte eine gültige E-Mail-Adresse eingeben.");
+      return;
+    }
+    try {
+      await saveContact({
+        id: editingContactId,
+        name: contactName.trim(),
+        email,
+        isFavorite: contactFavorite
+      });
+      closeContactForm();
+      setMessage(editingContactId ? "Kontakt gespeichert." : "Kontakt erstellt.");
+    } catch (error) {
+      setContactError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function openTagForm(tag?: Tag) {
+    setEditingTagId(tag?.id);
+    setTagName(tag?.name ?? "");
+    setTagColor(tag?.color ?? "#737373");
+    setTagError(null);
+    setTagFormOpen(true);
+  }
+
+  function closeTagForm() {
+    setTagFormOpen(false);
+    setEditingTagId(undefined);
+    setTagName("");
+    setTagColor("#737373");
+    setTagError(null);
+  }
+
+  async function submitTag(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = tagName.trim();
+    if (!name) {
+      setTagError("Bitte einen Namen für den Tag eingeben.");
+      return;
+    }
+    try {
+      await saveTag(editingTagId ? { id: editingTagId, name, color: tagColor } : { name, color: tagColor });
+      closeTagForm();
+      setMessage(editingTagId ? "Tag gespeichert." : "Tag erstellt.");
+    } catch (error) {
+      setTagError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   async function exportBackupToFile() {
@@ -427,6 +511,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <TabButton active={tab === "sync"} onClick={() => setTab("sync")} label="Synchronisierung" />
             <TabButton active={tab === "rules"} onClick={() => setTab("rules")} label="Regeln" />
             <TabButton active={tab === "contacts"} onClick={() => setTab("contacts")} label="Kontakte" />
+            <TabButton active={tab === "tags"} onClick={() => setTab("tags")} label="Tags" />
             <TabButton active={tab === "backup"} onClick={() => setTab("backup")} label="Datensicherung" />
             <TabButton active={tab === "about"} onClick={() => setTab("about")} label="Über" />
           </nav>
@@ -892,11 +977,56 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             {tab === "contacts" ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Kontakte</h3>
-                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => void createContact()}>
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Kontakte</h3>
+                    <p className="mt-1 text-xs text-white/45">Gespeicherte Kontakte werden beim Verfassen vorgeschlagen.</p>
+                  </div>
+                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => openContactForm()}>
                     Kontakt hinzufügen
                   </button>
                 </div>
+                {contactFormOpen ? (
+                  <form className="rounded-2xl border border-white/[0.08] bg-[#151515] p-4" onSubmit={(event) => void submitContact(event)}>
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">{editingContactId ? "Kontakt bearbeiten" : "Neuen Kontakt erstellen"}</h4>
+                      <button type="button" className="rounded-lg p-1.5 text-white/45 hover:bg-white/[0.06] hover:text-white" onClick={closeContactForm}>
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/55">Name</span>
+                        <input
+                          className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#111] px-3 text-sm outline-none focus:border-white/20"
+                          value={contactName}
+                          onChange={(event) => setContactName(event.target.value)}
+                          placeholder="Max Mustermann"
+                          autoFocus
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/55">E-Mail-Adresse</span>
+                        <input
+                          type="email"
+                          required
+                          className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#111] px-3 text-sm outline-none focus:border-white/20"
+                          value={contactEmail}
+                          onChange={(event) => setContactEmail(event.target.value)}
+                          placeholder="max@example.de"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs text-white/65">
+                      <input type="checkbox" checked={contactFavorite} onChange={(event) => setContactFavorite(event.target.checked)} className="mail-checkbox h-4 w-4" />
+                      Als Favorit markieren
+                    </label>
+                    {contactError ? <p className="mt-3 text-xs text-red-300">{contactError}</p> : null}
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={closeContactForm}>Abbrechen</button>
+                      <button type="submit" className="accent-primary rounded-lg px-4 py-2 text-xs font-semibold">Kontakt speichern</button>
+                    </div>
+                  </form>
+                ) : null}
                 {contacts.length === 0 ? (
                   <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
                     Noch keine Kontakte gespeichert.
@@ -906,15 +1036,100 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   {contacts.map((contact) => (
                     <div key={contact.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-white/[0.08]">
                       <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="font-medium">{contact.name || contact.email}</div>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-semibold">
+                            {(contact.name || contact.email).charAt(0).toUpperCase()}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 font-medium">
+                              <span className="truncate">{contact.name || contact.email}</span>
+                              {contact.isFavorite ? <Star size={13} className="shrink-0 fill-[rgb(var(--accent))] text-[rgb(var(--accent))]" /> : null}
+                            </div>
                           <div className="text-xs text-slate-500 dark:text-slate-400">{contact.email}</div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400">
                             Letzter Kontakt: {contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleString() : "—"} · Nutzungen: {contact.usageCount}
                           </div>
+                          </div>
                         </div>
-                        <button className="rounded-lg border border-white/[0.06] px-2 py-1 text-xs text-white/55 hover:bg-white/[0.05] hover:text-white" onClick={() => void deleteContact(contact.id)}>
-                          Löschen
+                        <div className="flex shrink-0 gap-2">
+                          <button className="rounded-lg border border-white/[0.06] p-2 text-white/55 hover:bg-white/[0.05] hover:text-white" title="Bearbeiten" onClick={() => openContactForm(contact)}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className="rounded-lg border border-red-500/20 p-2 text-red-300 hover:bg-red-500/10" title="Löschen" onClick={() => void deleteContact(contact.id)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {tab === "tags" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Tags</h3>
+                    <p className="mt-1 text-xs text-white/45">Erstelle frei benennbare Tags und ordne sie ausgewählten Mails zu.</p>
+                  </div>
+                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => openTagForm()}>
+                    Tag hinzufügen
+                  </button>
+                </div>
+                {tagFormOpen ? (
+                  <form className="rounded-2xl border border-white/[0.08] bg-[#151515] p-4" onSubmit={(event) => void submitTag(event)}>
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">{editingTagId ? "Tag bearbeiten" : "Neuen Tag erstellen"}</h4>
+                      <button type="button" className="rounded-lg p-1.5 text-white/45 hover:bg-white/[0.06] hover:text-white" onClick={closeTagForm}>
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="grid items-end gap-3 sm:grid-cols-[1fr_120px]">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/55">Name</span>
+                        <input
+                          required
+                          maxLength={40}
+                          className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#111] px-3 text-sm outline-none focus:border-white/20"
+                          value={tagName}
+                          onChange={(event) => setTagName(event.target.value)}
+                          placeholder="z. B. Rechnung"
+                          autoFocus
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/55">Farbe</span>
+                        <input
+                          type="color"
+                          className="h-10 w-full cursor-pointer rounded-lg border border-white/[0.08] bg-[#111] p-1"
+                          value={tagColor}
+                          onChange={(event) => setTagColor(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    {tagError ? <p className="mt-3 text-xs text-red-300">{tagError}</p> : null}
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={closeTagForm}>Abbrechen</button>
+                      <button type="submit" className="accent-primary rounded-lg px-4 py-2 text-xs font-semibold">Tag speichern</button>
+                    </div>
+                  </form>
+                ) : null}
+                {tags.length === 0 ? (
+                  <div className="rounded-2xl border border-white/[0.08] p-4 text-sm text-white/45">Noch keine Tags vorhanden.</div>
+                ) : null}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {tags.map((tag) => (
+                    <div key={tag.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] p-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
+                        <span className="truncate text-sm font-medium">{tag.name}</span>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button className="rounded-lg border border-white/[0.06] p-2 text-white/55 hover:bg-white/[0.05] hover:text-white" title="Bearbeiten" onClick={() => openTagForm(tag)}>
+                          <Pencil size={14} />
+                        </button>
+                        <button className="rounded-lg border border-red-500/20 p-2 text-red-300 hover:bg-red-500/10" title="Löschen" onClick={() => void deleteTag(tag.id)}>
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>

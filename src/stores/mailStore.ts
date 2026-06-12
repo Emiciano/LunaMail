@@ -91,8 +91,10 @@ type MailState = {
   saveContact: (contact: Parameters<typeof mailService.saveContact>[0]) => Promise<void>;
   deleteContact: (id: number) => Promise<void>;
   createTag: (name: string, color: string) => Promise<void>;
+  saveTag: (tag: Tag | Omit<Tag, "id">) => Promise<void>;
   deleteTag: (id: number) => Promise<void>;
   setEmailTags: (emailId: number, tagIds: number[]) => Promise<void>;
+  setSelectedEmailTags: (tagIds: number[]) => Promise<void>;
   quickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive") => Promise<void>;
   handleSyncAccountComplete: (report: SyncReport) => void;
   handleSyncAccountError: (payload: { accountId: number; message: string }) => void;
@@ -970,6 +972,11 @@ export const useMailStore = create<MailState>((set, get) => ({
     const tags = await mailService.getTags();
     set({ tags });
   },
+  async saveTag(tag) {
+    await mailService.saveTag(tag);
+    const tags = await mailService.getTags();
+    set({ tags });
+  },
   async deleteTag(id) {
     await mailService.deleteTag(id);
     const tags = await mailService.getTags();
@@ -986,6 +993,12 @@ export const useMailStore = create<MailState>((set, get) => ({
       ? await mailService.getEmail(emailId)
       : get().selectedEmail;
     set({ emails, selectedEmail });
+  },
+  async setSelectedEmailTags(tagIds) {
+    const emailIds = get().selectedEmailIds;
+    if (!emailIds.length) return;
+    await mailService.setEmailsTags(emailIds, tagIds);
+    await get().refreshCurrentView();
   },
   async quickAction(emailId, action) {
     const email = get().emails.find((item) => item.id === emailId);
