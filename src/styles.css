@@ -5,16 +5,16 @@
 :root,
 :root.dark {
   color-scheme: dark;
-  background: #0b0b0b;
+  background: #050505;
   --accent: 255 255 255;
   --accent-soft: 21 21 21;
   --accent-contrast: 11 11 11;
-  --surface: 17 17 17;
+  --surface: 13 13 13;
   --surface-elevated: 21 21 21;
   --text-primary: 255 255 255;
   --text-secondary: 255 255 255 / 0.55;
-  --glass-bg: 17 17 17 / 1;
-  --glass-border: 255 255 255 / 0.06;
+  --glass-bg: 13 13 13 / 1;
+  --glass-border: 31 31 31 / 1;
   --glass-shadow: none;
   --glass-blur: 0px;
   --app-font-size: 16px;
@@ -31,7 +31,7 @@ body {
   overflow: hidden;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: var(--app-font-size);
-  background: #0b0b0b;
+  background: #050505;
   color: #fff;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeSpeed;
@@ -53,8 +53,8 @@ button {
 }
 
 .tr-shell {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #111111;
+  border: 0;
+  background: #0d0d0d;
 }
 
 .tr-panel {
