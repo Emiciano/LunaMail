@@ -1,4 +1,4 @@
-import { ExternalLink, Info, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, ExternalLink, Info, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -697,7 +697,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         min="14"
                         max="22"
                         value={draft.fontSize}
-                        onChange={(event) => setDraft({ ...draft, fontSize: Number(event.target.value) })}
+                        onChange={(event) => {
+                          const fontSize = Number(event.target.value);
+                          setDraft({ ...draft, fontSize });
+                          document.documentElement.style.setProperty("--app-font-size", `${fontSize}px`);
+                        }}
+                        onPointerUp={(event) => applySettings({ ...draft, fontSize: Number(event.currentTarget.value) })}
+                        onBlur={(event) => applySettings({ ...draft, fontSize: Number(event.currentTarget.value) })}
                         className="mt-4 w-full accent-[rgb(var(--accent))]"
                       />
                     </label>
@@ -1284,9 +1290,12 @@ function ModernSelect({ label, value, onChange, options }: { label: string; valu
   return (
     <label className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-white/[0.07] bg-[#151515] px-4 py-2.5">
       <span className="text-sm font-medium text-white/80">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-w-52 rounded-lg border border-white/[0.07] bg-[#101010] px-3 py-2 text-sm text-white outline-none focus:border-[rgb(var(--accent)/0.45)]">
-        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
-      </select>
+      <span className="relative min-w-52">
+        <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/[0.07] bg-[#101010] px-3 py-2 pr-10 text-sm text-white outline-none focus:border-[rgb(var(--accent)/0.45)]">
+          {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+        </select>
+        <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/60" />
+      </span>
     </label>
   );
 }

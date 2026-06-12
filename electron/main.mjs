@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { LunaBackend } from "./backend.mjs";
 import { setupAutoUpdater } from "./updater.mjs";
 
-app.commandLine.appendSwitch("js-flags", "--max-old-space-size=192");
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=128");
+app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");

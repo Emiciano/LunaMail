@@ -26,14 +26,15 @@ const accentSoftValues: Record<AccentColor, string> = {
   gray: "248 250 252"
 };
 
-export function useTheme(theme: ThemeMode, accentColor: AccentColor) {
+export function useTheme(theme: ThemeMode, accentColor: AccentColor, fontSize = 16) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.style.setProperty("--accent", accentValues[accentColor]);
     document.documentElement.style.setProperty("--accent-soft", accentSoftValues[accentColor]);
     document.documentElement.style.setProperty("--accent-contrast", accentColor === "white" ? "11 11 11" : "255 255 255");
+    document.documentElement.style.setProperty("--app-font-size", `${Math.min(22, Math.max(12, fontSize))}px`);
     if (isDesktop) {
       void window.electronAPI?.window.setTheme(theme);
     }
-  }, [theme, accentColor]);
+  }, [theme, accentColor, fontSize]);
 }

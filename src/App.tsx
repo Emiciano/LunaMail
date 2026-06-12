@@ -1,17 +1,18 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AppLayout } from "./layouts/AppLayout";
 import { CommandPalette } from "./components/CommandPalette";
-import { Composer } from "./components/Composer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { QuickLook } from "./components/QuickLook";
-import { SettingsPanel } from "./components/SettingsPanel";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { useTheme } from "./hooks/useTheme";
 import { ensureNotificationPermission } from "./services/notifications";
 import { mailService } from "./services/mailService";
 import { isDesktop } from "./services/desktop";
 import { setupMailStoreListeners, useMailStore } from "./stores/mailStore";
+
+const Composer = lazy(() => import("./components/Composer").then((module) => ({ default: module.Composer })));
+const QuickLook = lazy(() => import("./components/QuickLook").then((module) => ({ default: module.QuickLook })));
+const SettingsPanel = lazy(() => import("./components/SettingsPanel").then((module) => ({ default: module.SettingsPanel })));
 
 export default function App() {
   const { accounts, hasSynced, syncing, sync, realtimeSyncInboxes, closeSettings, composer, selectedEmail, loadInitial, startupStatus, settings, settingsOpen, openComposer, replyToSelected, deleteSelected } = useMailStore(useShallow((state) => ({
@@ -35,7 +36,7 @@ export default function App() {
   const [quickLookOpen, setQuickLookOpen] = useState(false);
   const [pageHidden, setPageHidden] = useState(document.hidden);
   const [bootReady, setBootReady] = useState(false);
-  useTheme(settings.theme, settings.accentColor);
+  useTheme(settings.theme, settings.accentColor, settings.fontSize);
 
   useEffect(() => {
     setupMailStoreListeners();
@@ -158,9 +159,11 @@ export default function App() {
     <main className="h-full bg-[#0B0B0B] text-white">
       <ErrorBoundary>
         <AppLayout />
-        {composer ? <Composer /> : null}
-        {quickLookOpen && selectedEmail ? <QuickLook email={selectedEmail} onClose={() => setQuickLookOpen(false)} /> : null}
-        {settingsOpen ? <SettingsPanel onClose={closeSettings} /> : null}
+        <Suspense fallback={null}>
+          {composer ? <Composer /> : null}
+          {quickLookOpen && selectedEmail ? <QuickLook email={selectedEmail} onClose={() => setQuickLookOpen(false)} /> : null}
+          {settingsOpen ? <SettingsPanel onClose={closeSettings} /> : null}
+        </Suspense>
         <UpdatePrompt />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {!bootReady ? (

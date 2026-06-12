@@ -6,7 +6,7 @@ import { cn } from "../lib/cn";
 import { useMailStore } from "../stores/mailStore";
 import type { Email } from "../types";
 
-const PAGE_SIZE = 40;
+const PAGE_SIZE = 30;
 
 export function MailList() {
   const {
@@ -200,7 +200,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div
-            className="mail-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1 pb-20 pt-1"
+            className="mail-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-20 pt-1"
             onScroll={(event) => {
               const element = event.currentTarget;
               if (element.scrollTop + element.clientHeight >= element.scrollHeight - 240 && visibleCount < emails.length) {
