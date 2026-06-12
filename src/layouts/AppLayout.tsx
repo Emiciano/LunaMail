@@ -15,19 +15,19 @@ export function AppLayout() {
   const hasAccounts = accounts.length > 0;
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[#0B0B0B] p-2 text-white">
-      <header className="titlebar-drag flex h-10 shrink-0 items-center justify-end">
-        <div className="titlebar-no-drag flex items-center gap-2">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#0B0B0B] px-2 pb-2 pt-1 text-white">
+      <header className="titlebar-drag flex h-7 shrink-0 items-start justify-end">
+        <div className="titlebar-no-drag flex h-6 items-center gap-1 overflow-hidden rounded-bl-xl border-b border-l border-white/[0.06] bg-[#111111] px-1">
           {isDesktop ? (
             <>
-              <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/55 hover:bg-white/[0.06]" onClick={() => void window.electronAPI?.window.minimize()} title="Minimieren">
-                <Minus size={14} />
+              <button className="inline-flex h-5 w-8 items-center justify-center rounded-md text-white/50 hover:bg-white/[0.08] hover:text-white" onClick={() => void window.electronAPI?.window.minimize()} title="Minimieren">
+                <Minus size={12} />
               </button>
-              <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/55 hover:bg-white/[0.06]" onClick={() => void window.electronAPI?.window.toggleMaximize()} title="Maximieren">
-                <Square size={12} />
+              <button className="inline-flex h-5 w-8 items-center justify-center rounded-md text-white/50 hover:bg-white/[0.08] hover:text-white" onClick={() => void window.electronAPI?.window.toggleMaximize()} title="Maximieren">
+                <Square size={10} />
               </button>
-              <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/55 hover:bg-white/[0.06]" onClick={() => void mailService.requestClose()} title="Schließen">
-                <X size={14} />
+              <button className="inline-flex h-5 w-8 items-center justify-center rounded-md text-white/50 hover:bg-red-500 hover:text-white" onClick={() => void mailService.requestClose()} title="Schließen">
+                <X size={12} />
               </button>
             </>
           ) : null}
