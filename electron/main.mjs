@@ -2,7 +2,6 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, sh
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LunaBackend } from "./backend.mjs";
-import { setupAutoUpdater } from "./updater.mjs";
 
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=128");
 app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling");
@@ -14,7 +13,6 @@ let mainWindow;
 let tray;
 let quitting = false;
 let backend;
-let appUpdater;
 
 function emit(event, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -79,6 +77,29 @@ function showWindow() {
   mainWindow.focus();
 }
 
+async function getReleaseHistory() {
+  try {
+    const response = await fetch("https://api.github.com/repos/Emiciano/LunaMail/releases?per_page=10", {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "LunaMail"
+      }
+    });
+    if (!response.ok) return [];
+    const releases = await response.json();
+    if (!Array.isArray(releases)) return [];
+    return releases.map((release) => ({
+      version: String(release.tag_name || release.name || "").replace(/^v/i, ""),
+      name: release.name || release.tag_name || "Release",
+      notes: typeof release.body === "string" ? release.body : "",
+      publishedAt: release.published_at || "",
+      url: release.html_url || "https://github.com/Emiciano/LunaMail/releases"
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function registerIpc() {
   ipcMain.handle("lunamail:invoke", async (_event, command, args) => {
     if (command === "show_main_window_cmd") return showWindow();
@@ -125,16 +146,13 @@ function registerIpc() {
     return result.response === 0;
   });
   ipcMain.handle("lunamail:check-for-updates", async () => {
-    if (!appUpdater) return { skipped: true, reason: "development" };
-    return appUpdater.checkForUpdates();
+    return { skipped: true, reason: "managed-by-launcher" };
   });
   ipcMain.handle("lunamail:download-update", async () => {
-    if (!appUpdater) return { skipped: true, reason: "development" };
-    return appUpdater.downloadUpdate();
+    return { skipped: true, reason: "managed-by-launcher" };
   });
   ipcMain.handle("lunamail:release-history", async () => {
-    if (!appUpdater) return [];
-    return appUpdater.getReleaseHistory();
+    return getReleaseHistory();
   });
   ipcMain.handle("lunamail:window", (_event, action, value) => {
     if (!mainWindow) return false;
@@ -157,10 +175,8 @@ app.whenReady().then(async () => {
   });
   await backend.init();
   registerIpc();
-  appUpdater = setupAutoUpdater({ emit });
   createWindow();
   createTray();
-  appUpdater.scheduleStartupCheck();
 });
 
 app.on("before-quit", () => { quitting = true; });

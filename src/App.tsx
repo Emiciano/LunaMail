@@ -3,7 +3,6 @@ import { useShallow } from "zustand/react/shallow";
 import { AppLayout } from "./layouts/AppLayout";
 import { CommandPalette } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { UpdatePrompt } from "./components/UpdatePrompt";
 import { useTheme } from "./hooks/useTheme";
 import { ensureNotificationPermission } from "./services/notifications";
 import { mailService } from "./services/mailService";
@@ -164,7 +163,6 @@ export default function App() {
           {quickLookOpen && selectedEmail ? <QuickLook email={selectedEmail} onClose={() => setQuickLookOpen(false)} /> : null}
           {settingsOpen ? <SettingsPanel onClose={closeSettings} /> : null}
         </Suspense>
-        <UpdatePrompt />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {!bootReady ? (
           <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-[#0B0B0B]">
