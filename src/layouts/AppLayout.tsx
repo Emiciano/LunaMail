@@ -16,6 +16,7 @@ export function AppLayout() {
 
   return (
     <div className="relative h-full overflow-hidden bg-[#050505] text-white">
+      {isDesktop ? <div className="titlebar-drag absolute left-[292px] right-32 top-0 z-40 h-10" /> : null}
       {isDesktop ? (
         <div className="titlebar-drag absolute right-0 top-0 z-50 flex h-8 items-center gap-1 overflow-hidden rounded-bl-2xl border-b border-l border-[#1F1F1F] bg-[#050505] px-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
           <button className="titlebar-no-drag inline-flex h-6 w-8 items-center justify-center rounded-lg text-white/48 transition-colors hover:bg-white/[0.08] hover:text-white" onClick={() => void window.electronAPI?.window.minimize()} title="Minimieren">
@@ -30,9 +31,11 @@ export function AppLayout() {
         </div>
       ) : null}
 
-      <section className="tr-shell grid h-full min-h-0 grid-cols-[292px_minmax(0,1fr)] overflow-hidden bg-[#0D0D0D]">
+      <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-[#050505] lg:p-3">
         <MailSidebar />
-        <MailList />
+        <div className="min-w-0 flex-1 overflow-hidden bg-[#0d0d0e] lg:rounded-[24px] lg:border lg:border-white/[0.07]">
+          <MailList />
+        </div>
       </section>
       <MailReader />
 

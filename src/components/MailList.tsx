@@ -91,8 +91,8 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex min-h-0 flex-col bg-[#0D0D0D] px-3 py-3">
-      <header className="flex min-h-14 shrink-0 items-center justify-between px-3">
+    <section className="flex min-h-0 h-full flex-col bg-[#0D0D0D] px-5 py-5 sm:px-7 lg:px-8 lg:py-6 xl:px-9">
+      <header className="flex min-h-14 shrink-0 items-center justify-between px-1">
         <div>
           <h1 className="text-[17px] font-semibold tracking-[-0.02em]">{viewTitle(selectedView, selectedCategoryId)}</h1>
           <p className="mt-0.5 text-[11px] text-white/40">
@@ -104,7 +104,7 @@ export function MailList() {
 
       {showsMailList ? (
         <>
-          <div className="shrink-0 px-2 pb-2 pt-1">
+          <div className="shrink-0 px-0 pb-2 pt-1">
             <label className="flex h-9 items-center gap-3 rounded-lg border border-white/[0.08] bg-[#181818] px-3 text-white/45 focus-within:border-white/[0.14]">
               <Search size={15} />
               <input
@@ -200,7 +200,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div
-            className="mail-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-20 pt-1"
+            className="mail-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-0 pb-20 pt-1"
             onScroll={(event) => {
               const element = event.currentTarget;
               if (element.scrollTop + element.clientHeight >= element.scrollHeight - 240 && visibleCount < emails.length) {
@@ -229,7 +229,7 @@ export function MailList() {
               />
             ))}
           </div>
-          <footer className="flex h-9 shrink-0 items-center justify-between px-3 text-[11px] text-white/40">
+          <footer className="flex h-9 shrink-0 items-center justify-between px-1 text-[11px] text-white/40">
             <span>{emails.filter((email) => !email.isRead).length} ungelesen</span>
             <span>Neueste zuerst</span>
           </footer>
@@ -294,7 +294,7 @@ function ActionToolbar({
 }) {
   const disabled = selectedCount === 0;
   return (
-    <div className="scrollbar-hidden mx-2 flex h-11 shrink-0 items-center gap-2 overflow-x-auto rounded-lg bg-white/[0.025] px-2">
+    <div className="scrollbar-hidden mx-0 flex h-11 shrink-0 items-center gap-2 overflow-x-auto rounded-xl bg-white/[0.025] px-2">
       <label className="mr-1 inline-flex shrink-0 items-center gap-2 text-[11px] text-white/55">
         <input type="checkbox" checked={allSelected} onChange={(event) => onSelectAll(event.target.checked)} className="mail-checkbox h-3.5 w-3.5" />
         Alle
@@ -355,7 +355,7 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
         active
           ? "border-white/[0.10] bg-white/[0.105]"
           : email.isRead

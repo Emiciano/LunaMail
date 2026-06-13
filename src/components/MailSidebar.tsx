@@ -85,11 +85,11 @@ export function MailSidebar() {
   }
 
   return (
-    <aside className="flex min-h-0 flex-col bg-[#050505] px-3 py-3">
-      <div className="mb-4 flex items-center">
+    <aside className="flex min-h-0 w-[292px] shrink-0 flex-col bg-[#050505] px-5 py-6 lg:w-[318px] lg:px-6 lg:py-7">
+      <div className="mb-10 flex items-center px-2">
         <button className="flex items-center gap-3 text-left" onClick={openSettings}>
-          <img src="./icon.png" alt="" className="h-7 w-7 rounded-lg object-cover" />
-          <span className="text-[15px] font-semibold tracking-[-0.02em]">LunaMail</span>
+          <img src="./icon.png" alt="" className="h-12 w-12 rounded-[15px] object-cover" />
+          <span className="text-xl font-semibold tracking-[-0.04em]">LunaMail</span>
         </button>
       </div>
 
@@ -101,7 +101,7 @@ export function MailSidebar() {
         </nav>
 
         <SectionTitle title="Konten" />
-        <div className="space-y-2">
+        <div className="space-y-1">
           {accounts.length === 0 ? <p className="px-2 py-3 text-[12px] text-white/45">Noch kein Konto verbunden</p> : null}
           {accounts.map((account) => {
             const accountFolders = foldersByAccount.get(account.id) ?? [];
@@ -114,7 +114,7 @@ export function MailSidebar() {
             return (
               <section key={account.id}>
                 <button
-                  className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${selectedAccountId === account.id ? "bg-white/[0.045]" : "hover:bg-white/[0.035]"}`}
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${selectedAccountId === account.id ? "bg-white/[0.09]" : "hover:bg-white/[0.045]"}`}
                   onClick={() => toggleAccount(account)}
                 >
                   <ChevronRight size={14} className={`shrink-0 text-white/45 transition-transform ${accountOpen ? "rotate-90" : ""}`} />
@@ -166,7 +166,7 @@ export function MailSidebar() {
         </div>
       </div>
 
-      <div className="mt-3 shrink-0 border-t border-white/[0.06] pt-3">
+      <div className="mt-auto shrink-0 pt-5">
         <SideButton active={false} icon={<Settings size={16} />} label="Einstellungen" onClick={openSettings} />
       </div>
     </aside>
@@ -176,10 +176,10 @@ export function MailSidebar() {
 function SideButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
   return (
     <button
-      className={`flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-[13px] font-medium ${
+      className={`flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-all duration-200 ${
         active
-          ? "bg-white/[0.10] text-white"
-          : "text-white/78 hover:bg-white/[0.055] hover:text-white"
+          ? "border border-white/[0.08] bg-white/[0.09] text-white"
+          : "border border-transparent text-white/58 hover:bg-white/[0.045] hover:text-white"
       }`}
       onClick={onClick}
     >
@@ -191,7 +191,7 @@ function SideButton({ active, icon, label, count, onClick }: { active: boolean; 
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <div className="mb-2 mt-6 px-2 text-[12px] font-medium text-white/38">{title}</div>;
+  return <div className="mb-3 mt-8 px-3 text-xs font-medium uppercase tracking-[0.14em] text-white/28">{title}</div>;
 }
 
 function FolderButton({ folder, active, onClick }: { folder: MailFolder; active: boolean; onClick: () => void }) {
