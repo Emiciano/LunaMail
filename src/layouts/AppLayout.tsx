@@ -33,7 +33,7 @@ export function AppLayout() {
 
       <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-[#050505] lg:p-3">
         <MailSidebar />
-        <div className="min-w-0 flex-1 overflow-hidden bg-[#0d0d0e] lg:rounded-[24px] lg:border lg:border-white/[0.07]">
+        <div className="min-w-0 flex-1 overflow-hidden bg-[#050505] lg:rounded-[24px] lg:border lg:border-white/[0.07]">
           <MailList />
         </div>
       </section>

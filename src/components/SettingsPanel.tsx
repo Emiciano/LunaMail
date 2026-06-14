@@ -2,7 +2,7 @@ import { ChevronDown, ExternalLink, Info, Pencil, Plus, ShieldCheck, Star, Trash
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { desktopDialog, isDesktop, listenDesktop, openExternalLink, type AppRelease, type AppUpdateStatus } from "../services/desktop";
+import { desktopDialog, isDesktop, openExternalLink, type AppRelease } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import type { AccentColor, Contact, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings, Tag } from "../types";
@@ -100,8 +100,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<number | undefined>();
   const [appVersion, setAppVersion] = useState<string>(packageJson.version);
-  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
-  const [updateBusy, setUpdateBusy] = useState(false);
   const [releases, setReleases] = useState<AppRelease[]>([]);
   const [releasesBusy, setReleasesBusy] = useState(false);
   const [releasesError, setReleasesError] = useState<string | null>(null);
@@ -135,31 +133,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    if (!isDesktop) return;
-    let unsubscribe = () => {};
-    let disposed = false;
-    void listenDesktop<AppUpdateStatus>("app-update-status", ({ payload }) => {
-      setUpdateStatus(payload);
-      if (payload.status === "checking" || payload.status === "downloading" || payload.status === "downloaded") {
-        setUpdateBusy(true);
-      }
-      if (payload.status === "available" || payload.status === "not-available" || payload.status === "error") {
-        setUpdateBusy(false);
-      }
-    }).then((removeListener) => {
-      if (disposed) {
-        removeListener();
-        return;
-      }
-      unsubscribe = removeListener;
-    });
-    return () => {
-      disposed = true;
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
     if (tab !== "about" || !isDesktop || !window.electronAPI?.getReleaseHistory) return;
     let active = true;
     setReleasesBusy(true);
@@ -178,53 +151,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       active = false;
     };
   }, [tab]);
-
-  async function checkForAppUpdate() {
-    if (!isDesktop || !window.electronAPI?.checkForUpdates) {
-      setUpdateStatus({ status: "error", message: "Updates sind nur in der Desktop-App verfügbar." });
-      return;
-    }
-    setUpdateBusy(true);
-    setUpdateStatus({ status: "checking" });
-    try {
-      const result = await window.electronAPI.checkForUpdates() as { skipped?: boolean; reason?: string };
-      if (result?.skipped) {
-        setUpdateBusy(false);
-        setUpdateStatus({
-          status: "error",
-          message: result.reason === "development"
-            ? "Updates sind nur in der installierten Desktop-Version verfügbar."
-            : "Update-Prüfung wurde übersprungen."
-        });
-      }
-    } catch (error) {
-      setUpdateBusy(false);
-      setUpdateStatus({
-        status: "error",
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }
-
-  function formatUpdateStatus(status: AppUpdateStatus | null): string {
-    if (!status) return "Beim Start wird automatisch nach Updates gesucht.";
-    switch (status.status) {
-      case "checking":
-        return "Suche nach Updates...";
-      case "available":
-        return `Version ${status.version} ist verfügbar. Bestätige die Installation im eingeblendeten Fenster.`;
-      case "not-available":
-        return "LunaMail ist auf dem neuesten Stand.";
-      case "downloading":
-        return `Update wird heruntergeladen... ${Math.round(status.percent)}%`;
-      case "downloaded":
-        return `Update ${status.version} ist bereit. Der Installer startet gleich...`;
-      case "error":
-        return `Update fehlgeschlagen: ${status.message}`;
-      default:
-        return "";
-    }
-  }
 
   useEffect(() => {
     setDraft(settings);
@@ -1175,29 +1101,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
                     Installierte Version: <span className="font-semibold text-slate-800 dark:text-white">{appVersion}</span>
                   </div>
-                  {isDesktop ? (
-                    <div className="mt-4 space-y-3">
-                      <button
-                        type="button"
-                        className="accent-primary w-full rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={updateBusy}
-                        onClick={() => void checkForAppUpdate()}
-                      >
-                        {updateBusy ? "Update wird verarbeitet..." : "Auf Updates prüfen"}
-                      </button>
-                      <p className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
-                        {formatUpdateStatus(updateStatus)}
-                      </p>
-                      {updateStatus?.status === "downloading" ? (
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-[rgb(var(--accent))] transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(0, updateStatus.percent))}%` }}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
+                    Updates werden zentral über den LunaSuite Launcher verwaltet.
+                  </div>
                 </section>
 
                 <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">

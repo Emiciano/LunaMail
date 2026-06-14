@@ -91,7 +91,7 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex min-h-0 h-full flex-col bg-[#0D0D0D] px-5 py-5 sm:px-7 lg:px-8 lg:py-6 xl:px-9">
+    <section className="flex min-h-0 h-full flex-col bg-[#050505] px-5 py-5 sm:px-7 lg:px-8 lg:py-6 xl:px-9">
       <header className="flex min-h-14 shrink-0 items-center justify-between px-1">
         <div>
           <h1 className="text-[17px] font-semibold tracking-[-0.02em]">{viewTitle(selectedView, selectedCategoryId)}</h1>

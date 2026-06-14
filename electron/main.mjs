@@ -145,12 +145,6 @@ function registerIpc() {
     });
     return result.response === 0;
   });
-  ipcMain.handle("lunamail:check-for-updates", async () => {
-    return { skipped: true, reason: "managed-by-launcher" };
-  });
-  ipcMain.handle("lunamail:download-update", async () => {
-    return { skipped: true, reason: "managed-by-launcher" };
-  });
   ipcMain.handle("lunamail:release-history", async () => {
     return getReleaseHistory();
   });

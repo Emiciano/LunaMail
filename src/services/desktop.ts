@@ -1,13 +1,5 @@
 export type DesktopEvent<T> = { payload: T };
 
-export type AppUpdateStatus =
-  | { status: "checking" }
-  | { status: "available"; version: string; releaseNotes?: string }
-  | { status: "not-available"; version?: string }
-  | { status: "downloading"; version: string; percent: number; transferred: number; total: number; bytesPerSecond: number }
-  | { status: "downloaded"; version: string }
-  | { status: "error"; message: string };
-
 export type AppRelease = {
   version: string;
   name: string;
@@ -20,8 +12,6 @@ type ElectronBridge = {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
   on<T>(event: string, callback: (payload: T) => void): () => void;
   getVersion(): Promise<string>;
-  checkForUpdates(): Promise<unknown>;
-  downloadUpdate(): Promise<unknown>;
   getReleaseHistory(): Promise<AppRelease[]>;
   openDialog(options: Record<string, unknown>): Promise<string | string[] | null>;
   saveDialog(options: Record<string, unknown>): Promise<string | null>;
