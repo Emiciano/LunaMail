@@ -1,11 +1,10 @@
 import { Activity, AlertCircle, Archive, ChevronRight, FileText, Folder, Inbox, LayoutDashboard, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useMailStore } from "../stores/mailStore";
 import type { Account, Folder as MailFolder } from "../types";
 
-const SIDEBAR_STORAGE_KEY = "lunamail.sidebar.expanded";
 const folderIcons: Record<MailFolder["role"], typeof Inbox> = {
   inbox: Inbox,
   sent: Send,
@@ -23,18 +22,13 @@ type ExpandedState = {
 };
 
 function readExpandedState(): ExpandedState {
-  try {
-    const value = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-    return value ? JSON.parse(value) as ExpandedState : { accounts: {}, customFolders: {} };
-  } catch {
-    return { accounts: {}, customFolders: {} };
-  }
+  return { accounts: {}, customFolders: {} };
 }
 
 export function MailSidebar() {
   const {
     accounts, folders, selectedAccountId, selectedFolderId, selectedView, selectedSpecialAccountId,
-    mailCounts, selectAccount, selectFolder, selectSpecialView, openUnifiedInbox, openHealth,
+    mailCounts, selectFolder, selectSpecialView, openUnifiedInbox, openHealth,
     openSettings, openDashboard
   } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
@@ -44,7 +38,6 @@ export function MailSidebar() {
     selectedView: state.selectedView,
     selectedSpecialAccountId: state.selectedSpecialAccountId,
     mailCounts: state.mailCounts,
-    selectAccount: state.selectAccount,
     selectFolder: state.selectFolder,
     selectSpecialView: state.selectSpecialView,
     openUnifiedInbox: state.openUnifiedInbox,
@@ -65,16 +58,11 @@ export function MailSidebar() {
     () => new Map(mailCounts.perAccount.map((item) => [item.accountId, item])),
     [mailCounts.perAccount]
   );
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(expanded));
-  }, [expanded]);
-
   function toggleAccount(account: Account) {
     setExpanded((current) => ({
       ...current,
-      accounts: { ...current.accounts, [account.id]: !(current.accounts[account.id] ?? true) }
+      accounts: { ...current.accounts, [account.id]: !(current.accounts[account.id] ?? false) }
     }));
-    void selectAccount(account.id);
   }
 
   function toggleCustomFolders(accountId: number) {
@@ -107,14 +95,14 @@ export function MailSidebar() {
             const accountFolders = foldersByAccount.get(account.id) ?? [];
             const primaryFolders = accountFolders.filter((folder) => folder.role !== "custom");
             const customFolders = accountFolders.filter((folder) => folder.role === "custom");
-            const accountOpen = expanded.accounts[account.id] ?? true;
+            const accountOpen = expanded.accounts[account.id] ?? false;
             const customOpen = expanded.customFolders[account.id] ?? true;
             const accountUnread = accountFolders.reduce((sum, folder) => sum + folder.unreadCount, 0);
 
             return (
               <section key={account.id}>
                 <button
-                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${selectedAccountId === account.id ? "bg-white/[0.09]" : "hover:bg-white/[0.045]"}`}
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-all duration-200 ${selectedAccountId === account.id && selectedView !== "dashboard" ? "bg-white/[0.09]" : "hover:bg-white/[0.045]"}`}
                   onClick={() => toggleAccount(account)}
                 >
                   <ChevronRight size={14} className={`shrink-0 text-white/45 transition-transform ${accountOpen ? "rotate-90" : ""}`} />

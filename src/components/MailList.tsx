@@ -91,21 +91,21 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex min-h-0 h-full flex-col bg-[#050505] px-5 py-5 sm:px-7 lg:px-8 lg:py-6 xl:px-9">
-      <header className="flex min-h-14 shrink-0 items-center justify-between px-1">
+    <section className="flex h-full min-h-0 flex-col bg-[#050505] px-3 py-4 sm:px-5 lg:px-8 lg:py-6 xl:px-9">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 px-1">
         <div>
           <h1 className="text-[17px] font-semibold tracking-[-0.02em]">{viewTitle(selectedView, selectedCategoryId)}</h1>
           <p className="mt-0.5 text-[11px] text-white/40">
             {selectedView === "dashboard" ? "Deine Konten auf einen Blick" : selectedView === "health" ? "Lokaler Status und Synchronisation" : `${emails.length} Nachrichten`}
           </p>
         </div>
-        {showsMailList ? <span className="text-[11px] text-white/45">{selectedCount > 0 ? `${selectedCount} ausgewählt` : `${emails.length} Mails`}</span> : null}
+        {showsMailList ? <span className="shrink-0 rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/48">{selectedCount > 0 ? `${selectedCount} ausgewählt` : `${emails.length} Mails`}</span> : null}
       </header>
 
       {showsMailList ? (
         <>
-          <div className="shrink-0 px-0 pb-2 pt-1">
-            <label className="flex h-9 items-center gap-3 rounded-lg border border-white/[0.08] bg-[#181818] px-3 text-white/45 focus-within:border-white/[0.14]">
+          <div className="shrink-0 px-0 pb-3 pt-1">
+            <label className="flex h-10 items-center gap-3 rounded-xl border border-white/[0.08] bg-[#141414] px-3 text-white/45 transition focus-within:border-white/[0.16] focus-within:bg-[#181818]">
               <Search size={15} />
               <input
                 id="mail-search-input"
@@ -200,7 +200,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div
-            className="mail-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-0 pb-20 pt-1"
+            className="mail-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-0 pb-20 pt-2"
             onScroll={(event) => {
               const element = event.currentTarget;
               if (element.scrollTop + element.clientHeight >= element.scrollHeight - 240 && visibleCount < emails.length) {
@@ -294,7 +294,7 @@ function ActionToolbar({
 }) {
   const disabled = selectedCount === 0;
   return (
-    <div className="scrollbar-hidden mx-0 flex h-11 shrink-0 items-center gap-2 overflow-x-auto rounded-xl bg-white/[0.025] px-2">
+    <div className="scrollbar-hidden mx-0 flex h-11 shrink-0 items-center gap-2 overflow-x-auto rounded-xl border border-white/[0.06] bg-white/[0.025] px-2">
       <label className="mr-1 inline-flex shrink-0 items-center gap-2 text-[11px] text-white/55">
         <input type="checkbox" checked={allSelected} onChange={(event) => onSelectAll(event.target.checked)} className="mail-checkbox h-3.5 w-3.5" />
         Alle
@@ -355,12 +355,12 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row group relative grid w-full cursor-pointer grid-cols-[18px_48px_10px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+        "mail-row mail-row-enter group relative grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] gap-3 rounded-2xl border px-3.5 py-3.5 text-left transition-[transform,border-color,background-color] duration-200 sm:grid-cols-[18px_42px_10px_minmax(0,1fr)_auto]",
         active
-          ? "border-white/[0.10] bg-white/[0.105]"
+          ? "border-white/[0.13] bg-white/[0.105] shadow-[0_14px_34px_rgba(0,0,0,0.28)]"
           : email.isRead
-            ? "border-white/[0.035] hover:border-white/[0.07] hover:bg-white/[0.055]"
-            : "border-[rgb(var(--accent)/0.12)] bg-[rgb(var(--accent)/0.06)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:border-white/[0.09] hover:bg-white/[0.07]"
+            ? "border-white/[0.045] bg-white/[0.015] hover:-translate-y-0.5 hover:border-white/[0.09] hover:bg-white/[0.055]"
+            : "border-[rgb(var(--accent)/0.14)] bg-[rgb(var(--accent)/0.065)] before:absolute before:bottom-4 before:left-0 before:top-4 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:-translate-y-0.5 hover:border-white/[0.11] hover:bg-white/[0.08]"
       )}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
@@ -373,18 +373,18 @@ const MailRow = memo(function MailRow({
         className={cn("mail-checkbox mt-1 h-3.5 w-3.5 transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}
         aria-label="Mail auswählen"
       />
-      <span className={cn("flex items-center gap-1 transition-opacity", email.isFavorite || email.isImportant ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}>
+      <span className={cn("hidden items-center gap-1 transition-opacity sm:flex", email.isFavorite || email.isImportant ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}>
         <QuickButton label="Favorit" active={email.isFavorite} alwaysVisible onClick={() => void onQuickAction(email.id, "favorite")}><Star size={13} /></QuickButton>
         <QuickButton label="Wichtig" active={email.isImportant} alwaysVisible onClick={() => void onQuickAction(email.id, "important")}><AlertCircle size={13} /></QuickButton>
       </span>
-      <span className={cn("mt-1.5 h-2 w-2 rounded-full", email.isRead ? "bg-transparent" : "bg-[rgb(var(--accent))] shadow-[0_0_0_4px_rgb(var(--accent)/0.12)]")} />
+      <span className={cn("mt-1.5 hidden h-2 w-2 rounded-full sm:block", email.isRead ? "bg-transparent" : "bg-[rgb(var(--accent))] shadow-[0_0_0_4px_rgb(var(--accent)/0.12)]")} />
       <span className="min-w-0">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn("truncate text-[13px] text-white", email.isRead ? "font-medium" : "font-bold")}>{sender}</span>
           {!email.isRead ? <span className="shrink-0 rounded-full bg-[rgb(var(--accent))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[rgb(var(--accent-contrast))]">Neu</span> : null}
         </span>
-        <span className={cn("mt-1 block truncate text-[13px]", email.isRead ? "font-normal text-white/85" : "font-bold text-white")}>{email.subject || "(Kein Betreff)"}</span>
-        <span className="mt-1 flex min-w-0 items-center gap-2">
+        <span className={cn("mt-1 block truncate text-[13px] leading-5", email.isRead ? "font-normal text-white/86" : "font-bold text-white")}>{email.subject || "(Kein Betreff)"}</span>
+        <span className="mt-1.5 flex min-w-0 items-center gap-2">
           <span className={cn("truncate text-[12px] leading-5", email.isRead ? "text-white/45" : "font-medium text-white/70")}>{email.preview || "Keine Vorschau verfügbar"}</span>
           {email.hasAttachments ? <Paperclip size={12} className="shrink-0 text-white/40" /> : null}
           {accountLabel ? (
@@ -406,7 +406,7 @@ const MailRow = memo(function MailRow({
           </span>
         ) : null}
       </span>
-      <span className="flex items-center gap-2">
+      <span className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
         <time className={cn("whitespace-nowrap text-[11px]", email.isRead ? "font-medium text-white/60" : "font-bold text-white")}>{timeLabel}</time>
         <span className="hidden items-center gap-1 group-hover:flex">
           <QuickButton label="Gelesen" onClick={() => void onQuickAction(email.id, "read")}><CheckCheck size={13} /></QuickButton>

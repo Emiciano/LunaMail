@@ -341,7 +341,7 @@ export const useMailStore = create<MailState>((set, get) => ({
         mailService.getDrafts(selectedAccountId),
         mailService.getMailCounts(selectedAccountId)
       ]);
-      set({ accounts, folders, settings: normalizedSettings, selectedAccountId, selectedFolderId, selectedView: "dashboard", selectedSpecialAccountId: undefined, selectedCategoryId: undefined, emails, selectedEmailIds: [], mailCounts, mailCountsAccountId: selectedAccountId, drafts, tags, categories, rules, contacts, databaseSizeBytes, healthStatus });
+      set({ accounts, folders, settings: normalizedSettings, selectedAccountId: undefined, selectedFolderId: undefined, selectedView: "dashboard", selectedSpecialAccountId: undefined, selectedCategoryId: undefined, selectedEmail: undefined, emails, selectedEmailIds: [], mailCounts, mailCountsAccountId: selectedAccountId, drafts, tags, categories, rules, contacts, databaseSizeBytes, healthStatus });
     } finally {
       set({ loading: false, startupStatus: undefined });
     }
@@ -489,7 +489,7 @@ export const useMailStore = create<MailState>((set, get) => ({
     }
   },
   openDashboard() {
-    set({ selectedView: "dashboard", selectedFolderId: undefined, selectedSpecialAccountId: undefined, selectedCategoryId: undefined, selectedEmail: undefined, selectedEmailIds: [], searchFilters: {} });
+    set({ selectedView: "dashboard", selectedAccountId: undefined, selectedFolderId: undefined, selectedSpecialAccountId: undefined, selectedCategoryId: undefined, selectedEmail: undefined, selectedEmailIds: [], searchFilters: {} });
   },
   async selectEmail(email) {
     set({ syncError: undefined, selectedEmail: email, selectedEmailIds: [] });

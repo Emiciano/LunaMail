@@ -156,6 +156,49 @@ button {
   contain: layout paint style;
 }
 
+.mail-row-enter {
+  animation: mail-row-enter 180ms ease-out both;
+}
+
+.mail-reader-backdrop {
+  animation: mail-reader-backdrop 160ms ease-out both;
+}
+
+.mail-reader-panel {
+  animation: mail-reader-panel 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes mail-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mail-reader-backdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mail-reader-panel {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .titlebar-drag {
   -webkit-app-region: drag;
 }

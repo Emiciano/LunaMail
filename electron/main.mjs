@@ -47,6 +47,30 @@ function createWindow() {
     mainWindow.loadFile(path.join(root, "dist", "index.html"));
   }
 
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(url);
+      if (["http:", "https:", "mailto:"].includes(parsed.protocol)) {
+        void shell.openExternal(parsed.toString());
+      }
+    } catch {
+      // Ignore malformed popup URLs.
+    }
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url === mainWindow.webContents.getURL()) return;
+    try {
+      const parsed = new URL(url);
+      if (["http:", "https:", "mailto:"].includes(parsed.protocol)) {
+        event.preventDefault();
+        void shell.openExternal(parsed.toString());
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+
   mainWindow.once("ready-to-show", () => mainWindow.show());
   mainWindow.on("maximize", () => emit("window-maximized-changed", true));
   mainWindow.on("unmaximize", () => emit("window-maximized-changed", false));
