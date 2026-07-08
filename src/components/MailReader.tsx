@@ -249,6 +249,8 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { doc
   const safetyStyle = doc.createElement("style");
   safetyStyle.textContent = `
     html { color-scheme: light only !important; background: #fff; }
+    * { scrollbar-width: none; -ms-overflow-style: none; }
+    *::-webkit-scrollbar { display: none; }
     body {
       box-sizing: border-box;
       margin: 0 auto;

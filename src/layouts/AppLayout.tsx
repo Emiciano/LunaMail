@@ -33,20 +33,19 @@ export function AppLayout() {
 
       <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-black lg:p-3">
         <MailSidebar />
-        <div className="min-w-0 flex-1 overflow-hidden bg-[#050505] lg:rounded-[24px] lg:border lg:border-white/[0.07]">
+        <div className="relative min-w-0 flex-1 overflow-hidden bg-[#050505] lg:rounded-[24px] lg:border lg:border-white/[0.07]">
           <MailList />
+          <button
+            className="accent-primary absolute bottom-6 right-6 z-30 inline-flex h-12 items-center gap-3 rounded-lg px-4 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!hasAccounts}
+            onClick={() => openComposer()}
+          >
+            <MailPlus size={18} />
+            Neue Nachricht
+          </button>
         </div>
       </section>
       <MailReader />
-
-      <button
-        className="accent-primary absolute bottom-4 right-4 z-30 inline-flex h-12 items-center gap-3 rounded-lg px-4 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={!hasAccounts}
-        onClick={() => openComposer()}
-      >
-        <MailPlus size={18} />
-        Neue Nachricht
-      </button>
     </div>
   );
 }
