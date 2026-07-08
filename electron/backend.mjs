@@ -265,7 +265,15 @@ export class LunaBackend {
       if (this.settings.allowLocalSecretFallback) return Buffer.from(value, "base64").toString("utf8");
       throw new Error("Lokale Secret-Verschlüsselung ist nicht verfügbar. Aktiviere den lokalen Secret-Fallback nur auf vertrauenswürdigen Geräten.");
     }
-    return safeStorage.decryptString(Buffer.from(value, "base64"));
+    try {
+      return safeStorage.decryptString(Buffer.from(value, "base64"));
+    } catch (error) {
+      const legacy = Buffer.from(value, "base64").toString("utf8");
+      if (!legacy || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(legacy)) throw error;
+      this.state.secrets[`${accountId}:${protocol}`] = safeStorage.encryptString(legacy).toString("base64");
+      void this.persist().catch(() => undefined);
+      return legacy;
+    }
   }
 
   setPassword(accountId, protocol, password) {
@@ -1098,7 +1106,7 @@ export class LunaBackend {
 
   export_backup() {
     return {
-      version: "0.9.52",
+      version: "0.9.53",
       exportedAt: new Date().toISOString(),
       accounts: this.state.accounts.map(({ id: _id, ...account }) => this.publicAccount(account)),
       settings: this.state.settings,
