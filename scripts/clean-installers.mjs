@@ -5,8 +5,13 @@ const releaseDir = resolve(import.meta.dirname, "..", "release");
 
 try {
   for (const name of readdirSync(releaseDir)) {
-    if (/^LunaMail(?: |-)Setup(?: |-).+\.(?:exe|exe\.blockmap)$/i.test(name)) {
-      rmSync(resolve(releaseDir, name), { force: true });
+    if (
+      /^LunaMail(?: |-)Setup(?: |-).+\.(?:exe|exe\.blockmap)$/i.test(name)
+      || name === "latest.yml"
+      || name === "win-unpacked"
+      || name === "win-unpacked.tmp"
+    ) {
+      rmSync(resolve(releaseDir, name), { recursive: true, force: true });
     }
   }
 } catch (error) {
