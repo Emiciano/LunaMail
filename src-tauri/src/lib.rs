@@ -30,10 +30,13 @@ use tauri::{
 use url::Url;
 
 static ACCOUNT_SYNC_JOBS: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
+static SQLITE_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 struct BackgroundSyncState {
     last_inbox_poll: Mutex<Instant>,
 }
+
+const ENCRYPTED_SQLITE_MAGIC: &[u8] = b"LUNAMAILSQLITE1";
 
 const BACKGROUND_INBOX_POLL_SECS: u64 = 30;
 
@@ -64,6 +67,102 @@ fn sync_all_inboxes_now(app: &AppHandle) {
 fn background_inbox_poll_interval(settings: &Settings) -> Duration {
     let configured_secs = settings.sync_interval_minutes.max(1) as u64 * 60;
     Duration::from_secs(configured_secs.min(BACKGROUND_INBOX_POLL_SECS))
+}
+
+fn sqlite_encrypted_path(path: &Path) -> PathBuf {
+    let mut encrypted = path.to_path_buf();
+    encrypted.set_extension("sqlite3.lme");
+    encrypted
+}
+
+fn sqlite_encryption_key() -> [u8; 32] {
+    let mut hash = Sha256::new();
+    #[cfg(target_os = "linux")]
+    hash.update(
+        fs::read_to_string("/etc/machine-id")
+            .unwrap_or_default()
+            .trim()
+            .as_bytes(),
+    );
+    #[cfg(target_os = "windows")]
+    {
+        for name in ["COMPUTERNAME", "USERNAME", "USERDOMAIN", "USERPROFILE"] {
+            hash.update(std::env::var(name).unwrap_or_default().as_bytes());
+            hash.update([0]);
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    hash.update(std::env::var("HOME").unwrap_or_default().as_bytes());
+    hash.update(b"lunamail-sqlite-at-rest-v1");
+    let digest = hash.finalize();
+    let mut key = [0_u8; 32];
+    key.copy_from_slice(&digest[..32]);
+    key
+}
+
+fn encrypt_sqlite_bytes(bytes: &[u8]) -> AppResult<Vec<u8>> {
+    let cipher = Aes256GcmSiv::new_from_slice(&sqlite_encryption_key())
+        .map_err(|_| AppError::Message("SQLite-Verschluesselung konnte nicht initialisiert werden.".into()))?;
+    let mut nonce_bytes = [0_u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(Nonce::from_slice(&nonce_bytes), bytes)
+        .map_err(|_| AppError::Message("SQLite-Datenbank konnte nicht verschluesselt werden.".into()))?;
+    let mut output = ENCRYPTED_SQLITE_MAGIC.to_vec();
+    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(&ciphertext);
+    Ok(output)
+}
+
+fn decrypt_sqlite_bytes(bytes: &[u8]) -> AppResult<Vec<u8>> {
+    if !bytes.starts_with(ENCRYPTED_SQLITE_MAGIC) {
+        return Err(AppError::Message("Unbekanntes verschluesseltes SQLite-Format.".into()));
+    }
+    let offset = ENCRYPTED_SQLITE_MAGIC.len();
+    if bytes.len() <= offset + 12 {
+        return Err(AppError::Message("Verschluesselte SQLite-Datei ist unvollstaendig.".into()));
+    }
+    let (nonce, ciphertext) = bytes[offset..].split_at(12);
+    let cipher = Aes256GcmSiv::new_from_slice(&sqlite_encryption_key())
+        .map_err(|_| AppError::Message("SQLite-Verschluesselung konnte nicht initialisiert werden.".into()))?;
+    cipher
+        .decrypt(Nonce::from_slice(nonce), ciphertext)
+        .map_err(|_| AppError::Message("SQLite-Datenbank konnte nicht entschluesselt werden.".into()))
+}
+
+fn restore_sqlite_for_runtime(path: &Path) -> AppResult<()> {
+    if path.exists() {
+        return Ok(());
+    }
+    let encrypted_path = sqlite_encrypted_path(path);
+    if !encrypted_path.exists() {
+        return Ok(());
+    }
+    let encrypted = fs::read(&encrypted_path).map_err(anyhow::Error::from)?;
+    let plain = decrypt_sqlite_bytes(&encrypted)?;
+    let tmp = path.with_extension("sqlite3.tmp");
+    fs::write(&tmp, plain).map_err(anyhow::Error::from)?;
+    fs::rename(&tmp, path).map_err(anyhow::Error::from)?;
+    Ok(())
+}
+
+fn seal_sqlite_at_rest(path: &Path) -> AppResult<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let plain = fs::read(path).map_err(anyhow::Error::from)?;
+    let encrypted = encrypt_sqlite_bytes(&plain)?;
+    let encrypted_path = sqlite_encrypted_path(path);
+    let tmp = encrypted_path.with_extension("sqlite3.lme.tmp");
+    fs::write(&tmp, encrypted).map_err(anyhow::Error::from)?;
+    fs::rename(&tmp, &encrypted_path).map_err(anyhow::Error::from)?;
+    fs::remove_file(path).map_err(anyhow::Error::from)?;
+    for extension in ["sqlite3-wal", "sqlite3-shm", "sqlite3-journal"] {
+        let mut sidecar = path.to_path_buf();
+        sidecar.set_extension(extension);
+        let _ = fs::remove_file(sidecar);
+    }
+    Ok(())
 }
 
 fn move_to_background(app: &AppHandle) -> AppResult<()> {
@@ -718,7 +817,7 @@ fn set_debug_sync_state(
 fn allow_local_secret_fallback(db: &Db) -> bool {
     db.settings()
         .map(|settings| settings.allow_local_secret_fallback)
-        .unwrap_or(true)
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -2414,9 +2513,12 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let db = Db::open(data_dir.join("mail.sqlite3"))?;
+            let db_path = data_dir.join("mail.sqlite3");
+            restore_sqlite_for_runtime(&db_path)?;
+            let db = Db::open(db_path.clone())?;
             db.migrate()?;
             app.manage(db);
+            let _ = SQLITE_DB_PATH.set(db_path);
             app.manage(SecretsCache::default());
             app.manage(PersistentSecrets::open(data_dir.join("secrets.vault.json")));
             app.manage(SyncDebugState::default());
@@ -2496,8 +2598,16 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to build app")
-        .run(|_, event| {
+        .run(|app, event| {
             if let RunEvent::Exit { .. } = event {
+                if let Some(db) = app.try_state::<Db>() {
+                    db.prepare_for_shutdown();
+                }
+                if let Some(path) = SQLITE_DB_PATH.get() {
+                    if let Err(error) = seal_sqlite_at_rest(path) {
+                        eprintln!("warn: could not encrypt sqlite database at rest: {error}");
+                    }
+                }
                 notifications::clear_dock_badge();
             }
         });

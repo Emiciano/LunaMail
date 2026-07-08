@@ -35,6 +35,7 @@ pub fn send(account: &Account, password: &str, draft: &Draft) -> Result<()> {
         let Some(path) = attachment.path.as_deref() else {
             continue;
         };
+        reject_sensitive_attachment(path)?;
         let bytes = fs::read(path)?;
         let file_name = attachment
             .file_name
@@ -60,6 +61,39 @@ pub fn send(account: &Account, password: &str, draft: &Draft) -> Result<()> {
     mailer
         .send(&message)
         .map_err(|error| anyhow!("SMTP-Versand fehlgeschlagen: {error}"))?;
+    Ok(())
+}
+
+fn reject_sensitive_attachment(path: &str) -> Result<()> {
+    let lower = path.to_lowercase();
+    let file_name = Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_lowercase();
+    let blocked_names = [
+        "lunamail-data.key",
+        "lunamail-backups.dpapi.key",
+        "secrets.vault.json",
+        "mail.sqlite3",
+        "mail.sqlite3.lme",
+    ];
+    if blocked_names.contains(&file_name.as_str())
+        || lower.ends_with(".key")
+        || lower.ends_with(".pem")
+        || lower.ends_with(".p12")
+        || lower.ends_with(".pfx")
+        || lower.ends_with(".kdbx")
+    {
+        return Err(anyhow!(
+            "Schluessel- und Tresordateien duerfen nicht per E-Mail versendet werden"
+        ));
+    }
+    if lower.ends_with(".sqlite3") || lower.ends_with(".sqlite3.lme") {
+        return Err(anyhow!(
+            "Lokale Maildatenbanken duerfen nicht per E-Mail versendet werden"
+        ));
+    }
     Ok(())
 }
 

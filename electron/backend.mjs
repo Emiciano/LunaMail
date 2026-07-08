@@ -1,5 +1,5 @@
 import { Notification, safeStorage } from "electron";
-import { createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
@@ -17,10 +17,10 @@ const defaultSettings = {
   fontSize: 16,
   syncIntervalMinutes: 15,
   externalImages: "never",
-  allowLocalSecretFallback: true,
+  allowLocalSecretFallback: false,
   notificationsEnabled: true,
   notificationSound: true,
-  notificationPreview: true,
+  notificationPreview: false,
   runInBackground: true,
   accountNotifications: {},
   accountAppearance: {}
@@ -30,6 +30,9 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const GOOGLE_MAIL_SCOPE = "https://mail.google.com/";
+const ENCRYPTED_BACKUP_FORMAT = "lunamail.encrypted-backup.v1";
+const LOCAL_ENCRYPTED_FORMAT = "lunamail.local-encrypted.v1";
+const BACKUP_KDF_OPTIONS = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 const emptyState = () => ({
   counters: { account: 0, folder: 0, email: 0, attachment: 0, draft: 0, tag: 0, rule: 0, contact: 0 },
@@ -47,14 +50,77 @@ const emptyState = () => ({
   sync: {}
 });
 
+function assertBackupPassword(password) {
+  if (typeof password !== "string" || password.length < 12) {
+    throw new Error("Backup-Passwort muss mindestens 12 Zeichen lang sein.");
+  }
+}
+
+function backupKey(password, salt) {
+  return scryptSync(password, salt, 32, BACKUP_KDF_OPTIONS);
+}
+
+function encryptBackupPayload(payload, password) {
+  assertBackupPassword(password);
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", backupKey(password, salt), iv);
+  const plaintext = Buffer.from(JSON.stringify(payload), "utf8");
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    format: ENCRYPTED_BACKUP_FORMAT,
+    version: 1,
+    kdf: { name: "scrypt", N: BACKUP_KDF_OPTIONS.N, r: BACKUP_KDF_OPTIONS.r, p: BACKUP_KDF_OPTIONS.p },
+    cipher: { name: "aes-256-gcm", salt: salt.toString("base64"), iv: iv.toString("base64"), tag: tag.toString("base64") },
+    payload: ciphertext.toString("base64")
+  };
+}
+
+function decryptBackupPayload(encrypted, password) {
+  assertBackupPassword(password);
+  if (!encrypted || encrypted.format !== ENCRYPTED_BACKUP_FORMAT) throw new Error("Unbekanntes Backup-Format.");
+  const salt = Buffer.from(encrypted.cipher?.salt || "", "base64");
+  const iv = Buffer.from(encrypted.cipher?.iv || "", "base64");
+  const tag = Buffer.from(encrypted.cipher?.tag || "", "base64");
+  const ciphertext = Buffer.from(encrypted.payload || "", "base64");
+  const decipher = createDecipheriv("aes-256-gcm", backupKey(password, salt), iv);
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return JSON.parse(plaintext.toString("utf8"));
+}
+
+function sensitiveAttachmentReason(filePath) {
+  const normalized = String(filePath || "").toLowerCase();
+  const name = path.basename(normalized);
+  const extension = path.extname(name);
+  const blockedNames = new Set([
+    "lunamail-data.key",
+    "lunamail-backups.dpapi.key",
+    "secrets.vault.json",
+    "mail.sqlite3",
+    "mail.sqlite3.lme"
+  ]);
+  const blockedExtensions = new Set([".key", ".pem", ".p12", ".pfx", ".kdbx"]);
+  if (blockedNames.has(name) || blockedExtensions.has(extension)) {
+    return "Schluessel- und Tresordateien duerfen nicht per E-Mail versendet werden.";
+  }
+  if (normalized.endsWith(".sqlite3") || normalized.endsWith(".sqlite3.lme")) {
+    return "Lokale Maildatenbanken duerfen nicht per E-Mail versendet werden.";
+  }
+  return "";
+}
+
 export class LunaBackend {
   constructor({ dataDir, emit, showWindow, openExternal }) {
     this.dataDir = dataDir;
     this.file = path.join(dataDir, "lunamail.json");
+    this.keyFile = path.join(dataDir, "lunamail-data.key");
     this.emit = emit;
     this.showWindow = showWindow;
     this.openExternal = openExternal;
     this.state = emptyState();
+    this.dataKey = undefined;
     this.syncing = new Set();
     this.lastAutoSync = 0;
     this.autoSyncTimer = undefined;
@@ -67,13 +133,16 @@ export class LunaBackend {
 
   async init() {
     await fs.mkdir(this.dataDir, { recursive: true });
+    let stateNeedsEncryption = false;
     try {
-      this.state = { ...emptyState(), ...JSON.parse(await fs.readFile(this.file, "utf8")) };
+      stateNeedsEncryption = !(await this.localFileIsEncrypted(this.file));
+      this.state = { ...emptyState(), ...await this.readLocalJsonFile(this.file) };
       this.state.settings = { ...defaultSettings, ...this.state.settings };
     } catch {}
     const attachmentsMigrated = await this.migrateAttachmentsToDisk();
     const bodiesMigrated = await this.migrateBodiesToDisk();
-    if (attachmentsMigrated || bodiesMigrated) await this.persist();
+    const cacheEncrypted = await this.migrateLocalCacheEncryption();
+    if (stateNeedsEncryption || attachmentsMigrated || bodiesMigrated || cacheEncrypted) await this.persist();
     if (this.normalizeFolders()) await this.persist();
     this.autoSyncTimer = setInterval(() => {
       this.lastAutoSync = Date.now();
@@ -86,8 +155,90 @@ export class LunaBackend {
 
   async persist() {
     const temp = `${this.file}.tmp`;
-    await fs.writeFile(temp, JSON.stringify(this.state), "utf8");
+    await this.writeLocalJsonFile(temp, this.state);
     await fs.rename(temp, this.file);
+  }
+
+  async localDataKey() {
+    if (this.dataKey) return this.dataKey;
+    if (!safeStorage.isEncryptionAvailable() && !this.settings.allowLocalSecretFallback) {
+      throw new Error("Lokale Datenverschlüsselung ist nicht verfügbar. LunaMail speichert Kundendaten nicht unverschlüsselt.");
+    }
+    try {
+      const wrapped = JSON.parse(await fs.readFile(this.keyFile, "utf8"));
+      if (wrapped?.format === LOCAL_ENCRYPTED_FORMAT && wrapped.key) {
+        this.dataKey = safeStorage.isEncryptionAvailable()
+          ? Buffer.from(safeStorage.decryptString(Buffer.from(wrapped.key, "base64")), "base64")
+          : Buffer.from(wrapped.key, "base64");
+        return this.dataKey;
+      }
+    } catch {}
+
+    this.dataKey = randomBytes(32);
+    const wrappedKey = safeStorage.isEncryptionAvailable()
+      ? safeStorage.encryptString(this.dataKey.toString("base64")).toString("base64")
+      : this.dataKey.toString("base64");
+    await fs.writeFile(this.keyFile, JSON.stringify({ format: LOCAL_ENCRYPTED_FORMAT, key: wrappedKey }, null, 2), "utf8");
+    return this.dataKey;
+  }
+
+  async encryptLocalBuffer(buffer) {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", await this.localDataKey(), iv);
+    const ciphertext = Buffer.concat([cipher.update(buffer), cipher.final()]);
+    return {
+      format: LOCAL_ENCRYPTED_FORMAT,
+      cipher: "aes-256-gcm",
+      iv: iv.toString("base64"),
+      tag: cipher.getAuthTag().toString("base64"),
+      payload: ciphertext.toString("base64")
+    };
+  }
+
+  async decryptLocalEnvelope(envelope) {
+    if (!envelope || envelope.format !== LOCAL_ENCRYPTED_FORMAT) return undefined;
+    const decipher = createDecipheriv("aes-256-gcm", await this.localDataKey(), Buffer.from(envelope.iv, "base64"));
+    decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(envelope.payload || "", "base64")),
+      decipher.final()
+    ]);
+  }
+
+  async readLocalJsonFile(filePath) {
+    const text = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(text);
+    const decrypted = await this.decryptLocalEnvelope(parsed);
+    return decrypted ? JSON.parse(decrypted.toString("utf8")) : parsed;
+  }
+
+  async writeLocalJsonFile(filePath, value) {
+    const encrypted = await this.encryptLocalBuffer(Buffer.from(JSON.stringify(value), "utf8"));
+    await fs.writeFile(filePath, JSON.stringify(encrypted), "utf8");
+  }
+
+  async readLocalBlobFile(filePath) {
+    const bytes = await fs.readFile(filePath);
+    try {
+      const parsed = JSON.parse(bytes.toString("utf8"));
+      const decrypted = await this.decryptLocalEnvelope(parsed);
+      if (decrypted) return decrypted;
+    } catch {}
+    return bytes;
+  }
+
+  async writeLocalBlobFile(filePath, bytes) {
+    const encrypted = await this.encryptLocalBuffer(Buffer.from(bytes));
+    await fs.writeFile(filePath, JSON.stringify(encrypted), "utf8");
+  }
+
+  async localFileIsEncrypted(filePath) {
+    try {
+      const parsed = JSON.parse(await fs.readFile(filePath, "utf8"));
+      return parsed?.format === LOCAL_ENCRYPTED_FORMAT;
+    } catch {
+      return false;
+    }
   }
 
   next(type) {
@@ -110,12 +261,18 @@ export class LunaBackend {
   password(accountId, protocol) {
     const value = this.state.secrets[`${accountId}:${protocol}`];
     if (!value) throw new Error(`${protocol.toUpperCase()}-Passwort fehlt.`);
-    if (!safeStorage.isEncryptionAvailable()) return Buffer.from(value, "base64").toString("utf8");
+    if (!safeStorage.isEncryptionAvailable()) {
+      if (this.settings.allowLocalSecretFallback) return Buffer.from(value, "base64").toString("utf8");
+      throw new Error("Lokale Secret-Verschlüsselung ist nicht verfügbar. Aktiviere den lokalen Secret-Fallback nur auf vertrauenswürdigen Geräten.");
+    }
     return safeStorage.decryptString(Buffer.from(value, "base64"));
   }
 
   setPassword(accountId, protocol, password) {
     if (!password) return;
+    if (!safeStorage.isEncryptionAvailable() && !this.settings.allowLocalSecretFallback) {
+      throw new Error("Lokale Secret-Verschlüsselung ist nicht verfügbar. Das Passwort wurde nicht unsicher gespeichert.");
+    }
     const buffer = safeStorage.isEncryptionAvailable()
       ? safeStorage.encryptString(password)
       : Buffer.from(password, "utf8");
@@ -152,7 +309,7 @@ export class LunaBackend {
       return { ...summary, bodyText: email.bodyText || "", bodyHtml: email.bodyHtml || "" };
     }
     try {
-      const body = JSON.parse(await fs.readFile(email.bodyPath, "utf8"));
+      const body = JSON.parse((await this.readLocalBlobFile(email.bodyPath)).toString("utf8"));
       return { ...summary, bodyText: body.bodyText || "", bodyHtml: body.bodyHtml || "" };
     } catch {
       return { ...summary, bodyText: "", bodyHtml: "" };
@@ -166,7 +323,7 @@ export class LunaBackend {
     for (const attachment of this.state.attachments) {
       if (!attachment.dataBase64) continue;
       const filePath = path.join(attachmentDir, `${attachment.id}.bin`);
-      await fs.writeFile(filePath, Buffer.from(attachment.dataBase64, "base64"));
+      await this.writeLocalBlobFile(filePath, Buffer.from(attachment.dataBase64, "base64"));
       attachment.cachePath = filePath;
       delete attachment.dataBase64;
       changed = true;
@@ -181,10 +338,10 @@ export class LunaBackend {
     for (const email of this.state.emails) {
       if (email.bodyPath || (!email.bodyText && !email.bodyHtml)) continue;
       const bodyPath = path.join(bodyDir, `${email.id}.json`);
-      await fs.writeFile(bodyPath, JSON.stringify({
+      await this.writeLocalBlobFile(bodyPath, Buffer.from(JSON.stringify({
         bodyText: email.bodyText || "",
         bodyHtml: email.bodyHtml || ""
-      }), "utf8");
+      }), "utf8"));
       email.bodyPath = bodyPath;
       delete email.bodyText;
       delete email.bodyHtml;
@@ -197,8 +354,31 @@ export class LunaBackend {
     const bodyDir = path.join(this.dataDir, "bodies");
     await fs.mkdir(bodyDir, { recursive: true });
     const bodyPath = path.join(bodyDir, `${emailId}.json`);
-    await fs.writeFile(bodyPath, JSON.stringify({ bodyText, bodyHtml }), "utf8");
+    await this.writeLocalBlobFile(bodyPath, Buffer.from(JSON.stringify({ bodyText, bodyHtml }), "utf8"));
     return bodyPath;
+  }
+
+  async migrateLocalCacheEncryption() {
+    let changed = false;
+    for (const email of this.state.emails) {
+      if (!email.bodyPath) continue;
+      try {
+        if (await this.localFileIsEncrypted(email.bodyPath)) continue;
+        const plain = await fs.readFile(email.bodyPath);
+        await this.writeLocalBlobFile(email.bodyPath, plain);
+        changed = true;
+      } catch {}
+    }
+    for (const attachment of this.state.attachments) {
+      if (!attachment.cachePath) continue;
+      try {
+        if (await this.localFileIsEncrypted(attachment.cachePath)) continue;
+        const plain = await fs.readFile(attachment.cachePath);
+        await this.writeLocalBlobFile(attachment.cachePath, plain);
+        changed = true;
+      } catch {}
+    }
+    return changed;
   }
 
   async invoke(command, args) {
@@ -661,7 +841,7 @@ export class LunaBackend {
     const attachment = this.state.attachments.find((item) => item.id === Number(attachmentId));
     if (!attachment) throw new Error("Anhang nicht gefunden.");
     if (attachment.path) await fs.copyFile(attachment.path, destinationPath);
-    else if (attachment.cachePath) await fs.copyFile(attachment.cachePath, destinationPath);
+    else if (attachment.cachePath) await fs.writeFile(destinationPath, await this.readLocalBlobFile(attachment.cachePath));
     else await fs.writeFile(destinationPath, Buffer.from(attachment.dataBase64 || "", "base64"));
   }
 
@@ -669,7 +849,7 @@ export class LunaBackend {
     const item = this.state.attachments.find((entry) => entry.id === Number(attachmentId));
     if (!item) return null;
     const dataBase64 = item.dataBase64
-      || (item.cachePath ? (await fs.readFile(item.cachePath)).toString("base64") : undefined);
+      || (item.cachePath ? (await this.readLocalBlobFile(item.cachePath)).toString("base64") : undefined);
     if (!dataBase64) return null;
     return { attachmentId: item.id, fileName: item.fileName, contentType: item.contentType, dataBase64 };
   }
@@ -679,7 +859,7 @@ export class LunaBackend {
     if (!item || !/calendar|ics/i.test(`${item.contentType} ${item.fileName}`)) return null;
     const content = item.dataBase64
       ? Buffer.from(item.dataBase64, "base64")
-      : item.cachePath ? await fs.readFile(item.cachePath) : undefined;
+      : item.cachePath ? await this.readLocalBlobFile(item.cachePath) : undefined;
     if (!content) return null;
     const text = content.toString("utf8");
     const read = (key) => text.match(new RegExp(`^${key}[^:]*:(.*)$`, "mi"))?.[1]?.trim();
@@ -714,6 +894,18 @@ export class LunaBackend {
       await this.persist();
     }
     const transporter = await this.smtpTransport(account, smtpHost);
+    const attachments = (draft.attachments || [])
+      .filter((item) => item.path)
+      .map((item) => {
+        const reason = sensitiveAttachmentReason(item.path);
+        if (reason) throw new Error(reason);
+        const resolved = path.resolve(item.path);
+        const dataRoot = path.resolve(this.dataDir);
+        if (resolved.toLowerCase().startsWith(`${dataRoot.toLowerCase()}${path.sep}`)) {
+          throw new Error("Interne LunaMail-Daten duerfen nicht per E-Mail versendet werden.");
+        }
+        return { filename: item.fileName, path: item.path, contentType: item.contentType };
+      });
     const mailOptions = {
         from: account.email,
         to: draft.to,
@@ -721,7 +913,7 @@ export class LunaBackend {
         bcc: draft.bcc || undefined,
         subject: draft.subject,
         text: draft.body,
-        attachments: (draft.attachments || []).filter((item) => item.path).map((item) => ({ filename: item.fileName, path: item.path, contentType: item.contentType }))
+        attachments
     };
     let info;
     try {
@@ -923,8 +1115,17 @@ export class LunaBackend {
     for (const account of backup.accounts || []) await this.save_account({ account: { ...account, password: "", smtpPassword: "" } });
     await this.persist();
   }
-  async export_backup_to_file({ path: filePath }) { await fs.writeFile(filePath, JSON.stringify(this.export_backup(), null, 2), "utf8"); }
-  async import_backup_from_file({ path: filePath }) { await this.import_backup({ backup: JSON.parse(await fs.readFile(filePath, "utf8")) }); }
+  async export_backup_to_file({ path: filePath, password }) {
+    const encrypted = encryptBackupPayload(this.export_backup(), password);
+    await fs.writeFile(filePath, JSON.stringify(encrypted, null, 2), "utf8");
+  }
+  async import_backup_from_file({ path: filePath, password }) {
+    const parsed = JSON.parse(await fs.readFile(filePath, "utf8"));
+    const backup = parsed?.format === ENCRYPTED_BACKUP_FORMAT
+      ? decryptBackupPayload(parsed, password)
+      : parsed;
+    await this.import_backup({ backup });
+  }
 
   async test_account({ accountId }) {
     const account = this.account(accountId);
@@ -1214,7 +1415,7 @@ export class LunaBackend {
     for (const attachment of attachments) {
       const attachmentId = this.next("attachment");
       const cachePath = path.join(attachmentDir, `${attachmentId}.bin`);
-      await fs.writeFile(cachePath, attachment.content);
+      await this.writeLocalBlobFile(cachePath, attachment.content);
       this.state.attachments.push({
         id: attachmentId,
         emailId,

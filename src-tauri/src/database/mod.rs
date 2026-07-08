@@ -62,7 +62,7 @@ fn default_layout_mode() -> String {
 }
 
 fn default_allow_local_secret_fallback() -> bool {
-    true
+    false
 }
 
 fn default_notifications_enabled() -> bool {
@@ -74,7 +74,7 @@ fn default_notification_sound() -> bool {
 }
 
 fn default_notification_preview() -> bool {
-    true
+    false
 }
 
 fn default_run_in_background() -> bool {
@@ -89,7 +89,7 @@ pub struct Db {
 fn open_sqlite(path: &PathBuf) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "journal_mode", "DELETE")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "busy_timeout", 2_000)?;
     Ok(conn)
@@ -119,6 +119,12 @@ impl Db {
             read: Mutex::new(open_sqlite(&path)?),
             write: Mutex::new(open_sqlite(&path)?),
         })
+    }
+
+    pub fn prepare_for_shutdown(&self) {
+        if let Ok(conn) = self.write.lock() {
+            let _ = conn.execute_batch("PRAGMA optimize;");
+        }
     }
 
     pub fn migrate(&self) -> Result<()> {

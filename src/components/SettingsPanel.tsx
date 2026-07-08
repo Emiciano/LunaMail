@@ -35,6 +35,46 @@ const accentVars: Record<AccentColor, CSSProperties> = {
   gray: { "--accent": "71 85 105", "--accent-soft": "248 250 252", "--accent-contrast": "255 255 255" } as CSSProperties
 };
 
+function requestSecret(title: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "fixed inset-0 z-[9999] grid place-items-center bg-black/60 px-4";
+    const panel = document.createElement("form");
+    panel.className = "w-full max-w-sm rounded-2xl border border-white/10 bg-[#111] p-5 shadow-2xl";
+    const label = document.createElement("label");
+    label.className = "block text-sm font-semibold text-white";
+    label.textContent = title;
+    const input = document.createElement("input");
+    input.type = "password";
+    input.autocomplete = "new-password";
+    input.className = "mt-3 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-white/30";
+    const actions = document.createElement("div");
+    actions.className = "mt-4 flex justify-end gap-2";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70";
+    cancel.textContent = "Abbrechen";
+    const ok = document.createElement("button");
+    ok.type = "submit";
+    ok.className = "accent-primary rounded-lg px-3 py-2 text-sm font-semibold";
+    ok.textContent = "OK";
+    const close = (value?: string) => {
+      overlay.remove();
+      resolve(value);
+    };
+    cancel.onclick = () => close();
+    panel.onsubmit = (event) => {
+      event.preventDefault();
+      close(input.value);
+    };
+    actions.append(cancel, ok);
+    panel.append(label, input, actions);
+    overlay.append(panel);
+    document.body.append(overlay);
+    input.focus();
+  });
+}
+
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const {
     accounts,
@@ -390,23 +430,37 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   }
 
   async function exportBackupToFile() {
+    const password = await requestSecret("Backup-Passwort festlegen (mindestens 12 Zeichen)");
+    if (!password) return;
+    if (password.length < 12) {
+      setMessage("Backup-Passwort muss mindestens 12 Zeichen lang sein.");
+      return;
+    }
+    const confirmation = await requestSecret("Backup-Passwort wiederholen");
+    if (password !== confirmation) {
+      setMessage("Backup-Passwoerter stimmen nicht ueberein.");
+      return;
+    }
     const path = await desktopDialog.save({
       title: "Backup exportieren",
-      defaultPath: `lunamail-backup-${new Date().toISOString().slice(0, 10)}.json`
+      defaultPath: `lunamail-backup-${new Date().toISOString().slice(0, 10)}.lmbak`
     });
     if (!path) return;
-    await mailService.exportBackupToFile(path);
-    setMessage(`Backup exportiert: ${path}`);
+    await mailService.exportBackupToFile(path, password);
+    setMessage(`Verschluesseltes Backup exportiert: ${path}`);
   }
 
   async function importBackupFromFile() {
     const file = await desktopDialog.open({
       title: "Backup importieren",
       multiple: false,
-      filters: [{ name: "JSON", extensions: ["json"] }]
+      filters: [{ name: "LunaMail Backup", extensions: ["lmbak", "json"] }]
     });
     if (!file || Array.isArray(file)) return;
-    await mailService.importBackupFromFile(String(file));
+    const password = String(file).toLowerCase().endsWith(".json")
+      ? undefined
+      : await requestSecret("Backup-Passwort eingeben");
+    await mailService.importBackupFromFile(String(file), password);
     setMessage("Datensicherung importiert. Konten ohne Passwort bleiben unverändert.");
     await sync(true);
     await loadRules(selectedAccountId);
@@ -1073,7 +1127,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Datensicherung und Wiederherstellung</h3>
                 <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
-                  Exportiert Konten ohne Passwörter, Einstellungen, Regeln, Kontakte und Schlagwörter. Passwörter bleiben geschützt gespeichert.
+                  Exportiert Konten ohne Passwoerter, Einstellungen, Regeln, Kontakte und Schlagwoerter. Neue Backups werden passwortgeschuetzt verschluesselt.
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void exportBackupToFile()}>

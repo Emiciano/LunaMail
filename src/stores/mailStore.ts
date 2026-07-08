@@ -108,10 +108,10 @@ const defaultSettings: Settings = {
   fontSize: 16,
   syncIntervalMinutes: 15,
   externalImages: "never",
-  allowLocalSecretFallback: true,
+  allowLocalSecretFallback: false,
   notificationsEnabled: true,
   notificationSound: true,
-  notificationPreview: true,
+  notificationPreview: false,
   runInBackground: true,
   accountNotifications: {},
   accountAppearance: {}
