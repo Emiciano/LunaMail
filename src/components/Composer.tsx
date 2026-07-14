@@ -137,9 +137,9 @@ export function Composer() {
   }
 
   return (
-    <div className="fixed inset-0 z-[2147483647] flex items-end justify-end bg-black/70 p-6">
-      <form onSubmit={onSubmit} className="tr-panel flex h-[720px] w-[880px] max-w-[calc(100vw-3rem)] overflow-hidden rounded-[10px]">
-        <aside className="w-64 border-r border-white/[0.06] bg-[#0B0B0B] p-3">
+    <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/78 p-3 backdrop-blur-sm sm:p-6">
+      <form onSubmit={onSubmit} className="tr-panel flex h-[min(760px,calc(100vh-3rem))] w-[min(940px,calc(100vw-3rem))] overflow-hidden rounded-[20px] shadow-[0_32px_100px_rgba(0,0,0,0.65)]">
+        <aside className="hidden w-60 border-r border-white/[0.07] bg-[#0b0b0b] p-4 md:block">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/45">Entwürfe</div>
           <div className="mail-scroll max-h-[640px] space-y-2 overflow-y-auto">
             {drafts.length === 0 ? (
@@ -148,7 +148,7 @@ export function Composer() {
               </div>
             ) : null}
             {drafts.map((draft) => (
-              <div key={draft.id} className="rounded-lg border border-white/[0.06] bg-[#151515] px-3 py-2">
+              <div key={draft.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5 transition hover:bg-white/[0.05]">
                 <button type="button" className="w-full text-left" onClick={() => editDraft(draft)}>
                   <div className="truncate text-sm font-medium">{draft.subject || "(Kein Betreff)"}</div>
                   <div className="truncate text-xs text-white/45">{draft.to || "Unbekannter Empfänger"}</div>
@@ -163,13 +163,16 @@ export function Composer() {
           </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 items-center justify-between border-b border-white/[0.06] px-5">
-            <h2 className="font-semibold">Neue Mail</h2>
+          <header className="flex h-16 items-center justify-between border-b border-white/[0.07] px-5 sm:px-6">
+            <div>
+              <h2 className="text-sm font-semibold">Neue Nachricht</h2>
+              <p className="mt-0.5 text-[11px] text-white/38">{autosaveInfo || "Wird automatisch als Entwurf gespeichert"}</p>
+            </div>
             <button type="button" className="rounded-lg p-2 text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={closeComposer} title="Schließen">
               <X size={18} />
             </button>
           </header>
-          <div className="grid gap-0 border-b border-white/[0.06] px-5 py-2 text-sm">
+          <div className="grid gap-0 border-b border-white/[0.07] px-5 py-2 text-sm sm:px-6">
             <label className="grid h-9 grid-cols-[70px_1fr] items-center">
               <span className="text-white/45">Von</span>
               <select value={accountId} onChange={(event) => setAccountId(Number(event.target.value))} className="h-full bg-transparent text-white outline-none">
@@ -193,10 +196,10 @@ export function Composer() {
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-4 leading-7 text-white outline-none placeholder:text-white/35"
+            placeholder="Schreibe deine Nachricht …"
+            className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-5 leading-7 text-white outline-none placeholder:text-white/30 sm:px-6"
           />
           {error ? <div className="mx-5 mb-2 rounded-lg border border-white/[0.08] bg-[#151515] px-4 py-3 text-sm text-white">{error}</div> : null}
-          {autosaveInfo ? <div className="mx-5 mb-2 text-xs text-white/45">{autosaveInfo}</div> : null}
           {totalAttachmentBytes >= WARN_ATTACHMENT_BYTES ? (
             <div className="mx-5 mb-2 rounded-lg border border-white/[0.08] bg-[#151515] px-4 py-2 text-xs text-white/65">
               Große Anhänge erkannt ({formatBytes(totalAttachmentBytes)}).
@@ -217,7 +220,7 @@ export function Composer() {
               ))}
             </div>
           ) : null}
-          <footer className="flex h-16 items-center justify-between border-t border-white/[0.06] px-5">
+          <footer className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => void attachFile()} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.06] px-3 py-2 text-sm text-white/75 hover:bg-white/[0.05] hover:text-white">
                 <Paperclip size={16} />

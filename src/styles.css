@@ -58,6 +58,15 @@ button {
   color: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid rgb(var(--accent) / 0.72);
+  outline-offset: 2px;
+}
+
 .tr-shell {
   border: 0;
   background: #000;
@@ -163,6 +172,47 @@ button {
 
 .mail-reader-panel {
   animation: mail-reader-panel 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mail-list-pane {
+  width: min(480px, 42%);
+  max-width: 520px;
+}
+
+.reader-icon-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  color: rgba(255, 255, 255, 0.52);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.reader-icon-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.reader-icon-danger:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: rgb(252 165 165);
+}
+
+@media (max-width: 1279px) {
+  .mail-list-pane {
+    width: auto;
+    max-width: none;
+  }
+
+  .mail-reader-pane {
+    position: absolute;
+    inset: 0;
+    z-index: 35;
+    border-left: 0;
+    animation: mail-reader-panel 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
 }
 
 @keyframes mail-row-enter {

@@ -1,8 +1,7 @@
 import DOMPurify from "dompurify";
-import { Archive, Check, Clock3, Download, Forward, MoreHorizontal, Paperclip, Reply, ReplyAll, Trash2, UserPlus, X } from "lucide-react";
+import { Archive, Check, Download, Forward, MailOpen, Paperclip, Reply, ReplyAll, Trash2, UserPlus, X } from "lucide-react";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { desktopDialog, openExternalLink } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
@@ -12,13 +11,15 @@ const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
+  const { selectedEmail, selectedView, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
+    selectedView: state.selectedView,
     settings: state.settings,
     contacts: state.contacts,
     closeEmail: state.closeEmail,
     replyToSelected: state.replyToSelected,
     forwardSelected: state.forwardSelected,
+    archiveSelected: state.archiveSelected,
     deleteSelected: state.deleteSelected,
     saveContact: state.saveContact
   })));
@@ -28,7 +29,21 @@ export function MailReader() {
     return sanitizeEmailHtml(selectedEmail.bodyHtml, settings.externalImages === "always");
   }, [selectedEmail?.bodyHtml, settings.externalImages]);
 
-  if (!selectedEmail) return null;
+  if (selectedView === "dashboard" || selectedView === "health") return null;
+
+  if (!selectedEmail) {
+    return (
+      <aside className="hidden min-w-0 flex-1 items-center justify-center border-l border-white/[0.07] bg-[#0b0b0b] xl:flex">
+        <div className="max-w-xs px-8 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-white/38">
+            <MailOpen size={24} />
+          </span>
+          <h2 className="mt-5 text-sm font-semibold text-white/78">Nachricht auswählen</h2>
+          <p className="mt-2 text-xs leading-5 text-white/38">Wähle eine E-Mail aus der Liste, um sie hier zu lesen und zu bearbeiten.</p>
+        </div>
+      </aside>
+    );
+  }
 
   const bodyFallback = selectedEmail.bodyText || selectedEmail.preview || "";
   const senderContact = parseSender(selectedEmail.sender);
@@ -47,21 +62,16 @@ export function MailReader() {
     }
   }
 
-  return createPortal(
-    <div className="mail-reader-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/76 p-3 sm:p-6" onClick={closeEmail}>
-      <article
-        className="mail-reader-panel tr-shell mail-scroll max-h-[calc(100vh-1.5rem)] w-full max-w-[1120px] overflow-y-auto rounded-[18px] border border-white/[0.08] bg-[#0B0B0B] px-4 py-4 shadow-2xl sm:max-h-[min(900px,calc(100vh-3rem))] sm:px-7 lg:px-9"
-        onClick={(event) => event.stopPropagation()}
-      >
+  return (
+    <aside className="mail-reader-pane mail-scroll min-w-0 flex-1 overflow-y-auto border-l border-white/[0.07] bg-[#0b0b0b]">
+      <article className="mx-auto min-h-full w-full max-w-[980px] px-6 py-6 lg:px-8 xl:px-10">
         <header className="mb-6 border-b border-white/[0.06] pb-5">
           <div className="mb-6 flex items-center justify-between">
             <button className="rounded-lg px-2 py-1 text-[12px] font-medium text-white/55 transition hover:bg-white/[0.06] hover:text-white" onClick={closeEmail}>‹ Zurück</button>
             <div className="flex items-center gap-2 text-white/65 sm:gap-4">
-              <button title="Archivieren"><Archive size={17} /></button>
-              <button title="Löschen" onClick={() => void deleteSelected()}><Trash2 size={17} /></button>
-              <button title="Später"><Clock3 size={17} /></button>
-              <button title="Mehr"><MoreHorizontal size={18} /></button>
-              <button title="Schließen" onClick={closeEmail}><X size={18} /></button>
+              <button className="reader-icon-button" title="Archivieren" onClick={() => void archiveSelected()}><Archive size={17} /></button>
+              <button className="reader-icon-button reader-icon-danger" title="Löschen" onClick={() => void deleteSelected()}><Trash2 size={17} /></button>
+              <button className="reader-icon-button" title="Schließen" onClick={closeEmail}><X size={18} /></button>
             </div>
           </div>
           <h2 className="max-w-[820px] text-[21px] font-semibold leading-8 tracking-[-0.025em] sm:text-[24px]">{selectedEmail.subject || "(Kein Betreff)"}</h2>
@@ -167,8 +177,7 @@ export function MailReader() {
           <ActionButton icon={<Forward size={15} />} label="Weiterleiten" onClick={forwardSelected} />
         </footer>
       </article>
-    </div>,
-    document.body
+    </aside>
   );
 }
 
