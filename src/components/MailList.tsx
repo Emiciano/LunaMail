@@ -1,4 +1,4 @@
-import { AlertCircle, Archive, CheckCheck, Paperclip, RefreshCw, Search, Star, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { AlertCircle, Archive, CheckCheck, MailOpen, Paperclip, RefreshCw, Search, Star, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -91,7 +91,7 @@ export function MailList() {
   }, [search, searchDraft]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#050505] px-3 py-4 sm:px-5 lg:px-8 lg:py-6 xl:px-9">
+    <section className="flex h-full min-h-0 flex-col bg-[#080808] px-4 py-4 lg:px-5 lg:py-5">
       <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 px-1">
         <div>
           <h1 className="text-[17px] font-semibold tracking-[-0.02em]">{viewTitle(selectedView, selectedCategoryId)}</h1>
@@ -110,11 +110,11 @@ export function MailList() {
               <input
                 id="mail-search-input"
                 className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/35"
-                placeholder="Suchen..."
+                placeholder="Nach Absender, Betreff oder Inhalt suchen"
                 value={searchDraft}
                 onChange={(event) => setSearchDraft(event.target.value)}
               />
-              <span className="text-[11px]">Strg K</span>
+              <span className="rounded-md border border-white/[0.08] px-1.5 py-0.5 text-[10px]">Strg F</span>
             </label>
             {selectedView === "unifiedInbox" && categories.length > 0 ? (
               <div className="scrollbar-hidden mt-2 flex gap-1 overflow-x-auto text-[11px] font-medium">
@@ -200,7 +200,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div
-            className="mail-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-0 pb-20 pt-2"
+            className="mail-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-0 pb-20 pt-2"
             onScroll={(event) => {
               const element = event.currentTarget;
               if (element.scrollTop + element.clientHeight >= element.scrollHeight - 240 && visibleCount < emails.length) {
@@ -210,8 +210,21 @@ export function MailList() {
           >
             {loading && emails.length === 0 ? <MailListSkeleton /> : null}
             {!loading && emails.length === 0 ? (
-              <div className="px-6 py-10 text-[13px] leading-6 text-white/45">
-                {accounts.length === 0 ? "Noch kein Konto verbunden" : syncError ? "Synchronisation fehlgeschlagen." : hasSynced ? "Keine E-Mails gefunden" : "Noch nicht synchronisiert"}
+              <div className="mx-auto flex max-w-sm flex-col items-center px-6 py-16 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-white/40">
+                  {syncError ? <AlertCircle size={20} /> : <MailOpen size={20} />}
+                </span>
+                <h2 className="mt-4 text-sm font-semibold text-white/80">
+                  {accounts.length === 0 ? "Noch kein Konto verbunden" : syncError ? "Synchronisation fehlgeschlagen" : hasSynced ? "Keine Nachrichten gefunden" : "Bereit für die erste Synchronisierung"}
+                </h2>
+                <p className="mt-2 text-xs leading-5 text-white/40">
+                  {accounts.length === 0 ? "Verbinde in den Einstellungen ein E-Mail-Konto, um loszulegen." : syncError ? syncError : hasSynced ? "In dieser Ansicht gibt es momentan keine passenden E-Mails." : "LunaMail lädt deine Nachrichten sicher auf dieses Gerät."}
+                </p>
+                {accounts.length > 0 && !hasSynced ? (
+                  <button className="mt-5 inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-xs font-medium text-white/75 hover:bg-white/[0.08] hover:text-white" onClick={() => void sync(false)}>
+                    <RefreshCw size={13} /> Jetzt synchronisieren
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {visibleEmails.map((email) => (
@@ -355,12 +368,12 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row mail-row-enter group relative grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] gap-3 rounded-2xl border px-3.5 py-3.5 text-left transition-[transform,border-color,background-color] duration-200 sm:grid-cols-[18px_42px_10px_minmax(0,1fr)_auto]",
+        "mail-row mail-row-enter group relative grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] gap-3 rounded-xl border px-3 py-3 text-left transition-[border-color,background-color] duration-150 sm:grid-cols-[18px_42px_10px_minmax(0,1fr)_auto]",
         active
           ? "border-white/[0.13] bg-white/[0.105] shadow-[0_14px_34px_rgba(0,0,0,0.28)]"
           : email.isRead
-            ? "border-white/[0.045] bg-white/[0.015] hover:-translate-y-0.5 hover:border-white/[0.09] hover:bg-white/[0.055]"
-            : "border-[rgb(var(--accent)/0.14)] bg-[rgb(var(--accent)/0.065)] before:absolute before:bottom-4 before:left-0 before:top-4 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:-translate-y-0.5 hover:border-white/[0.11] hover:bg-white/[0.08]"
+            ? "border-transparent bg-transparent hover:border-white/[0.07] hover:bg-white/[0.045]"
+            : "border-[rgb(var(--accent)/0.12)] bg-[rgb(var(--accent)/0.055)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-[3px] before:rounded-full before:bg-[rgb(var(--accent))] hover:border-white/[0.11] hover:bg-white/[0.08]"
       )}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}

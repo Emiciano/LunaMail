@@ -8,8 +8,9 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 
 export function AppLayout() {
-  const { accounts, openComposer } = useMailStore(useShallow((state) => ({
+  const { accounts, selectedView, openComposer } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
+    selectedView: state.selectedView,
     openComposer: state.openComposer
   })));
   const hasAccounts = accounts.length > 0;
@@ -33,10 +34,13 @@ export function AppLayout() {
 
       <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-black lg:p-3">
         <MailSidebar />
-        <div className="relative min-w-0 flex-1 overflow-hidden bg-[#050505] lg:rounded-[24px] lg:border lg:border-white/[0.07]">
-          <MailList />
+        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-[#080808] lg:rounded-[22px] lg:border lg:border-white/[0.08] lg:shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+          <div className={`relative min-w-0 flex-1 overflow-hidden ${selectedView === "dashboard" || selectedView === "health" ? "workspace-overview-pane" : "mail-list-pane"}`}>
+            <MailList />
+          </div>
+          <MailReader />
           <button
-            className="accent-primary absolute bottom-6 right-6 z-30 inline-flex h-12 items-center gap-3 rounded-lg px-4 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+            className="accent-primary compose-fab absolute bottom-6 left-6 z-30 inline-flex h-11 items-center gap-2.5 rounded-xl px-4 text-sm font-semibold shadow-[0_12px_32px_rgba(0,0,0,0.35)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!hasAccounts}
             onClick={() => openComposer()}
           >
@@ -45,7 +49,6 @@ export function AppLayout() {
           </button>
         </div>
       </section>
-      <MailReader />
     </div>
   );
 }
