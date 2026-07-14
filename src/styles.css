@@ -179,6 +179,38 @@ select:focus-visible,
   max-width: 520px;
 }
 
+.pane-resizer {
+  position: relative;
+  z-index: 40;
+  width: 9px;
+  flex: 0 0 9px;
+  cursor: col-resize;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  margin-inline: -4px;
+}
+
+.pane-resizer span {
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.07);
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+.pane-resizer:hover span,
+.pane-resizer:active span,
+.is-resizing-pane .pane-resizer span {
+  width: 3px;
+  background: rgb(var(--accent) / 0.62);
+}
+
+.is-resizing-pane,
+.is-resizing-pane * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
 .reader-icon-button {
   display: inline-flex;
   width: 2rem;
