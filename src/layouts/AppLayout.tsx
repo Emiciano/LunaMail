@@ -11,7 +11,8 @@ import { useMailStore } from "../stores/mailStore";
 
 const DEFAULT_LIST_WIDTH = 480;
 const MIN_LIST_WIDTH = 360;
-const MAX_LIST_WIDTH = 720;
+const MAX_LIST_WIDTH = 1600;
+const MIN_READER_WIDTH = 320;
 const LIST_WIDTH_STORAGE_KEY = "lunamail:list-pane-width";
 
 function readListWidth() {
@@ -36,7 +37,7 @@ export function AppLayout() {
     const workspace = event.currentTarget.parentElement;
     if (!workspace) return;
     const workspaceBounds = workspace.getBoundingClientRect();
-    const maxWidth = Math.max(MIN_LIST_WIDTH, Math.min(MAX_LIST_WIDTH, workspaceBounds.width - 360));
+    const maxWidth = Math.max(MIN_LIST_WIDTH, Math.min(MAX_LIST_WIDTH, workspaceBounds.width - MIN_READER_WIDTH));
     document.body.classList.add("is-resizing-pane");
 
     const resize = (moveEvent: PointerEvent) => {
