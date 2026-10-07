@@ -1,9 +1,11 @@
 package com.lunamail.app
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.lunamail.app.ui.LunaMailApp
@@ -15,7 +17,11 @@ class MainActivity : ComponentActivity() {
     private val mailto = MutableStateFlow<ComposeRequest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // Die Oberfläche ist immer dunkel, also auch helle Symbole in Status- und Navigationsleiste.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handle(intent)
         NewMailWorker.schedule(

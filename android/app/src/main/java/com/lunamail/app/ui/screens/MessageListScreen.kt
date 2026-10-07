@@ -208,7 +208,7 @@ fun MessageListScreen(
                             SwipeAction(
                                 if (message.seen) "Ungelesen" else "Gelesen",
                                 if (message.seen) Icons.Rounded.MarkEmailUnread else Icons.Rounded.MarkEmailRead,
-                                Luna.colors.accent,
+                                Luna.colors.blue,
                             ) { vm.setSeen(message, !message.seen) },
                         ),
                         trailing = listOf(
@@ -224,7 +224,7 @@ fun MessageListScreen(
                                 Icons.Rounded.Flag,
                                 Luna.colors.orange,
                             ) { vm.setFlagged(message, !message.flagged) },
-                            SwipeAction("Mehr", Icons.Rounded.MoreHoriz, MoreGray) { actionsFor = message },
+                            SwipeAction("Mehr", Icons.Rounded.MoreHoriz, Luna.colors.gray) { actionsFor = message },
                         ),
                         modifier = Modifier.animateItem(),
                     ) {
@@ -338,7 +338,6 @@ fun MessageListScreen(
     }
 }
 
-private val MoreGray = Color(0xFF8E8E93)
 
 @Composable
 fun MessageRow(
@@ -370,7 +369,7 @@ fun MessageRow(
                         .border(1.5.dp, if (selected) Luna.colors.accent else Luna.colors.tertiaryLabel, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (selected) Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    if (selected) Icon(Icons.Rounded.Check, null, tint = Luna.colors.onAccent, modifier = Modifier.size(16.dp))
                 }
             }
         }

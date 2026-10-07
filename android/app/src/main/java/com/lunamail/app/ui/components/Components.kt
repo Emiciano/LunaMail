@@ -45,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -246,10 +245,12 @@ fun GroupedSection(
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         if (header != null) {
             Text(
-                header,
-                style = LunaType.title3,
-                color = Luna.colors.label,
-                modifier = Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp),
+                header.uppercase(),
+                style = LunaType.sectionLabel,
+                color = Luna.colors.tertiaryLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 8.dp),
             )
         } else {
             Spacer(Modifier.height(16.dp))
@@ -328,7 +329,7 @@ fun Avatar(name: String, size: Dp = 40.dp) {
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(Color(0xFFA5ABB8), Color(0xFF858994)))),
+            .background(Color(0xFF2A2A2A)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -375,6 +376,6 @@ fun PrimaryButton(label: String, enabled: Boolean = true, modifier: Modifier = M
             .padding(vertical = 15.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = LunaType.headline, color = Color.White)
+        Text(label, style = LunaType.headline, color = Luna.colors.onAccent)
     }
 }

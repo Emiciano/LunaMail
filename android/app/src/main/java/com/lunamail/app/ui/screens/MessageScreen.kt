@@ -340,7 +340,7 @@ private fun HtmlBody(html: String, colors: LunaColors) {
           img { max-width: 100% !important; height: auto !important; }
           table { max-width: 100% !important; }
           pre { white-space: pre-wrap; }
-          a { color: #0A84FF; }
+          a { color: #6EA8FE; }
         </style></head><body>$html</body></html>
         """.trimIndent()
     }
