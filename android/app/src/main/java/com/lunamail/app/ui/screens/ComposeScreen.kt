@@ -195,7 +195,7 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
                                     references = request.references,
                                 )
                             ).onSuccess { onClose() }
-                                .onFailure { error = it.message }
+                                .onFailure { error = MailViewModel.friendlyError(it) }
                             sending = false
                         }
                     },
@@ -291,7 +291,7 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
                                     references = request.references,
                                 )
                             ).onSuccess { onClose() }
-                                .onFailure { error = it.message }
+                                .onFailure { error = MailViewModel.friendlyError(it) }
                         }
                     }
                 }

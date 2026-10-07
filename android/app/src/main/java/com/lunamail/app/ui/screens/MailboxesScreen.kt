@@ -45,6 +45,7 @@ import com.lunamail.app.R
 import com.lunamail.app.data.BoxRef
 import com.lunamail.app.data.MailboxRole
 import com.lunamail.app.ui.MailViewModel
+import com.lunamail.app.ui.components.AccountDropdown
 import com.lunamail.app.ui.components.BarIcon
 import com.lunamail.app.ui.components.BottomToolbar
 import com.lunamail.app.ui.components.CellRow
@@ -81,6 +82,7 @@ fun MailboxesScreen(
     val mailboxes by vm.mailboxes.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
+    val expandedAccounts by vm.expandedAccounts.collectAsStateWithLifecycle()
     // Die ungelesen-Zähler hängen von den geladenen Nachrichten ab.
     val unified by vm.messages(BoxRef.UnifiedInbox).collectAsStateWithLifecycle(emptyList())
     val flagged by vm.messages(BoxRef.Flagged).collectAsStateWithLifecycle(emptyList())
@@ -121,15 +123,6 @@ fun MailboxesScreen(
                                 onClick = { onOpen(BoxRef.UnifiedInbox) },
                             )
                         }
-                        accounts.forEach { account ->
-                            val inbox = BoxRef(account.id, "INBOX")
-                            CellRow(
-                                title = if (accounts.size > 1) account.description else "Eingang",
-                                icon = Icons.Outlined.Inbox,
-                                value = vm.unreadCount(inbox).takeIf { it > 0 }?.toString(),
-                                onClick = { onOpen(inbox) },
-                            )
-                        }
                         // Intelligente Postfächer wie in Apple Mail.
                         CellRow(
                             title = "Markiert",
@@ -148,13 +141,39 @@ fun MailboxesScreen(
                     }
                 }
 
+                item {
+                    Text(
+                        if (accounts.size > 1) "KONTEN" else "KONTO",
+                        style = LunaType.sectionLabel,
+                        color = Luna.colors.tertiaryLabel,
+                        modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 8.dp),
+                    )
+                }
+
                 accounts.forEach { account ->
+                    val inbox = BoxRef(account.id, "INBOX")
                     val boxes = mailboxes[account.id].orEmpty().filter { it.role != MailboxRole.INBOX }
+                    // Mit nur einem Konto ist es anfangs offen, bei mehreren zu, damit es übersichtlich bleibt.
+                    val expanded = expandedAccounts?.contains(account.id) ?: (accounts.size == 1)
                     item(key = account.id) {
-                        GroupedSection(header = account.description) {
-                            if (boxes.isEmpty()) {
+                        AccountDropdown(
+                            email = account.email,
+                            name = account.description,
+                            unread = vm.unreadCount(inbox),
+                            expanded = expanded,
+                            onToggle = { vm.toggleAccountExpanded(account.id, expanded) },
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        ) {
+                            CellRow(
+                                title = "Eingang",
+                                icon = Icons.Outlined.Inbox,
+                                value = vm.unreadCount(inbox).takeIf { it > 0 }?.toString(),
+                                showDivider = boxes.isNotEmpty(),
+                                onClick = { onOpen(inbox) },
+                            )
+                            if (boxes.isEmpty() && refreshing.isNotEmpty()) {
                                 CellRow(
-                                    title = if (refreshing.isNotEmpty()) "Wird geladen …" else "Keine Postfächer",
+                                    title = "Wird geladen …",
                                     titleColor = Luna.colors.secondaryLabel,
                                     showChevron = false,
                                     showDivider = false,
