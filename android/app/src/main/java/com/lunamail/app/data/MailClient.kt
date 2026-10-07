@@ -217,13 +217,9 @@ class MailClient(private val account: Account, private val password: String) {
     suspend fun fetchBody(folderName: String, uid: Long): MessageBody = withStore { store ->
         store.withFolder(folderName, Folder.READ_ONLY) { folder ->
             val message = folder.getMessageByUID(uid) ?: throw MessagingException("Nachricht nicht mehr vorhanden")
-            val collector = BodyCollector()
+            val collector = BodyCollector(referenceHtml = findText(message, "text/html"))
             collector.walk(message)
-            val html = collector.html?.let { source ->
-                collector.inline.entries.fold(source) { acc, (cid, dataUri) ->
-                    acc.replace(Regex("cid:" + Regex.escape(cid), RegexOption.IGNORE_CASE), Regex.escapeReplacement(dataUri))
-                }
-            }
+            val html = collector.html?.let { embedResources(it, collector.resources) }
             MessageBody(
                 formatVersion = BODY_FORMAT,
                 html = html,
@@ -294,7 +290,7 @@ class MailClient(private val account: Account, private val password: String) {
     suspend fun fetchAttachment(folderName: String, uid: Long, index: Int): ByteArray = withStore { store ->
         store.withFolder(folderName, Folder.READ_ONLY) { folder ->
             val message = folder.getMessageByUID(uid) ?: throw MessagingException("Nachricht nicht mehr vorhanden")
-            val collector = BodyCollector(captureIndex = index)
+            val collector = BodyCollector(captureIndex = index, referenceHtml = findText(message, "text/html"))
             collector.walk(message)
             collector.captured ?: throw MessagingException("Anhang nicht gefunden")
         }
@@ -327,20 +323,24 @@ class MailClient(private val account: Account, private val password: String) {
         store = null
     }
 
-    private class BodyCollector(private val captureIndex: Int = -1) {
+    /** Ein im HTML eingebundener Mailteil (Logo, Signaturbild) mit seinen Bezeichnern. */
+    class InlineResource(val contentId: String?, val location: String?, val fileName: String?, val mimeType: String, val bytes: ByteArray)
+
+    /**
+     * Sammelt Text, Anhänge und eingebettete Bilder. [referenceHtml] ist das HTML der Mail,
+     * damit nur tatsächlich eingebundene Teile als Bild statt als Anhang behandelt werden
+     * (gleiches Ergebnis beim Anzeigen und beim Laden eines Anhangs).
+     */
+    private class BodyCollector(private val captureIndex: Int = -1, referenceHtml: String?) {
+        private val reference = referenceHtml?.lowercase().orEmpty()
         var html: String? = null
         var text: String? = null
         val attachments = mutableListOf<AttachmentInfo>()
-        val inline = mutableMapOf<String, String>()
+        val resources = mutableListOf<InlineResource>()
         var captured: ByteArray? = null
 
-        private fun contentId(part: Part) =
-            runCatching { part.getHeader("Content-ID")?.firstOrNull() }.getOrNull()?.trim('<', '>', ' ')?.takeIf { it.isNotEmpty() }
-
-        /** Wie [addAttachment], nur ohne Inhalt zu lesen (für die Anhangsliste). */
-        private fun attachmentsOnly(part: Part, name: String) {
-            attachments += AttachmentInfo(name, part.contentType.substringBefore(';').lowercase(), part.size, attachments.size)
-        }
+        private fun header(part: Part, name: String) =
+            runCatching { part.getHeader(name)?.firstOrNull() }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
         private fun addAttachment(part: Part, name: String) {
             val index = attachments.size
@@ -350,6 +350,7 @@ class MailClient(private val account: Account, private val password: String) {
 
         fun walk(part: Part) {
             val disposition = runCatching { part.disposition }.getOrNull()
+            val isAttachment = disposition.equals(Part.ATTACHMENT, true)
             val fileName = runCatching { part.fileName?.let { MimeUtility.decodeText(it) } }.getOrNull()
             when {
                 part.isMimeType("multipart/*") -> {
@@ -357,25 +358,28 @@ class MailClient(private val account: Account, private val password: String) {
                     for (i in 0 until multipart.count) walk(multipart.getBodyPart(i))
                 }
                 part.isMimeType("message/rfc822") && disposition == null -> (part.content as? Part)?.let(::walk)
-                // Bilder mit Content-ID (Logos, Signaturen) werden im HTML über „cid:“ eingebunden,
-                // auch wenn der Absender sie als Anhang markiert. part.size ist bei base64 oft -1.
-                part.isMimeType("image/*") && contentId(part) != null && captureIndex < 0 -> {
-                    val bytes = part.inputStream.use { it.readBytes() }.takeIf { it.size <= MAX_INLINE_IMAGE }
-                    if (bytes != null) {
-                        val type = part.contentType.substringBefore(';').trim().lowercase()
-                        inline[contentId(part)!!] = "data:$type;base64," + Base64.getEncoder().encodeToString(bytes)
+                part.isMimeType("text/html") && html == null && !isAttachment -> html = textContent(part)
+                part.isMimeType("text/plain") && text == null && !isAttachment -> text = textContent(part)
+                else -> {
+                    // Teile mit Content-ID oder Content-Location können im HTML eingebunden sein
+                    // (Logos, Signaturen). Manche Absender markieren sie als Anhang oder geben
+                    // ihnen einen unpassenden Typ; part.size ist bei base64 oft -1.
+                    val cid = header(part, "Content-ID")?.let(::cleanContentId)
+                    val location = header(part, "Content-Location")
+                    val embeddable = isReferenced(reference, cid, location)
+                    if (embeddable && captureIndex < 0) {
+                        val bytes = runCatching { part.inputStream.use { it.readBytes() } }.getOrNull()
+                        if (bytes != null && bytes.size <= MAX_INLINE_IMAGE) {
+                            resources += InlineResource(cid, location, fileName, part.contentType.substringBefore(';').trim().lowercase(), bytes)
+                        }
                     }
-                    if (disposition.equals(Part.ATTACHMENT, true)) attachmentsOnly(part, fileName ?: "Bild")
+                    when {
+                        isAttachment -> addAttachment(part, fileName ?: "Anhang")
+                        embeddable -> Unit
+                        fileName != null -> addAttachment(part, fileName)
+                        part.isMimeType("image/*") -> addAttachment(part, "Bild")
+                    }
                 }
-                part.isMimeType("image/*") && contentId(part) != null -> {
-                    if (disposition.equals(Part.ATTACHMENT, true)) addAttachment(part, fileName ?: "Bild")
-                }
-                disposition.equals(Part.ATTACHMENT, true) || (fileName != null && !part.isMimeType("image/*")) -> {
-                    addAttachment(part, fileName ?: "Anhang")
-                }
-                part.isMimeType("image/*") -> addAttachment(part, fileName ?: "Bild")
-                part.isMimeType("text/html") && html == null -> html = textContent(part)
-                part.isMimeType("text/plain") && text == null -> text = textContent(part)
             }
         }
     }
@@ -384,8 +388,58 @@ class MailClient(private val account: Account, private val password: String) {
         const val PAGE_SIZE = 60
 
         /** Erhöhen, wenn sich die Aufbereitung ändert, damit zwischengespeicherte Inhalte neu geladen werden. */
-        const val BODY_FORMAT = 2
+        const val BODY_FORMAT = 3
         private const val MAX_INLINE_IMAGE = 5_000_000
+
+        /** „<abc@host>“ → „abc@host“, auch bei gefalteten Kopfzeilen mit Zeilenumbrüchen. */
+        fun cleanContentId(raw: String): String? {
+            val inner = Regex("<([^>]*)>").find(raw)?.groupValues?.get(1) ?: raw
+            return inner.replace(Regex("\\s+"), "").takeIf { it.isNotEmpty() }
+        }
+
+        private val extensionTypes = mapOf(
+            "png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif",
+            "webp" to "image/webp", "svg" to "image/svg+xml", "bmp" to "image/bmp",
+        )
+
+        /**
+         * Ersetzt Verweise auf eingebettete Mailteile („cid:…“ oder Content-Location) durch
+         * data:-URIs, damit der WebView sie ohne Netz anzeigen kann.
+         */
+        /** Ob [html] (kleingeschrieben) den Teil per „cid:“ oder Content-Location einbindet. */
+        fun isReferenced(html: String, contentId: String?, location: String?): Boolean {
+            if (contentId != null) {
+                val id = contentId.lowercase()
+                if ("cid:$id" in html || "cid:${java.net.URLEncoder.encode(id, "UTF-8").lowercase()}" in html ||
+                    "cid:${id.replace("@", "%40")}" in html
+                ) return true
+            }
+            return location != null && location.lowercase().let { "\"$it\"" in html || "'$it'" in html }
+        }
+
+        fun embedResources(html: String, resources: List<InlineResource>): String {
+            var result = html
+            for (resource in resources) {
+                val type = resource.mimeType.takeIf { it.startsWith("image/") }
+                    ?: extensionTypes[(resource.fileName ?: resource.location ?: "").substringAfterLast('.', "").lowercase()]
+                    ?: resource.mimeType
+                val dataUri = "data:$type;base64," + Base64.getEncoder().encodeToString(resource.bytes)
+                val replacement = Regex.escapeReplacement(dataUri)
+                resource.contentId?.let { cid ->
+                    val variants = setOf(cid, java.net.URLEncoder.encode(cid, "UTF-8"), cid.replace("@", "%40"))
+                    for (variant in variants) {
+                        result = result.replace(Regex("cid:" + Regex.escape(variant) + "(?=[\"'\\s>)])", RegexOption.IGNORE_CASE), replacement)
+                    }
+                }
+                resource.location?.let { location ->
+                    result = result.replace(
+                        Regex("(src\\s*=\\s*[\"'])" + Regex.escape(location) + "([\"'])", RegexOption.IGNORE_CASE),
+                        "$1$replacement$2",
+                    )
+                }
+            }
+            return result
+        }
 
         fun inferRole(fullName: String, attributes: List<String>): MailboxRole {
             val attrs = attributes.map { it.lowercase() }
