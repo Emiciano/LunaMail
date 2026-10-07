@@ -75,6 +75,17 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean(KEY_SWIPE_ARCHIVES, value).apply()
     }
 
+    private val _expandedAccounts = MutableStateFlow(prefs.getStringSet(KEY_EXPANDED_ACCOUNTS, null)?.toSet())
+    /** Aufgeklappte Konten in der Übersicht; null heißt: noch nie umgeschaltet. */
+    val expandedAccounts: StateFlow<Set<String>?> = _expandedAccounts.asStateFlow()
+
+    fun toggleAccountExpanded(accountId: String, currentlyExpanded: Boolean) {
+        val base = _expandedAccounts.value ?: if (currentlyExpanded) setOf(accountId) else emptySet()
+        val next = if (currentlyExpanded) base - accountId else base + accountId
+        _expandedAccounts.value = next
+        prefs.edit().putStringSet(KEY_EXPANDED_ACCOUNTS, next).apply()
+    }
+
     private val _notifications = MutableStateFlow(prefs.getBoolean(KEY_NOTIFICATIONS, true))
     val notifications: StateFlow<Boolean> = _notifications.asStateFlow()
 
@@ -474,9 +485,11 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         const val UNDO_WINDOW_MS = 4_500L
         const val KEY_SWIPE_ARCHIVES = "swipe_archives"
         const val KEY_NOTIFICATIONS = "notifications"
+        const val KEY_EXPANDED_ACCOUNTS = "expanded_accounts"
 
         fun friendlyError(e: Throwable): String {
             if (e is com.lunamail.app.data.ServerCheckException) return "${e.server}: ${friendlyError(e.cause ?: e)}"
+            com.lunamail.app.data.SendErrors.describe(e)?.let { return it }
             val cause = generateSequence(e) { (it as? MessagingException)?.nextException ?: it.cause }.take(10).toList()
             return when {
                 cause.any { it is AuthenticationFailedException } ->

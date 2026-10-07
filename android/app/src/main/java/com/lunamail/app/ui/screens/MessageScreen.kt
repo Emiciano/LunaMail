@@ -328,19 +328,22 @@ private fun Header(message: MessageSummary, body: MessageBody?) {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun HtmlBody(html: String, colors: LunaColors) {
-    val background = colors.background.toArgb()
+    // HTML-Mails sind fast immer für hellen Hintergrund gestaltet. Automatisch abgedunkelt
+    // verschwinden dunkle Logos mit transparentem Hintergrund, darum liegen sie auf einer weißen Karte.
+    val background = android.graphics.Color.WHITE
     val document = remember(html, colors.isDark) {
         """
         <!DOCTYPE html><html><head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           html, body { margin: 0; padding: 0; }
-          body { padding: 0 16px; font-family: sans-serif; font-size: 16px; line-height: 1.4;
+          body { padding: 12px; font-family: sans-serif; font-size: 16px; line-height: 1.4;
                  overflow-wrap: break-word; word-wrap: break-word; }
           img { max-width: 100% !important; height: auto !important; }
           table { max-width: 100% !important; }
           pre { white-space: pre-wrap; }
-          a { color: #6EA8FE; }
+          body { color: #111; background: #fff; }
+          a { color: #0A66D8; }
         </style></head><body>$html</body></html>
         """.trimIndent()
     }
@@ -350,6 +353,8 @@ private fun HtmlBody(html: String, colors: LunaColors) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     AndroidView(
         modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(10.dp))
             .fillMaxWidth()
             .then(
                 if (contentHeight > 0) Modifier.height(with(density) { contentHeight.toDp() })
@@ -372,7 +377,7 @@ private fun HtmlBody(html: String, colors: LunaColors) {
                 settings.blockNetworkImage = false
                 settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-                    WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
+                    WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
                 }
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String?) {
@@ -396,6 +401,7 @@ private fun HtmlBody(html: String, colors: LunaColors) {
                     }
 
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                        if (request.url.host == "mail.lunamail.invalid") return true
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(request.url.toString()))) }
                         return true
                     }
@@ -405,7 +411,8 @@ private fun HtmlBody(html: String, colors: LunaColors) {
         update = { view ->
             if (view.tag != document) {
                 view.tag = document
-                view.loadDataWithBaseURL(null, document, "text/html", "UTF-8", null)
+                // Mit https-Basis laden auch Bilder mit „//cdn…/logo.png“ ohne Protokoll.
+                view.loadDataWithBaseURL("https://mail.lunamail.invalid/", document, "text/html", "UTF-8", null)
             }
         },
     )
