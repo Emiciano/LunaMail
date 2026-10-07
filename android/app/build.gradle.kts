@@ -24,6 +24,24 @@ android {
         versionName = appVersion
     }
 
+    // Fester Signaturschlüssel, damit sich neue APKs über die installierte App installieren
+    // lassen und die Accounts erhalten bleiben. Die Schlüsseldatei ist mit dem Passwort aus dem
+    // GitHub-Secret ANDROID_SIGNING_PASSWORD verschlüsselt; ohne Passwort wird wie bisher mit
+    // dem zufälligen Debug-Schlüssel signiert.
+    val signingFile = file("lunamail-signing.p12")
+    val signingPassword = providers.environmentVariable("LUNAMAIL_SIGNING_PASSWORD").orNull?.takeIf { it.isNotBlank() }
+    if (signingFile.exists() && signingPassword != null) {
+        signingConfigs {
+            getByName("debug") {
+                storeFile = signingFile
+                storeType = "pkcs12"
+                storePassword = signingPassword
+                keyAlias = "lunamail"
+                keyPassword = signingPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
