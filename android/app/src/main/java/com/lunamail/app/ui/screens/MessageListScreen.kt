@@ -332,6 +332,18 @@ fun MessageListScreen(
 }
 
 
+/** Der Ungelesen-Punkt ploppt auf bzw. schrumpft weg, statt hart zu wechseln. */
+@Composable
+private fun UnreadDot(visible: Boolean) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+        exit = scaleOut(tween(180)) + fadeOut(tween(180)),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(Luna.colors.accent))
+    }
+}
+
 private val SubjectRead = LunaType.subhead.copy(fontWeight = FontWeight.Normal)
 private val SubjectUnread = LunaType.subhead.copy(fontWeight = FontWeight.Medium)
 
@@ -371,14 +383,7 @@ fun MessageRow(
         }
         Row(Modifier.weight(1f).padding(top = 10.dp, end = 12.dp)) {
             Box(Modifier.width(22.dp).padding(top = 16.dp), contentAlignment = Alignment.TopCenter) {
-                // Der Ungelesen-Punkt ploppt auf bzw. schrumpft weg, statt hart zu wechseln.
-                AnimatedVisibility(
-                    visible = !message.seen,
-                    enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
-                    exit = scaleOut(tween(180)) + fadeOut(tween(180)),
-                ) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(Luna.colors.accent))
-                }
+                UnreadDot(visible = !message.seen)
             }
             Box(Modifier.padding(top = 2.dp)) { Avatar(message.senderLabel, size = 38.dp) }
             Spacer(Modifier.width(12.dp))
