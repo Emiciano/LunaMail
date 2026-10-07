@@ -202,9 +202,9 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
                 contentAlignment = Alignment.Center,
             ) {
                 if (sending) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    CircularProgressIndicator(color = Luna.colors.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                 } else {
-                    Icon(Icons.Rounded.ArrowUpward, "Senden", tint = if (canSend) Color.White else Luna.colors.tertiaryLabel, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.ArrowUpward, "Senden", tint = if (canSend) Luna.colors.onAccent else Luna.colors.tertiaryLabel, modifier = Modifier.size(20.dp))
                 }
             }
         }
