@@ -412,14 +412,6 @@ fun MessageRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    message.preview ?: " ",
-                    style = LunaType.subhead,
-                    color = Luna.colors.secondaryLabel,
-                    maxLines = 2,
-                    minLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
                 Spacer(Modifier.height(10.dp))
                 HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator)
             }
