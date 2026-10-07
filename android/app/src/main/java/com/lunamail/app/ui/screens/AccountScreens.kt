@@ -184,6 +184,7 @@ private fun ProviderWordmark(id: String, name: String) {
         "webde" -> Triple(Color(0xFFFFB400), FontWeight.Black, FontFamily.SansSerif)
         "tonline" -> Triple(Color(0xFFE20074), FontWeight.Bold, FontFamily.SansSerif)
         "ionos" -> Triple(Color(0xFF11388C), FontWeight.Bold, FontFamily.SansSerif)
+        "hypnotic" -> Triple(Color(0xFF7B3FE4), FontWeight.SemiBold, FontFamily.SansSerif)
         "yahoo" -> Triple(Color(0xFF6001D2), FontWeight.Black, FontFamily.Serif)
         else -> Triple(Luna.colors.label, FontWeight.Normal, FontFamily.SansSerif)
     }
