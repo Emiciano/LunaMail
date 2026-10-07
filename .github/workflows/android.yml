@@ -15,6 +15,9 @@ on:
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -44,3 +47,25 @@ jobs:
           name: LunaMail-Android-debug
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: APK zum Download bereitstellen
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/LunaMail.apk"
+
+      # Fester Vorab-Release, damit die APK über einen direkten Link auf dem Handy
+      # geladen werden kann. Als Vorabversion markiert, damit der Windows-Updater ihn ignoriert.
+      - name: Android-Vorschau veröffentlichen
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          target_commitish: ${{ github.sha }}
+          name: LunaMail für Android (Vorschau)
+          body: |
+            Aktuelle Android-Version von LunaMail, automatisch gebaut aus ${{ github.sha }}.
+            Auf dem Handy `LunaMail.apk` antippen, herunterladen und installieren.
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: ${{ runner.temp }}/LunaMail.apk

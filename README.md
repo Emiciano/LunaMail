@@ -45,7 +45,11 @@ cd android
 ./gradlew assembleDebug
 ```
 
-Die APK liegt danach unter `android/app/build/outputs/apk/debug/`. Der Workflow
+Direkt aufs Handy laden:
+[LunaMail.apk](https://github.com/Emiciano/LunaMail/releases/download/android-latest/LunaMail.apk)
+(wird bei jeder Änderung auf `main` neu gebaut).
+
+Die selbst gebaute APK liegt unter `android/app/build/outputs/apk/debug/`. Der Workflow
 `Android-App` baut sie bei jeder Änderung unter `android/` und stellt sie als
 Artefakt bereit.
 
