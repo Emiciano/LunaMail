@@ -367,6 +367,10 @@ private fun HtmlBody(html: String, colors: LunaColors) {
                 settings.useWideViewPort = true
                 settings.builtInZoomControls = true
                 settings.displayZoomControls = false
+                // Bilder aus dem Netz (Logos, Newsletter) laden, auch über http.
+                settings.loadsImagesAutomatically = true
+                settings.blockNetworkImage = false
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
                     WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
                 }
@@ -379,9 +383,16 @@ private fun HtmlBody(html: String, colors: LunaColors) {
                             if (px > 0 && px != contentHeight) contentHeight = px
                         }
                         measure()
-                        // Bilder laden nach; die Höhe danach noch zweimal nachmessen.
-                        view.postDelayed({ measure() }, 400)
-                        view.postDelayed({ measure() }, 1500)
+                        // Bilder laden nach und machen die Seite höher; darum einige Sekunden
+                        // lang regelmäßig nachmessen.
+                        var remaining = 20
+                        val again = object : Runnable {
+                            override fun run() {
+                                measure()
+                                if (--remaining > 0) view.postDelayed(this, 500)
+                            }
+                        }
+                        view.postDelayed(again, 300)
                     }
 
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

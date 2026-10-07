@@ -89,6 +89,7 @@ data class MessageBody(
     val replyTo: String = "",
     val references: String = "",
     val attachments: List<AttachmentInfo> = emptyList(),
+    val formatVersion: Int = 0,
 )
 
 data class Draft(
