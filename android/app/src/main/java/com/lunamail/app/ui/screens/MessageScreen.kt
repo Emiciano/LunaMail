@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -266,8 +267,17 @@ private fun HtmlBody(html: String, colors: LunaColors) {
         </style></head><body>$html</body></html>
         """.trimIndent()
     }
+    // Ein WebView in einer scrollenden Spalte misst sich selbst oft mit Höhe 0. Darum wird
+    // die Inhaltshöhe nach dem Laden ausgelesen und als feste Höhe gesetzt.
+    var contentHeight by remember(document) { mutableStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
     AndroidView(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (contentHeight > 0) Modifier.height(with(density) { contentHeight.toDp() })
+                else Modifier.heightIn(min = 120.dp)
+            ),
         factory = { context ->
             WebView(context).apply {
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -284,6 +294,19 @@ private fun HtmlBody(html: String, colors: LunaColors) {
                     WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
                 }
                 webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        fun measure() {
+                            // contentHeight ist in CSS-Pixeln; scale enthält Dichte und Übersichts-Zoom.
+                            @Suppress("DEPRECATION")
+                            val px = (view.contentHeight * view.scale).toInt()
+                            if (px > 0 && px != contentHeight) contentHeight = px
+                        }
+                        measure()
+                        // Bilder laden nach; die Höhe danach noch zweimal nachmessen.
+                        view.postDelayed({ measure() }, 400)
+                        view.postDelayed({ measure() }, 1500)
+                    }
+
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(request.url.toString()))) }
                         return true

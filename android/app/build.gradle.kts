@@ -48,14 +48,13 @@ android {
 
     packaging {
         resources {
+            // Nur doppelte Lizenzdateien weglassen. mailcap, javamail.* und mimetypes.default
+            // braucht JavaMail zur Laufzeit, sonst lassen sich Mailinhalte nicht als Text lesen.
             excludes += setOf(
                 "META-INF/LICENSE.md",
                 "META-INF/NOTICE.md",
                 "META-INF/LICENSE.txt",
-                "META-INF/NOTICE.txt",
-                "META-INF/mailcap",
-                "META-INF/javamail.*",
-                "META-INF/mimetypes.default"
+                "META-INF/NOTICE.txt"
             )
         }
     }

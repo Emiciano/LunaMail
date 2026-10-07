@@ -163,7 +163,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _refreshing.update { it + box.key }
         try {
             val previous = _messages.value[box.key] ?: withContext(Dispatchers.IO) { cache.messages(box) }
-            val knownPreviews = previous.associate { it.uid to it.preview }
+            val knownPreviews = previous.associate { it.uid to it.preview?.takeIf { p -> p.isNotBlank() } }
             val fetched = client.fetchMessages(box.folder).map { it.copy(preview = knownPreviews[it.uid]) }
             setMessages(box, fetched)
 
@@ -305,7 +305,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _messages.value.values.asSequence().flatten().firstOrNull { it.key == key }
 
     suspend fun loadBody(message: MessageSummary): Result<MessageBody> = runCatching {
-        withContext(Dispatchers.IO) { cache.body(message) } ?: run {
+        // Leere Einträge stammen aus Versionen, die Mailinhalte nicht lesen konnten.
+        withContext(Dispatchers.IO) { cache.body(message) }?.takeIf { it.html != null || it.text != null } ?: run {
             val client = client(message.accountId) ?: error("Konto nicht gefunden")
             client.fetchBody(message.folder, message.uid).also { body ->
                 withContext(Dispatchers.IO) { cache.saveBody(message, body) }

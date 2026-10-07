@@ -314,10 +314,10 @@ class MailClient(private val account: Account, private val password: String) {
             val fileName = runCatching { part.fileName?.let { MimeUtility.decodeText(it) } }.getOrNull()
             when {
                 part.isMimeType("multipart/*") -> {
-                    val multipart = part.content as Multipart
+                    val multipart = part.content as? Multipart ?: return
                     for (i in 0 until multipart.count) walk(multipart.getBodyPart(i))
                 }
-                part.isMimeType("message/rfc822") && disposition == null -> walk(part.content as Part)
+                part.isMimeType("message/rfc822") && disposition == null -> (part.content as? Part)?.let(::walk)
                 disposition.equals(Part.ATTACHMENT, true) || (fileName != null && !part.isMimeType("image/*")) -> {
                     attachments += AttachmentInfo(fileName ?: "Anhang", part.contentType.substringBefore(';').lowercase(), part.size)
                 }
@@ -331,8 +331,8 @@ class MailClient(private val account: Account, private val password: String) {
                         attachments += AttachmentInfo(fileName ?: "Bild", part.contentType.substringBefore(';').lowercase(), part.size)
                     }
                 }
-                part.isMimeType("text/html") && html == null -> html = part.content as? String
-                part.isMimeType("text/plain") && text == null -> text = part.content as? String
+                part.isMimeType("text/html") && html == null -> html = textContent(part)
+                part.isMimeType("text/plain") && text == null -> text = textContent(part)
             }
         }
     }
@@ -392,11 +392,26 @@ class MailClient(private val account: Account, private val password: String) {
             .replace("&zwnj;", "")
             .replace(Regex("&#?\\w+;"), " ")
 
+        /**
+         * Liest einen Textteil als String. Fehlt ein passender Content-Handler oder ist der
+         * Zeichensatz unbekannt, liefert JavaMail einen Stream statt eines Strings.
+         */
+        fun textContent(part: Part): String? {
+            val content = runCatching { part.content }.getOrNull()
+            if (content is String) return content
+            val charset = runCatching {
+                javax.mail.internet.ContentType(part.contentType).getParameter("charset")
+                    ?.let { java.nio.charset.Charset.forName(MimeUtility.javaCharset(it)) }
+            }.getOrNull() ?: Charsets.UTF_8
+            val stream = content as? java.io.InputStream ?: runCatching { part.inputStream }.getOrNull() ?: return null
+            return stream.use { String(it.readBytes(), charset) }
+        }
+
         private fun findText(part: Part, mime: String): String? {
             if (runCatching { part.disposition }.getOrNull().equals(Part.ATTACHMENT, true)) return null
-            if (part.isMimeType(mime)) return part.content as? String
+            if (part.isMimeType(mime)) return textContent(part)
             if (part.isMimeType("multipart/*")) {
-                val multipart = part.content as Multipart
+                val multipart = part.content as? Multipart ?: return null
                 for (i in 0 until multipart.count) {
                     findText(multipart.getBodyPart(i), mime)?.let { return it }
                 }
@@ -406,7 +421,7 @@ class MailClient(private val account: Account, private val password: String) {
 
         private fun hasAttachments(part: Part): Boolean {
             if (part.isMimeType("multipart/*")) {
-                val multipart = part.content as Multipart
+                val multipart = part.content as? Multipart ?: return false
                 return (0 until multipart.count).any { hasAttachments(multipart.getBodyPart(it)) }
             }
             return part.disposition.equals(Part.ATTACHMENT, true)
