@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.screens
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,20 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.MarkEmailUnread
-import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.MoveToInbox
-import androidx.compose.material.icons.outlined.Report
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.AllInbox
-import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -59,14 +46,14 @@ import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
 
 fun MailboxRole.icon(): ImageVector = when (this) {
-    MailboxRole.INBOX -> Icons.Outlined.Inbox
-    MailboxRole.DRAFTS -> Icons.Outlined.Description
-    MailboxRole.SENT -> Icons.AutoMirrored.Outlined.Send
-    MailboxRole.ARCHIVE -> Icons.Outlined.Archive
-    MailboxRole.ALL -> Icons.Outlined.MoveToInbox
-    MailboxRole.JUNK -> Icons.Outlined.Report
-    MailboxRole.TRASH -> Icons.Outlined.Delete
-    MailboxRole.OTHER -> Icons.Outlined.Folder
+    MailboxRole.INBOX -> LunaIcons.Inbox
+    MailboxRole.DRAFTS -> LunaIcons.Draft
+    MailboxRole.SENT -> LunaIcons.Send
+    MailboxRole.ARCHIVE -> LunaIcons.Archive
+    MailboxRole.ALL -> LunaIcons.Inboxes
+    MailboxRole.JUNK -> LunaIcons.Spam
+    MailboxRole.TRASH -> LunaIcons.Trash
+    MailboxRole.OTHER -> LunaIcons.Folder
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,7 +83,7 @@ fun MailboxesScreen(
             collapsed = collapsed,
             background = background,
             actions = {
-                if (accounts.isNotEmpty()) BarIcon(Icons.Outlined.Settings, "Einstellungen", onClick = onSettings)
+                if (accounts.isNotEmpty()) BarIcon(LunaIcons.Settings, "Einstellungen", onClick = onSettings)
             },
         )
 
@@ -118,7 +105,7 @@ fun MailboxesScreen(
                         if (accounts.size > 1) {
                             CellRow(
                                 title = "Alle Eingänge",
-                                icon = Icons.Outlined.AllInbox,
+                                icon = LunaIcons.Inboxes,
                                 value = unified.count { !it.seen }.takeIf { it > 0 }?.toString(),
                                 onClick = { onOpen(BoxRef.UnifiedInbox) },
                             )
@@ -126,14 +113,14 @@ fun MailboxesScreen(
                         // Intelligente Postfächer wie in Apple Mail.
                         CellRow(
                             title = "Markiert",
-                            icon = Icons.Outlined.Flag,
+                            icon = LunaIcons.Flag,
                             iconTint = Luna.colors.orange,
                             value = flagged.size.takeIf { it > 0 }?.toString(),
                             onClick = { onOpen(BoxRef.Flagged) },
                         )
                         CellRow(
                             title = "Ungelesen",
-                            icon = Icons.Outlined.MarkEmailUnread,
+                            icon = LunaIcons.MailUnread,
                             value = unified.count { !it.seen }.takeIf { it > 0 }?.toString(),
                             showDivider = false,
                             onClick = { onOpen(BoxRef.Unread) },
@@ -166,7 +153,7 @@ fun MailboxesScreen(
                         ) {
                             CellRow(
                                 title = "Eingang",
-                                icon = Icons.Outlined.Inbox,
+                                icon = LunaIcons.Inbox,
                                 value = vm.unreadCount(inbox).takeIf { it > 0 }?.toString(),
                                 showDivider = boxes.isNotEmpty(),
                                 onClick = { onOpen(inbox) },
@@ -205,7 +192,7 @@ fun MailboxesScreen(
         BottomToolbar {
             Spacer(Modifier.size(44.dp))
             SyncStatus(refreshing = refreshing.isNotEmpty(), lastSync = lastSync, modifier = Modifier.weight(1f))
-            BarIcon(Icons.Outlined.EditNote, "Neue E-Mail", onClick = onCompose)
+            BarIcon(LunaIcons.Compose, "Neue E-Mail", onClick = onCompose)
         }
     }
 }

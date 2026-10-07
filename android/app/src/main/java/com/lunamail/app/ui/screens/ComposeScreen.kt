@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.screens
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -23,8 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -204,7 +203,7 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
                 if (sending) {
                     CircularProgressIndicator(color = Luna.colors.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                 } else {
-                    Icon(Icons.Rounded.ArrowUpward, "Senden", tint = if (canSend) Luna.colors.onAccent else Luna.colors.tertiaryLabel, modifier = Modifier.size(20.dp))
+                    Icon(LunaIcons.ArrowUp, "Senden", tint = if (canSend) Luna.colors.onAccent else Luna.colors.tertiaryLabel, modifier = Modifier.size(20.dp))
                 }
             }
         }

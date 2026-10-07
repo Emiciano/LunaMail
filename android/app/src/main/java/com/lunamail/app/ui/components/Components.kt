@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.components
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -29,11 +30,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Cancel
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -100,7 +96,7 @@ fun BackButton(label: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            Icons.AutoMirrored.Rounded.ArrowBackIos,
+            LunaIcons.ChevronLeft,
             contentDescription = "Zurück",
             tint = Luna.colors.accent,
             modifier = Modifier.size(20.dp),
@@ -210,7 +206,7 @@ fun SearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifi
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, contentDescription = null, tint = Luna.colors.secondaryLabel, modifier = Modifier.size(20.dp))
+        Icon(LunaIcons.Search, contentDescription = null, tint = Luna.colors.secondaryLabel, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(6.dp))
         Box(Modifier.weight(1f)) {
             if (query.isEmpty()) Text("Suchen", style = LunaType.body, color = Luna.colors.secondaryLabel)
@@ -225,7 +221,7 @@ fun SearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifi
         }
         if (query.isNotEmpty()) {
             Icon(
-                Icons.Rounded.Cancel,
+                LunaIcons.Clear,
                 contentDescription = "Suche löschen",
                 tint = Luna.colors.tertiaryLabel,
                 modifier = Modifier.size(18.dp).pressFade { onQueryChange("") },
@@ -300,7 +296,7 @@ fun CellRow(
             }
             if (showChevron) {
                 Icon(
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    LunaIcons.ChevronRight,
                     contentDescription = null,
                     tint = Luna.colors.tertiaryLabel,
                     modifier = Modifier.size(22.dp),

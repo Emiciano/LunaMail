@@ -1,11 +1,14 @@
 package com.lunamail.app.ui.screens
 
+import com.lunamail.app.ui.icons.LunaIcons
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import com.lunamail.app.data.RemoteImages
+import android.webkit.WebResourceResponse
 import android.webkit.WebViewClient
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedContent
@@ -31,17 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Reply
-import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.DriveFileMove
-import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.rounded.AttachFile
-import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -143,8 +135,8 @@ fun MessageScreen(
             navigation = { BackButton(backLabel, onBack) },
             actions = {
                 if (box != null) {
-                    BarIcon(Icons.Rounded.KeyboardArrowUp, "Vorherige E-Mail", enabled = newer != null) { show(newer, down = false) }
-                    BarIcon(Icons.Rounded.KeyboardArrowDown, "Nächste E-Mail", enabled = older != null) { show(older, down = true) }
+                    BarIcon(LunaIcons.ChevronUp, "Vorherige E-Mail", enabled = newer != null) { show(newer, down = false) }
+                    BarIcon(LunaIcons.ChevronDown, "Nächste E-Mail", enabled = older != null) { show(older, down = true) }
                 }
             },
         )
@@ -165,24 +157,24 @@ fun MessageScreen(
         val archives = vm.swipeArchives.collectAsStateWithLifecycle().value && vm.canArchive(message)
         BottomToolbar {
             BarIcon(
-                if (message.flagged) Icons.Rounded.Flag else Icons.Outlined.Flag,
+                if (message.flagged) LunaIcons.FlagFilled else LunaIcons.Flag,
                 if (message.flagged) "Markierung entfernen" else "Markieren",
                 tint = if (message.flagged) Luna.colors.orange else Luna.colors.accent,
             ) { vm.setFlagged(message, !message.flagged) }
-            BarIcon(Icons.Outlined.DriveFileMove, "Bewegen") { showMove = true }
+            BarIcon(LunaIcons.Move, "Bewegen") { showMove = true }
             if (archives) {
-                BarIcon(Icons.Outlined.Archive, "Archivieren") {
+                BarIcon(LunaIcons.Archive, "Archivieren") {
                     vm.archive(message)
                     afterRemoval()
                 }
             } else {
-                BarIcon(Icons.Outlined.Delete, "Löschen") {
+                BarIcon(LunaIcons.Trash, "Löschen") {
                     vm.delete(message)
                     afterRemoval()
                 }
             }
-            BarIcon(Icons.AutoMirrored.Outlined.Reply, "Antworten") { showActions = true }
-            BarIcon(Icons.Outlined.EditNote, "Neue E-Mail", onClick = onCompose)
+            BarIcon(LunaIcons.Reply, "Antworten") { showActions = true }
+            BarIcon(LunaIcons.Compose, "Neue E-Mail", onClick = onCompose)
         }
     }
 
@@ -284,7 +276,7 @@ private fun AttachmentRow(vm: MailViewModel, message: MessageSummary, attachment
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.AttachFile, null, tint = Luna.colors.accent, modifier = Modifier.size(20.dp))
+        Icon(LunaIcons.Paperclip, null, tint = Luna.colors.accent, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(attachment.fileName, style = LunaType.subhead, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -315,7 +307,7 @@ private fun Header(message: MessageSummary, body: MessageBody?) {
                 }
             }
             if (message.flagged) {
-                Icon(Icons.Rounded.Flag, null, tint = Luna.colors.orange, modifier = Modifier.size(16.dp))
+                Icon(LunaIcons.FlagFilled, null, tint = Luna.colors.orange, modifier = Modifier.size(16.dp))
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -339,7 +331,9 @@ private fun HtmlBody(html: String, colors: LunaColors) {
           html, body { margin: 0; padding: 0; }
           body { padding: 12px; font-family: sans-serif; font-size: 16px; line-height: 1.4;
                  overflow-wrap: break-word; word-wrap: break-word; }
-          img { max-width: 100% !important; height: auto !important; }
+          /* Bilder mit eigener Maximalbreite (z. B. Logos) behalten ihre Größe; alle anderen
+             werden nur verkleinert, nie aufgezogen. */
+          img:not([style*="max-width"]) { max-width: 100% !important; height: auto !important; }
           table { max-width: 100% !important; }
           pre { white-space: pre-wrap; }
           body { color: #111; background: #fff; }
@@ -351,6 +345,10 @@ private fun HtmlBody(html: String, colors: LunaColors) {
     // die Inhaltshöhe nach dem Laden ausgelesen und als feste Höhe gesetzt.
     var contentHeight by remember(document) { mutableStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
+    // Bilder, die nicht geladen werden konnten, mit Grund – damit man sieht, woran es liegt.
+    val failedImages = remember(document) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
+    val fetchErrors = remember(document) { java.util.concurrent.ConcurrentHashMap<String, String>() }
+    Column {
     AndroidView(
         modifier = Modifier
             .padding(horizontal = 8.dp)
@@ -400,6 +398,34 @@ private fun HtmlBody(html: String, colors: LunaColors) {
                         view.postDelayed(again, 300)
                     }
 
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                        val url = request.url
+                        if (request.isForMainFrame || request.method != "GET") return null
+                        if (url.scheme != "http" && url.scheme != "https") return null
+                        if (url.host == "mail.lunamail.invalid") return null
+                        return try {
+                            val image = RemoteImages.fetch(url.toString())
+                            WebResourceResponse(image.mimeType, image.encoding, java.io.ByteArrayInputStream(image.bytes))
+                        } catch (e: Exception) {
+                            // Dann versucht es das WebView selbst; scheitert auch das, steht der Grund unten.
+                            fetchErrors[url.toString()] = RemoteImages.describe(e)
+                            null
+                        }
+                    }
+
+                    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                        if (request.isForMainFrame) return
+                        val url = request.url.toString()
+                        val reason = fetchErrors[url] ?: error.description?.toString().orEmpty().ifBlank { "Fehler ${error.errorCode}" }
+                        view.post { failedImages[url] = reason }
+                    }
+
+                    override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                        if (request.isForMainFrame) return
+                        val url = request.url.toString()
+                        view.post { failedImages[url] = "HTTP ${response.statusCode}" }
+                    }
+
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                         if (request.url.host == "mail.lunamail.invalid") return true
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(request.url.toString()))) }
@@ -416,6 +442,35 @@ private fun HtmlBody(html: String, colors: LunaColors) {
             }
         },
     )
+    if (failedImages.isNotEmpty()) FailedImages(failedImages.toMap())
+    }
+}
+
+@Composable
+private fun FailedImages(failures: Map<String, String>) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            "${failures.size} ${if (failures.size == 1) "Bild konnte" else "Bilder konnten"} nicht geladen werden" +
+                if (open) "" else " · Details",
+            style = LunaType.footnote,
+            color = Luna.colors.secondaryLabel,
+            modifier = Modifier.pressFade { open = !open },
+        )
+        if (open) {
+            failures.forEach { (url, reason) ->
+                val where = Uri.parse(url).let { it.host ?: it.scheme ?: url }
+                Text(
+                    "$where: $reason",
+                    style = LunaType.caption,
+                    color = Luna.colors.tertiaryLabel,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
 }
 
 private fun formatSize(bytes: Int): String = when {

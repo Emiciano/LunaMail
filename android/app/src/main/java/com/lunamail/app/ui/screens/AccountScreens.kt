@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.screens
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,8 +64,6 @@ import com.lunamail.app.ui.components.rememberCollapsed
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.ui.platform.LocalContext
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
@@ -135,7 +134,7 @@ fun ProviderPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit, onScanned
                 GroupedSection(footer = "Zum Beispiel den IMAP-QR-Code aus Hypnotic One oder deinem Hosting-Panel.") {
                     CellRow(
                         title = if (loading) "Einstellungen werden geladen …" else "QR-Code scannen",
-                        icon = Icons.Outlined.QrCodeScanner,
+                        icon = LunaIcons.ScanQr,
                         showDivider = false,
                         onClick = { if (!loading) scan() },
                     )
