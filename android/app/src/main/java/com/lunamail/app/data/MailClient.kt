@@ -24,12 +24,15 @@ import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeMessage
 import javax.mail.internet.MimeUtility
 
+class ServerCheckException(val server: String, cause: Throwable) : Exception(cause.message, cause)
+
 /**
  * IMAP/SMTP-Zugriff für ein Konto. Alle Aufrufe laufen nacheinander über eine
  * gemeinsame IMAP-Verbindung, die bei Bedarf neu aufgebaut wird.
  */
 class MailClient(private val account: Account, private val password: String) {
     private val mutex = Mutex()
+    private val socketFactory = MultiAddressSocketFactory()
     private var store: IMAPStore? = null
 
     private fun imapSession(): Session {
@@ -51,6 +54,8 @@ class MailClient(private val account: Account, private val password: String) {
                 put("mail.$protocol.ssl.checkserveridentity", "true")
             }
             put("mail.mime.address.strict", "false")
+            put("mail.$protocol.socketFactory", socketFactory)
+            put("mail.$protocol.socketFactory.fallback", "false")
         }
         return Session.getInstance(props)
     }
@@ -63,6 +68,8 @@ class MailClient(private val account: Account, private val password: String) {
             put("mail.smtp.connectiontimeout", "15000")
             put("mail.smtp.timeout", "30000")
             put("mail.smtp.writetimeout", "30000")
+            put("mail.smtp.socketFactory", socketFactory)
+            put("mail.smtp.socketFactory.fallback", "false")
             when (account.smtpSecurity) {
                 Security.SSL -> {
                     put("mail.smtp.ssl.enable", "true")
@@ -115,12 +122,21 @@ class MailClient(private val account: Account, private val password: String) {
         }
     }
 
+    /** Prüft Posteingangs- und Postausgangsserver; Fehler nennen den betroffenen Server. */
     suspend fun test() {
-        withStore { it.defaultFolder.list("%") }
-        withContext(Dispatchers.IO) {
-            val transport = smtpSession().getTransport("smtp")
-            transport.connect(account.smtpHost, account.smtpPort, account.username, password)
-            transport.close()
+        try {
+            withStore { it.defaultFolder.list("%") }
+        } catch (e: Exception) {
+            throw ServerCheckException("Posteingang (${account.imapHost}:${account.imapPort})", e)
+        }
+        try {
+            withContext(Dispatchers.IO) {
+                val transport = smtpSession().getTransport("smtp")
+                transport.connect(account.smtpHost, account.smtpPort, account.username, password)
+                transport.close()
+            }
+        } catch (e: Exception) {
+            throw ServerCheckException("Postausgang (${account.smtpHost}:${account.smtpPort})", e)
         }
     }
 

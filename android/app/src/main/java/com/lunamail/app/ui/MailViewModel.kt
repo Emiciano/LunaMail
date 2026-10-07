@@ -356,12 +356,14 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         const val UNDO_WINDOW_MS = 4_500L
 
         fun friendlyError(e: Throwable): String {
+            if (e is com.lunamail.app.data.ServerCheckException) return "${e.server}: ${friendlyError(e.cause ?: e)}"
             val cause = generateSequence(e) { (it as? MessagingException)?.nextException ?: it.cause }.take(10).toList()
             return when {
                 cause.any { it is AuthenticationFailedException } ->
                     "Anmeldung fehlgeschlagen. Bitte Benutzername und Passwort prüfen."
                 cause.any { it is UnknownHostException } -> "Server nicht gefunden. Bitte die Internetverbindung prüfen."
-                cause.any { it is ConnectException || it is SocketTimeoutException } -> "Keine Verbindung zum Mailserver."
+                cause.any { it is ConnectException || it is SocketTimeoutException } ->
+                    "Keine Verbindung zum Mailserver. Bitte Servername und Port prüfen."
                 cause.any { it is javax.net.ssl.SSLException } -> "Sichere Verbindung zum Server fehlgeschlagen."
                 else -> e.message?.takeIf { it.isNotBlank() } ?: "Unbekannter Fehler"
             }

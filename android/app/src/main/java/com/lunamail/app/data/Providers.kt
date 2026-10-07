@@ -68,6 +68,15 @@ object Providers {
             smtpSecurity = Security.SSL,
         ),
         MailProvider(
+            id = "hypnotic",
+            name = "Hypnotic One",
+            imapHost = "hypnotic.one",
+            smtpHost = "hypnotic.one",
+            smtpPort = 465,
+            smtpSecurity = Security.SSL,
+            hint = "Benutzername ist deine vollständige E-Mail-Adresse.",
+        ),
+        MailProvider(
             id = "yahoo",
             name = "Yahoo!",
             imapHost = "imap.mail.yahoo.com",
