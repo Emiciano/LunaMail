@@ -395,6 +395,8 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
 fun SettingsScreen(vm: MailViewModel, onBack: () -> Unit, onAddAccount: () -> Unit) {
     val accounts by vm.accounts.collectAsStateWithLifecycle()
     var removing by remember { mutableStateOf<Account?>(null) }
+    val notifications by vm.notifications.collectAsStateWithLifecycle()
+    val swipeArchives by vm.swipeArchives.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val background = Luna.colors.groupedBackground
 
@@ -413,6 +415,12 @@ fun SettingsScreen(vm: MailViewModel, onBack: () -> Unit, onAddAccount: () -> Un
                         CellRow(title = account.description, value = account.email, showChevron = false) { removing = account }
                     }
                     CellRow("Account hinzufügen", titleColor = Luna.colors.accent, showDivider = false, showChevron = false, onClick = onAddAccount)
+                }
+            }
+            item {
+                GroupedSection(header = "E-Mails") {
+                    ToggleRow("Mitteilungen bei neuen E-Mails", notifications) { vm.setNotifications(it) }
+                    ToggleRow("Wischen nach links archiviert", swipeArchives, showDivider = false) { vm.setSwipeArchives(it) }
                 }
             }
             item {
@@ -436,5 +444,29 @@ fun SettingsScreen(vm: MailViewModel, onBack: () -> Unit, onAddAccount: () -> Un
             },
             dismissButton = { TextButton(onClick = { removing = null }) { Text("Abbrechen") } },
         )
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, checked: Boolean, showDivider: Boolean = true, onChange: (Boolean) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 46.dp).padding(start = 16.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, style = LunaType.body, color = Luna.colors.label, modifier = Modifier.weight(1f))
+            Switch(
+                checked = checked,
+                onCheckedChange = onChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = androidx.compose.ui.graphics.Color.White,
+                    checkedTrackColor = Luna.colors.green,
+                    checkedBorderColor = Luna.colors.green,
+                ),
+            )
+        }
+        if (showDivider) {
+            HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
+        }
     }
 }

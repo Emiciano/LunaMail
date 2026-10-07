@@ -7,6 +7,14 @@ import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.MimeTypeMap
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,36 +33,41 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
-import com.lunamail.app.data.MailboxRole
+import com.lunamail.app.data.AttachmentInfo
+import com.lunamail.app.data.BoxRef
 import com.lunamail.app.data.MessageBody
 import com.lunamail.app.data.MessageSummary
 import com.lunamail.app.ui.MailViewModel
@@ -62,28 +75,34 @@ import com.lunamail.app.ui.components.Avatar
 import com.lunamail.app.ui.components.BackButton
 import com.lunamail.app.ui.components.BarIcon
 import com.lunamail.app.ui.components.BottomToolbar
-import com.lunamail.app.ui.components.CellRow
 import com.lunamail.app.ui.components.NavigationBar
 import com.lunamail.app.ui.components.formatLongDate
+import com.lunamail.app.ui.components.pressFade
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaColors
 import com.lunamail.app.ui.theme.LunaType
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageScreen(
     vm: MailViewModel,
     messageKey: String,
+    box: BoxRef?,
     backLabel: String,
     onBack: () -> Unit,
-    onReply: (MessageSummary, MessageBody?) -> Unit,
+    onReply: (MessageSummary, MessageBody?, ReplyKind) -> Unit,
     onCompose: () -> Unit,
 ) {
+    // Mit den Pfeilen oben rechts blättert man wie in Apple Mail durch das Postfach,
+    // ohne die Ansicht zu verlassen.
+    var currentKey by rememberSaveable(messageKey) { mutableStateOf(messageKey) }
+    var direction by remember { mutableStateOf(1) }
+
     // Die Nachricht wird live gelesen, damit Markierungen sofort sichtbar sind. Wird sie
-    // archiviert oder gelöscht, bleibt der letzte Stand sichtbar, bis die Ansicht geschlossen ist.
+    // archiviert oder gelöscht, bleibt der letzte Stand sichtbar, bis die Ansicht wechselt.
     val index by vm.allMessages.collectAsStateWithLifecycle()
-    var lastKnown by remember(messageKey) { mutableStateOf(vm.findMessage(messageKey)) }
-    val live = remember(index, messageKey) { vm.findMessage(messageKey) }
+    var lastKnown by remember(currentKey) { mutableStateOf(vm.findMessage(currentKey)) }
+    val live = remember(index, currentKey) { vm.findMessage(currentKey) }
     if (live != null && live != lastKnown) lastKnown = live
     val message = live ?: lastKnown
     if (message == null) {
@@ -91,15 +110,28 @@ fun MessageScreen(
         return
     }
 
-    var body by remember(messageKey) { mutableStateOf<MessageBody?>(null) }
-    var error by remember(messageKey) { mutableStateOf<String?>(null) }
-    LaunchedEffect(messageKey) {
-        vm.setSeen(message, true)
-        vm.loadBody(message)
-            .onSuccess { body = it }
-            .onFailure { error = it.message }
+    val siblings = remember(index, box) { box?.let { vm.messagesNow(it) }.orEmpty() }
+    val position = siblings.indexOfFirst { it.key == currentKey }
+    val newer = if (position > 0) siblings[position - 1] else null
+    val older = if (position >= 0) siblings.getOrNull(position + 1) else null
+
+    fun show(target: MessageSummary?, down: Boolean) {
+        if (target == null) return
+        direction = if (down) 1 else -1
+        currentKey = target.key
     }
 
+    /** Nach Löschen/Archivieren/Bewegen zur nächsten E-Mail wechseln, wie Apple Mail. */
+    fun afterRemoval() {
+        when {
+            older != null -> show(older, down = true)
+            newer != null -> show(newer, down = false)
+            else -> onBack()
+        }
+    }
+
+    var body by remember(currentKey) { mutableStateOf<MessageBody?>(null) }
+    var showActions by remember { mutableStateOf(false) }
     var showMove by remember { mutableStateOf(false) }
     val background = Luna.colors.background
 
@@ -110,65 +142,27 @@ fun MessageScreen(
             background = background,
             navigation = { BackButton(backLabel, onBack) },
             actions = {
-                BarIcon(Icons.Outlined.MarkEmailUnread, "Als ungelesen markieren") {
-                    vm.setSeen(message, false)
-                    onBack()
+                if (box != null) {
+                    BarIcon(Icons.Rounded.KeyboardArrowUp, "Vorherige E-Mail", enabled = newer != null) { show(newer, down = false) }
+                    BarIcon(Icons.Rounded.KeyboardArrowDown, "Nächste E-Mail", enabled = older != null) { show(older, down = true) }
                 }
             },
         )
 
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Header(message, body)
-            HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
-            Spacer(Modifier.height(12.dp))
-            when {
-                error != null -> Text(
-                    error!!,
-                    style = LunaType.body,
-                    color = Luna.colors.secondaryLabel,
-                    modifier = Modifier.padding(16.dp),
-                )
-                body == null -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Luna.colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                }
-                body!!.html != null -> HtmlBody(body!!.html!!, Luna.colors)
-                else -> SelectionContainer {
-                    Text(
-                        body!!.text.orEmpty().trim(),
-                        style = LunaType.body,
-                        color = Luna.colors.label,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            }
-            body?.attachments?.takeIf { it.isNotEmpty() }?.let { attachments ->
-                Spacer(Modifier.height(16.dp))
-                attachments.forEach { attachment ->
-                    Row(
-                        Modifier
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Luna.colors.fill)
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Rounded.AttachFile, null, tint = Luna.colors.secondaryLabel, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(attachment.fileName, style = LunaType.subhead, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        if (attachment.size > 0) {
-                            Text(formatSize(attachment.size), style = LunaType.footnote, color = Luna.colors.secondaryLabel)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(32.dp))
+        AnimatedContent(
+            targetState = message,
+            contentKey = { it.key },
+            transitionSpec = {
+                (slideInVertically(tween(320)) { it / 4 * direction } + fadeIn(tween(320))) togetherWith
+                    (slideOutVertically(tween(320)) { -it / 4 * direction } + fadeOut(tween(200)))
+            },
+            modifier = Modifier.weight(1f),
+            label = "message",
+        ) { shown ->
+            MessageContent(vm, shown) { loaded -> if (shown.key == currentKey) body = loaded }
         }
 
+        val archives = vm.swipeArchives.collectAsStateWithLifecycle().value && vm.canArchive(message)
         BottomToolbar {
             BarIcon(
                 if (message.flagged) Icons.Rounded.Flag else Icons.Outlined.Flag,
@@ -176,47 +170,130 @@ fun MessageScreen(
                 tint = if (message.flagged) Luna.colors.orange else Luna.colors.accent,
             ) { vm.setFlagged(message, !message.flagged) }
             BarIcon(Icons.Outlined.DriveFileMove, "Bewegen") { showMove = true }
-            BarIcon(Icons.Outlined.Delete, "Löschen") {
-                vm.delete(message)
-                onBack()
+            if (archives) {
+                BarIcon(Icons.Outlined.Archive, "Archivieren") {
+                    vm.archive(message)
+                    afterRemoval()
+                }
+            } else {
+                BarIcon(Icons.Outlined.Delete, "Löschen") {
+                    vm.delete(message)
+                    afterRemoval()
+                }
             }
-            BarIcon(Icons.AutoMirrored.Outlined.Reply, "Antworten") { onReply(message, body) }
+            BarIcon(Icons.AutoMirrored.Outlined.Reply, "Antworten") { showActions = true }
             BarIcon(Icons.Outlined.EditNote, "Neue E-Mail", onClick = onCompose)
         }
     }
 
+    if (showActions) {
+        MessageActionsSheet(
+            vm = vm,
+            message = message,
+            onDismiss = { showActions = false },
+            onReply = { kind -> onReply(message, body, kind) },
+            onMove = { showMove = true },
+            onRemoved = { afterRemoval() },
+        )
+    }
     if (showMove) {
-        val mailboxes by vm.mailboxes.collectAsStateWithLifecycle()
-        ModalBottomSheet(onDismissRequest = { showMove = false }, containerColor = Luna.colors.groupedBackground) {
-            Text(
-                "Diese Nachricht bewegen",
-                style = LunaType.headline,
-                color = Luna.colors.label,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        MoveSheet(vm, message.accountId, message.folder, onDismiss = { showMove = false }) { target ->
+            vm.moveTo(message, target)
+            afterRemoval()
+        }
+    }
+}
+
+@Composable
+private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (MessageBody) -> Unit) {
+    var body by remember(message.key) { mutableStateOf<MessageBody?>(null) }
+    var error by remember(message.key) { mutableStateOf<String?>(null) }
+    LaunchedEffect(message.key) {
+        vm.setSeen(message, true)
+        vm.loadBody(message)
+            .onSuccess { body = it; onBody(it) }
+            .onFailure { error = it.message }
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Header(message, body)
+        HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
+        Spacer(Modifier.height(12.dp))
+        when {
+            error != null -> Text(
+                error!!,
+                style = LunaType.body,
+                color = Luna.colors.secondaryLabel,
+                modifier = Modifier.padding(16.dp),
             )
-            val targets = mailboxes[message.accountId].orEmpty()
-                .filter { it.fullName != message.folder && it.role != MailboxRole.DRAFTS }
-            Column(
-                Modifier
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Luna.colors.cell)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                targets.forEachIndexed { index, target ->
-                    CellRow(
-                        title = target.displayName,
-                        icon = target.role.icon(),
-                        showChevron = false,
-                        showDivider = index < targets.lastIndex,
-                    ) {
-                        showMove = false
-                        vm.moveTo(message, target)
-                        onBack()
-                    }
+            body == null -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Luna.colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+            }
+            body!!.html != null -> HtmlBody(body!!.html!!, Luna.colors)
+            else -> SelectionContainer {
+                Text(
+                    body!!.text.orEmpty().trim(),
+                    style = LunaType.body,
+                    color = Luna.colors.label,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+        body?.attachments?.takeIf { it.isNotEmpty() }?.let { attachments ->
+            Spacer(Modifier.height(16.dp))
+            attachments.forEach { attachment -> AttachmentRow(vm, message, attachment) }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** Antippen lädt den Anhang und öffnet ihn mit einer passenden App. */
+@Composable
+private fun AttachmentRow(vm: MailViewModel, message: MessageSummary, attachment: AttachmentInfo) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var loading by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf<String?>(null) }
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Luna.colors.fill)
+            .pressFade(enabled = !loading) {
+                loading = true
+                failed = null
+                scope.launch {
+                    vm.downloadAttachment(message, attachment)
+                        .onSuccess { file ->
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                            val mime = attachment.mimeType.substringBefore(';').trim().lowercase()
+                                .takeIf { it.contains('/') && it != "application/octet-stream" }
+                                ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+                                ?: "*/*"
+                            val intent = Intent(Intent.ACTION_VIEW)
+                                .setDataAndType(uri, mime)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            runCatching { context.startActivity(Intent.createChooser(intent, attachment.fileName)) }
+                                .onFailure { failed = "Keine App zum Öffnen gefunden" }
+                        }
+                        .onFailure { failed = it.message }
+                    loading = false
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.AttachFile, null, tint = Luna.colors.accent, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(attachment.fileName, style = LunaType.subhead, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            failed?.let { Text(it, style = LunaType.caption, color = Luna.colors.red, maxLines = 2) }
+        }
+        if (loading) {
+            CircularProgressIndicator(color = Luna.colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+        } else if (attachment.size > 0) {
+            Text(formatSize(attachment.size), style = LunaType.footnote, color = Luna.colors.secondaryLabel)
         }
     }
 }

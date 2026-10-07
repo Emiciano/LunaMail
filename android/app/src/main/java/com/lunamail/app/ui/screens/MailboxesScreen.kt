@@ -19,7 +19,9 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.MoveToInbox
 import androidx.compose.material.icons.outlined.Report
@@ -81,6 +83,7 @@ fun MailboxesScreen(
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
     // Die ungelesen-Zähler hängen von den geladenen Nachrichten ab.
     val unified by vm.messages(BoxRef.UnifiedInbox).collectAsStateWithLifecycle(emptyList())
+    val flagged by vm.messages(BoxRef.Flagged).collectAsStateWithLifecycle(emptyList())
     val listState = rememberLazyListState()
     val collapsed = rememberCollapsed(listState)
     val background = Luna.colors.groupedBackground
@@ -118,16 +121,30 @@ fun MailboxesScreen(
                                 onClick = { onOpen(BoxRef.UnifiedInbox) },
                             )
                         }
-                        accounts.forEachIndexed { index, account ->
+                        accounts.forEach { account ->
                             val inbox = BoxRef(account.id, "INBOX")
                             CellRow(
                                 title = if (accounts.size > 1) account.description else "Eingang",
                                 icon = Icons.Outlined.Inbox,
                                 value = vm.unreadCount(inbox).takeIf { it > 0 }?.toString(),
-                                showDivider = index < accounts.lastIndex,
                                 onClick = { onOpen(inbox) },
                             )
                         }
+                        // Intelligente Postfächer wie in Apple Mail.
+                        CellRow(
+                            title = "Markiert",
+                            icon = Icons.Outlined.Flag,
+                            iconTint = Luna.colors.orange,
+                            value = flagged.size.takeIf { it > 0 }?.toString(),
+                            onClick = { onOpen(BoxRef.Flagged) },
+                        )
+                        CellRow(
+                            title = "Ungelesen",
+                            icon = Icons.Outlined.MarkEmailUnread,
+                            value = unified.count { !it.seen }.takeIf { it > 0 }?.toString(),
+                            showDivider = false,
+                            onClick = { onOpen(BoxRef.Unread) },
+                        )
                     }
                 }
 

@@ -18,6 +18,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handle(intent)
+        NewMailWorker.schedule(
+            this,
+            getSharedPreferences("settings", MODE_PRIVATE).getBoolean(com.lunamail.app.ui.MailViewModel.KEY_NOTIFICATIONS, true),
+        )
         setContent {
             LunaMailTheme {
                 LunaMailApp(mailtoRequests = mailto, onMailtoHandled = { mailto.value = null })
