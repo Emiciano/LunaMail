@@ -1,7 +1,14 @@
 package com.lunamail.app.ui.components
 
 import com.lunamail.app.ui.icons.LunaIcons
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -40,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -60,9 +69,10 @@ import java.util.Locale
 fun Modifier.pressFade(enabled: Boolean = true, onClick: () -> Unit): Modifier {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val alpha by animateFloatAsState(if (pressed) 0.3f else 1f, tween(if (pressed) 0 else 220), label = "pressFade")
+    val alpha = animateFloatAsState(if (pressed) 0.3f else 1f, tween(if (pressed) 0 else 220), label = "pressFade")
+    // Der Wert wird erst in der Zeichenphase gelesen, so löst das Ausblenden keine Recomposition aus.
     return this
-        .alpha(if (enabled) alpha else 0.35f)
+        .graphicsLayer { this.alpha = if (enabled) alpha.value else 0.35f }
         .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
 }
 
@@ -71,13 +81,13 @@ fun Modifier.pressFade(enabled: Boolean = true, onClick: () -> Unit): Modifier {
 fun Modifier.cellPress(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val background by animateColorAsState(
+    val background = animateColorAsState(
         if (pressed) Luna.colors.cellPressed else Color.Transparent,
         tween(if (pressed) 0 else 300),
         label = "cellPress",
     )
     return this
-        .background(background)
+        .drawBehind { drawRect(background.value) }
         .combinedClickable(
             interactionSource = interaction,
             indication = null,
@@ -290,9 +300,23 @@ fun CellRow(
                 Spacer(Modifier.width(14.dp))
             }
             Text(title, style = LunaType.body, color = titleColor, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (value != null) {
-                Text(value, style = LunaType.body, color = Luna.colors.secondaryLabel, maxLines = 1)
-                Spacer(Modifier.width(6.dp))
+            // Zähler rollen beim Ändern weich nach oben bzw. unten.
+            AnimatedContent(
+                targetState = value,
+                transitionSpec = {
+                    val up = (targetState?.toIntOrNull() ?: 0) > (initialState?.toIntOrNull() ?: 0)
+                    (slideInVertically(tween(220)) { if (up) it else -it } + fadeIn(tween(220))) togetherWith
+                        (slideOutVertically(tween(220)) { if (up) -it else it } + fadeOut(tween(160))) using
+                        SizeTransform(clip = true)
+                },
+                label = "cellValue",
+            ) { shown ->
+                if (shown != null) {
+                    Row {
+                        Text(shown, style = LunaType.body, color = Luna.colors.secondaryLabel, maxLines = 1)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                }
             }
             if (showChevron) {
                 Icon(
@@ -316,11 +340,14 @@ fun CellRow(
 /** Runder Kontakt-Avatar mit Initialen, wie in der iOS-Kontaktdarstellung. */
 @Composable
 fun Avatar(name: String, size: Dp = 40.dp) {
-    val initials = name.split(' ', '.', '_', '-')
-        .filter { it.isNotBlank() && it.first().isLetter() }
-        .take(2)
-        .joinToString("") { it.first().uppercase() }
-        .ifEmpty { name.firstOrNull()?.uppercase() ?: "?" }
+    val initials = remember(name) {
+        name.split(' ', '.', '_', '-')
+            .filter { it.isNotBlank() && it.first().isLetter() }
+            .take(2)
+            .joinToString("") { it.first().uppercase() }
+            .ifEmpty { name.firstOrNull()?.uppercase() ?: "?" }
+    }
+    val style = remember(size) { LunaType.headline.copy(fontSize = (size.value * 0.4f).sp) }
     Box(
         modifier = Modifier
             .size(size)
@@ -331,15 +358,22 @@ fun Avatar(name: String, size: Dp = 40.dp) {
         Text(
             initials,
             color = Color.White,
-            style = LunaType.headline.copy(fontSize = (size.value * 0.4f).sp),
+            style = style,
         )
     }
 }
 
-private val timeFormat get() = SimpleDateFormat("HH:mm", Locale.GERMANY)
-private val weekdayFormat get() = SimpleDateFormat("EEEE", Locale.GERMANY)
-private val dateFormat get() = SimpleDateFormat("dd.MM.yy", Locale.GERMANY)
-private val longFormat get() = SimpleDateFormat("d. MMMM yyyy 'um' HH:mm", Locale.GERMANY)
+// Formatierer einmal pro Thread anlegen statt für jede Zeile neu (SimpleDateFormat ist teuer
+// und nicht threadsicher).
+private fun formatter(pattern: String) = ThreadLocal.withInitial { SimpleDateFormat(pattern, Locale.GERMANY) }
+private val timeFormatter = formatter("HH:mm")
+private val weekdayFormatter = formatter("EEEE")
+private val dateFormatter = formatter("dd.MM.yy")
+private val longFormatter = formatter("d. MMMM yyyy 'um' HH:mm")
+private val timeFormat get() = timeFormatter.get()!!
+private val weekdayFormat get() = weekdayFormatter.get()!!
+private val dateFormat get() = dateFormatter.get()!!
+private val longFormat get() = longFormatter.get()!!
 
 /** „14:32“, „Gestern“, „Montag“ oder „03.10.26“ – wie in der Mail-Liste von Apple Mail. */
 fun formatListDate(timestamp: Long, now: Long = System.currentTimeMillis()): String {

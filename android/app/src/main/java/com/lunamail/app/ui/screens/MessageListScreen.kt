@@ -5,7 +5,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -85,7 +89,7 @@ fun MessageListScreen(
         vm.loadCached(box)
         vm.refresh(box)
     }
-    val messages by vm.messages(box).collectAsStateWithLifecycle(emptyList())
+    val messages by vm.messages(box).collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val loadingMore by vm.loadingMore.collectAsStateWithLifecycle()
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
@@ -328,6 +332,9 @@ fun MessageListScreen(
 }
 
 
+private val SubjectRead = LunaType.subhead.copy(fontWeight = FontWeight.Normal)
+private val SubjectUnread = LunaType.subhead.copy(fontWeight = FontWeight.Medium)
+
 @Composable
 fun MessageRow(
     message: MessageSummary,
@@ -364,7 +371,12 @@ fun MessageRow(
         }
         Row(Modifier.weight(1f).padding(top = 10.dp, end = 12.dp)) {
             Box(Modifier.width(22.dp).padding(top = 16.dp), contentAlignment = Alignment.TopCenter) {
-                if (!message.seen) {
+                // Der Ungelesen-Punkt ploppt auf bzw. schrumpft weg, statt hart zu wechseln.
+                AnimatedVisibility(
+                    visible = !message.seen,
+                    enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                    exit = scaleOut(tween(180)) + fadeOut(tween(180)),
+                ) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(Luna.colors.accent))
                 }
             }
@@ -384,11 +396,18 @@ fun MessageRow(
                         Icon(LunaIcons.Paperclip, null, tint = Luna.colors.secondaryLabel, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))
                     }
-                    if (message.flagged) {
-                        Icon(LunaIcons.FlagFilled, null, tint = Luna.colors.orange, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(4.dp))
+                    AnimatedVisibility(
+                        visible = message.flagged,
+                        enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                        exit = scaleOut(tween(180)) + fadeOut(tween(180)),
+                    ) {
+                        Row {
+                            Icon(LunaIcons.FlagFilled, null, tint = Luna.colors.orange, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
                     }
-                    Text(formatListDate(message.date), style = LunaType.subhead, color = Luna.colors.secondaryLabel)
+                    val date = remember(message.date) { formatListDate(message.date) }
+                    Text(date, style = LunaType.subhead, color = Luna.colors.secondaryLabel)
                     Icon(
                         LunaIcons.ChevronRight,
                         null,
@@ -398,7 +417,7 @@ fun MessageRow(
                 }
                 Text(
                     message.subject.ifBlank { "(Kein Betreff)" },
-                    style = LunaType.subhead.copy(fontWeight = if (message.seen) FontWeight.Normal else FontWeight.Medium),
+                    style = if (message.seen) SubjectRead else SubjectUnread,
                     color = Luna.colors.label,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
