@@ -1,6 +1,11 @@
 package com.lunamail.app.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -29,10 +34,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -56,6 +64,7 @@ import com.lunamail.app.ui.screens.ProviderPickerScreen
 import com.lunamail.app.ui.screens.SettingsScreen
 import com.lunamail.app.ui.theme.Luna
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /** Kurve der iOS-Push-Animation (UINavigationController). */
 private val IosEasing = CubicBezierEasing(0.2f, 0.9f, 0.25f, 1f)
@@ -106,6 +115,19 @@ fun LunaMailApp(mailtoRequests: StateFlow<ComposeRequest?>, onMailtoHandled: () 
     val snackbar = remember { SnackbarHostState() }
     var compose by remember { mutableStateOf(ComposeRequest()) }
     var scanned by remember { mutableStateOf<AccountConfig?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // Ab Android 13 braucht es die Erlaubnis für Mitteilungen über neue E-Mails.
+    val accounts by vm.accounts.collectAsStateWithLifecycle()
+    val notifyPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val context = LocalContext.current
+    LaunchedEffect(accounts.isNotEmpty()) {
+        if (accounts.isNotEmpty() && Build.VERSION.SDK_INT >= 33 && vm.notifications.value &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LifecycleStartEffect(Unit) {
         vm.refreshIfStale()
@@ -159,17 +181,32 @@ fun LunaMailApp(mailtoRequests: StateFlow<ComposeRequest?>, onMailtoHandled: () 
                     vm = vm,
                     box = box,
                     onBack = { nav.back(entry) },
-                    onOpen = { message -> nav.navigate("message/${enc(message.key)}/${enc(vm.title(box))}") },
+                    onOpen = { message ->
+                        nav.navigate("message/${enc(message.key)}/${enc(vm.title(box))}/${enc(box.accountId)}/${enc(box.folder)}")
+                    },
                     onCompose = { openCompose(ComposeRequest(accountId = box.accountId.takeUnless { box.isUnified })) },
+                    onReply = { message, kind ->
+                        // Aus der Liste heraus ist der Text evtl. noch nicht geladen; fürs Zitat nachladen.
+                        scope.launch {
+                            val body = vm.loadBody(message).getOrNull()
+                            openCompose(ComposeRequest.create(kind, message, body, vm.account(message.accountId)?.email))
+                        }
+                    },
                 )
             }
-            screen("message/{key}/{back}") { entry ->
+            screen("message/{key}/{back}/{account}/{folder}") { entry ->
                 MessageScreen(
                     vm = vm,
                     messageKey = entry.arguments?.getString("key").orEmpty(),
+                    box = BoxRef(
+                        entry.arguments?.getString("account").orEmpty(),
+                        entry.arguments?.getString("folder").orEmpty(),
+                    ),
                     backLabel = entry.arguments?.getString("back").orEmpty(),
                     onBack = { nav.back(entry) },
-                    onReply = { message, body -> openCompose(ComposeRequest.reply(message, body)) },
+                    onReply = { message, body, kind ->
+                        openCompose(ComposeRequest.create(kind, message, body, vm.account(message.accountId)?.email))
+                    },
                     onCompose = { openCompose() },
                 )
             }

@@ -44,11 +44,14 @@ data class Mailbox(
 @Serializable
 data class BoxRef(val accountId: String, val folder: String) {
     val isUnified get() = accountId == ALL
+    val isSmart get() = isUnified && folder != "INBOX"
     val key get() = "$accountId|$folder"
 
     companion object {
         const val ALL = "*"
         val UnifiedInbox = BoxRef(ALL, "INBOX")
+        val Flagged = BoxRef(ALL, "FLAGGED")
+        val Unread = BoxRef(ALL, "UNREAD")
     }
 }
 
@@ -75,7 +78,7 @@ data class MessageSummary(
 }
 
 @Serializable
-data class AttachmentInfo(val fileName: String, val mimeType: String, val size: Int)
+data class AttachmentInfo(val fileName: String, val mimeType: String, val size: Int, val index: Int = 0)
 
 @Serializable
 data class MessageBody(

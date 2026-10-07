@@ -161,11 +161,12 @@ class MailClient(private val account: Account, private val password: String) {
             }
     }
 
-    suspend fun fetchMessages(folderName: String, limit: Int = 80): List<MessageSummary> = withStore { store ->
+    /** Lädt die neuesten [limit] Nachrichten, wobei die neuesten [skip] übersprungen werden. */
+    suspend fun fetchMessages(folderName: String, limit: Int = PAGE_SIZE, skip: Int = 0): List<MessageSummary> = withStore { store ->
         store.withFolder(folderName, Folder.READ_ONLY) { folder ->
-            val count = folder.messageCount
-            if (count <= 0) return@withFolder emptyList()
-            val messages = folder.getMessages(maxOf(1, count - limit + 1), count)
+            val end = folder.messageCount - skip
+            if (end <= 0) return@withFolder emptyList()
+            val messages = folder.getMessages(maxOf(1, end - limit + 1), end)
             val profile = FetchProfile().apply {
                 add(FetchProfile.Item.ENVELOPE)
                 add(FetchProfile.Item.FLAGS)
@@ -264,21 +265,41 @@ class MailClient(private val account: Account, private val password: String) {
         Unit
     }
 
+    private fun buildMessage(session: Session, draft: Draft): MimeMessage = MimeMessage(session).apply {
+        setFrom(InternetAddress(account.email, account.displayName, "UTF-8"))
+        if (draft.to.isNotBlank()) setRecipients(Message.RecipientType.TO, InternetAddress.parse(draft.to, false))
+        if (draft.cc.isNotBlank()) setRecipients(Message.RecipientType.CC, InternetAddress.parse(draft.cc, false))
+        if (draft.bcc.isNotBlank()) setRecipients(Message.RecipientType.BCC, InternetAddress.parse(draft.bcc, false))
+        setSubject(draft.subject, "UTF-8")
+        setText(draft.body, "UTF-8")
+        sentDate = Date()
+        draft.inReplyTo?.takeIf { it.isNotBlank() }?.let { setHeader("In-Reply-To", it) }
+        draft.references?.takeIf { it.isNotBlank() }?.let { setHeader("References", it) }
+        setHeader("X-Mailer", "LunaMail for Android")
+        saveChanges()
+    }
+
+    /** Legt einen Entwurf im Entwürfe-Ordner ab. */
+    suspend fun saveDraft(draft: Draft, draftsFolder: String) = withStore { store ->
+        val message = buildMessage(smtpSession(), draft)
+        message.setFlag(Flags.Flag.DRAFT, true)
+        message.setFlag(Flags.Flag.SEEN, true)
+        store.getFolder(draftsFolder).appendMessages(arrayOf(message))
+    }
+
+    /** Lädt den Inhalt des [index]-ten Anhangs (Reihenfolge wie in [MessageBody.attachments]). */
+    suspend fun fetchAttachment(folderName: String, uid: Long, index: Int): ByteArray = withStore { store ->
+        store.withFolder(folderName, Folder.READ_ONLY) { folder ->
+            val message = folder.getMessageByUID(uid) ?: throw MessagingException("Nachricht nicht mehr vorhanden")
+            val collector = BodyCollector(captureIndex = index)
+            collector.walk(message)
+            collector.captured ?: throw MessagingException("Anhang nicht gefunden")
+        }
+    }
+
     suspend fun send(draft: Draft, sentFolder: String?) {
         val session = smtpSession()
-        val message = MimeMessage(session).apply {
-            setFrom(InternetAddress(account.email, account.displayName, "UTF-8"))
-            setRecipients(Message.RecipientType.TO, InternetAddress.parse(draft.to, false))
-            if (draft.cc.isNotBlank()) setRecipients(Message.RecipientType.CC, InternetAddress.parse(draft.cc, false))
-            if (draft.bcc.isNotBlank()) setRecipients(Message.RecipientType.BCC, InternetAddress.parse(draft.bcc, false))
-            setSubject(draft.subject, "UTF-8")
-            setText(draft.body, "UTF-8")
-            sentDate = Date()
-            draft.inReplyTo?.takeIf { it.isNotBlank() }?.let { setHeader("In-Reply-To", it) }
-            draft.references?.takeIf { it.isNotBlank() }?.let { setHeader("References", it) }
-            setHeader("X-Mailer", "LunaMail for Android")
-            saveChanges()
-        }
+        val message = buildMessage(session, draft)
         withContext(Dispatchers.IO) {
             val transport = session.getTransport("smtp")
             transport.connect(account.smtpHost, account.smtpPort, account.username, password)
@@ -303,23 +324,30 @@ class MailClient(private val account: Account, private val password: String) {
         store = null
     }
 
-    private class BodyCollector {
+    private class BodyCollector(private val captureIndex: Int = -1) {
         var html: String? = null
         var text: String? = null
         val attachments = mutableListOf<AttachmentInfo>()
         val inline = mutableMapOf<String, String>()
+        var captured: ByteArray? = null
+
+        private fun addAttachment(part: Part, name: String) {
+            val index = attachments.size
+            attachments += AttachmentInfo(name, part.contentType.substringBefore(';').lowercase(), part.size, index)
+            if (index == captureIndex) captured = part.inputStream.use { it.readBytes() }
+        }
 
         fun walk(part: Part) {
             val disposition = runCatching { part.disposition }.getOrNull()
             val fileName = runCatching { part.fileName?.let { MimeUtility.decodeText(it) } }.getOrNull()
             when {
                 part.isMimeType("multipart/*") -> {
-                    val multipart = part.content as Multipart
+                    val multipart = part.content as? Multipart ?: return
                     for (i in 0 until multipart.count) walk(multipart.getBodyPart(i))
                 }
-                part.isMimeType("message/rfc822") && disposition == null -> walk(part.content as Part)
+                part.isMimeType("message/rfc822") && disposition == null -> (part.content as? Part)?.let(::walk)
                 disposition.equals(Part.ATTACHMENT, true) || (fileName != null && !part.isMimeType("image/*")) -> {
-                    attachments += AttachmentInfo(fileName ?: "Anhang", part.contentType.substringBefore(';').lowercase(), part.size)
+                    addAttachment(part, fileName ?: "Anhang")
                 }
                 part.isMimeType("image/*") -> {
                     val cid = part.getHeader("Content-ID")?.firstOrNull()?.trim('<', '>', ' ')
@@ -328,16 +356,18 @@ class MailClient(private val account: Account, private val password: String) {
                         val type = part.contentType.substringBefore(';').lowercase()
                         inline[cid] = "data:$type;base64," + Base64.getEncoder().encodeToString(bytes)
                     } else {
-                        attachments += AttachmentInfo(fileName ?: "Bild", part.contentType.substringBefore(';').lowercase(), part.size)
+                        addAttachment(part, fileName ?: "Bild")
                     }
                 }
-                part.isMimeType("text/html") && html == null -> html = part.content as? String
-                part.isMimeType("text/plain") && text == null -> text = part.content as? String
+                part.isMimeType("text/html") && html == null -> html = textContent(part)
+                part.isMimeType("text/plain") && text == null -> text = textContent(part)
             }
         }
     }
 
     companion object {
+        const val PAGE_SIZE = 60
+
         fun inferRole(fullName: String, attributes: List<String>): MailboxRole {
             val attrs = attributes.map { it.lowercase() }
             val name = fullName.lowercase().substringAfterLast('/').substringAfterLast('.')
@@ -392,11 +422,26 @@ class MailClient(private val account: Account, private val password: String) {
             .replace("&zwnj;", "")
             .replace(Regex("&#?\\w+;"), " ")
 
+        /**
+         * Liest einen Textteil als String. Fehlt ein passender Content-Handler oder ist der
+         * Zeichensatz unbekannt, liefert JavaMail einen Stream statt eines Strings.
+         */
+        fun textContent(part: Part): String? {
+            val content = runCatching { part.content }.getOrNull()
+            if (content is String) return content
+            val charset = runCatching {
+                javax.mail.internet.ContentType(part.contentType).getParameter("charset")
+                    ?.let { java.nio.charset.Charset.forName(MimeUtility.javaCharset(it)) }
+            }.getOrNull() ?: Charsets.UTF_8
+            val stream = content as? java.io.InputStream ?: runCatching { part.inputStream }.getOrNull() ?: return null
+            return stream.use { String(it.readBytes(), charset) }
+        }
+
         private fun findText(part: Part, mime: String): String? {
             if (runCatching { part.disposition }.getOrNull().equals(Part.ATTACHMENT, true)) return null
-            if (part.isMimeType(mime)) return part.content as? String
+            if (part.isMimeType(mime)) return textContent(part)
             if (part.isMimeType("multipart/*")) {
-                val multipart = part.content as Multipart
+                val multipart = part.content as? Multipart ?: return null
                 for (i in 0 until multipart.count) {
                     findText(multipart.getBodyPart(i), mime)?.let { return it }
                 }
@@ -406,7 +451,7 @@ class MailClient(private val account: Account, private val password: String) {
 
         private fun hasAttachments(part: Part): Boolean {
             if (part.isMimeType("multipart/*")) {
-                val multipart = part.content as Multipart
+                val multipart = part.content as? Multipart ?: return false
                 return (0 until multipart.count).any { hasAttachments(multipart.getBodyPart(it)) }
             }
             return part.disposition.equals(Part.ATTACHMENT, true)

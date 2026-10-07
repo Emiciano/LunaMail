@@ -48,14 +48,13 @@ android {
 
     packaging {
         resources {
+            // Nur doppelte Lizenzdateien weglassen. mailcap, javamail.* und mimetypes.default
+            // braucht JavaMail zur Laufzeit, sonst lassen sich Mailinhalte nicht als Text lesen.
             excludes += setOf(
                 "META-INF/LICENSE.md",
                 "META-INF/NOTICE.md",
                 "META-INF/LICENSE.txt",
-                "META-INF/NOTICE.txt",
-                "META-INF/mailcap",
-                "META-INF/javamail.*",
-                "META-INF/mimetypes.default"
+                "META-INF/NOTICE.txt"
             )
         }
     }
@@ -77,6 +76,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     implementation("androidx.webkit:webkit:1.13.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")

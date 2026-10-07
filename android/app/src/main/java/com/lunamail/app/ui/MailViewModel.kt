@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lunamail.app.data.Account
 import com.lunamail.app.data.AccountStore
+import com.lunamail.app.data.AttachmentInfo
 import com.lunamail.app.data.BoxRef
 import com.lunamail.app.data.Draft
 import com.lunamail.app.data.MailCache
@@ -63,6 +64,26 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     private val _lastSync = MutableStateFlow<Long?>(null)
     val lastSync: StateFlow<Long?> = _lastSync.asStateFlow()
 
+    private val prefs = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+
+    /** Ob „nach links wischen“ archiviert statt in den Papierkorb zu legen. */
+    private val _swipeArchives = MutableStateFlow(prefs.getBoolean(KEY_SWIPE_ARCHIVES, false))
+    val swipeArchives: StateFlow<Boolean> = _swipeArchives.asStateFlow()
+
+    fun setSwipeArchives(value: Boolean) {
+        _swipeArchives.value = value
+        prefs.edit().putBoolean(KEY_SWIPE_ARCHIVES, value).apply()
+    }
+
+    private val _notifications = MutableStateFlow(prefs.getBoolean(KEY_NOTIFICATIONS, true))
+    val notifications: StateFlow<Boolean> = _notifications.asStateFlow()
+
+    fun setNotifications(value: Boolean) {
+        _notifications.value = value
+        prefs.edit().putBoolean(KEY_NOTIFICATIONS, value).apply()
+        com.lunamail.app.NewMailWorker.schedule(getApplication(), value)
+    }
+
     private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<UiEvent> = _events
 
@@ -87,16 +108,28 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     fun mailbox(box: BoxRef): Mailbox? = _mailboxes.value[box.accountId].orEmpty().firstOrNull { it.fullName == box.folder }
 
     fun title(box: BoxRef): String = when {
+        box == BoxRef.Flagged -> "Markiert"
+        box == BoxRef.Unread -> "Ungelesen"
         box.isUnified -> "Alle Eingänge"
         _accounts.value.size > 1 && box.folder.equals("INBOX", true) -> account(box.accountId)?.description ?: "Eingang"
         else -> mailbox(box)?.displayName ?: box.folder.substringAfterLast('/')
     }
 
     fun messages(box: BoxRef): Flow<List<MessageSummary>> = combine(_messages, _accounts) { all, accounts ->
-        if (box.isUnified) {
-            accounts.flatMap { all[BoxRef(it.id, "INBOX").key].orEmpty() }.sortedByDescending { it.date }
-        } else {
-            all[box.key].orEmpty()
+        messagesIn(box, all, accounts)
+    }
+
+    /** Aktueller Inhalt eines Postfachs, z. B. für „Nächste/Vorige E-Mail“ in der Leseansicht. */
+    fun messagesNow(box: BoxRef) = messagesIn(box, _messages.value, _accounts.value)
+
+    private fun messagesIn(box: BoxRef, all: Map<String, List<MessageSummary>>, accounts: List<Account>): List<MessageSummary> {
+        val inboxes = { accounts.flatMap { all[BoxRef(it.id, "INBOX").key].orEmpty() } }
+        return when (box) {
+            BoxRef.UnifiedInbox -> inboxes().sortedByDescending { it.date }
+            BoxRef.Unread -> inboxes().filter { !it.seen }.sortedByDescending { it.date }
+            // „Markiert“ sammelt alle geladenen Postfächer, nicht nur die Eingänge.
+            BoxRef.Flagged -> all.values.flatten().filter { it.flagged }.distinctBy { it.key }.sortedByDescending { it.date }
+            else -> all[box.key].orEmpty()
         }
     }
 
@@ -139,6 +172,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh(box: BoxRef) {
         viewModelScope.launch {
             if (box.isUnified) {
+                // Intelligente Postfächer speisen sich aus den Eingängen.
                 _accounts.value.map { launch { refreshBox(BoxRef(it.id, "INBOX")) } }.forEach { it.join() }
                 _lastSync.value = System.currentTimeMillis()
             } else {
@@ -163,9 +197,13 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _refreshing.update { it + box.key }
         try {
             val previous = _messages.value[box.key] ?: withContext(Dispatchers.IO) { cache.messages(box) }
-            val knownPreviews = previous.associate { it.uid to it.preview }
+            val knownPreviews = previous.associate { it.uid to it.preview?.takeIf { p -> p.isNotBlank() } }
             val fetched = client.fetchMessages(box.folder).map { it.copy(preview = knownPreviews[it.uid]) }
-            setMessages(box, fetched)
+            // Bereits nachgeladene ältere Nachrichten behalten.
+            val oldest = fetched.minOfOrNull { it.uid }
+            val older = if (oldest == null || fetched.size < MailClient.PAGE_SIZE) emptyList()
+                else previous.filter { it.uid < oldest }
+            setMessages(box, fetched + older)
 
             val missing = fetched.filter { it.preview == null }.map { it.uid }
             for (chunk in missing.chunked(20)) {
@@ -177,6 +215,38 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
             report(box.accountId, e)
         } finally {
             _refreshing.update { it - box.key }
+        }
+    }
+
+    private val _loadingMore = MutableStateFlow<Set<String>>(emptySet())
+    val loadingMore: StateFlow<Set<String>> = _loadingMore.asStateFlow()
+    private val exhausted = ConcurrentHashMap.newKeySet<String>()
+
+    fun canLoadMore(box: BoxRef) = !box.isUnified && box.key !in exhausted
+
+    /** Lädt die nächsten älteren Nachrichten, wenn das Ende der Liste erreicht ist. */
+    fun loadMore(box: BoxRef) {
+        if (!canLoadMore(box) || box.key in _loadingMore.value || box.key in _refreshing.value) return
+        val client = client(box.accountId) ?: return
+        _loadingMore.update { it + box.key }
+        viewModelScope.launch {
+            try {
+                val current = _messages.value[box.key].orEmpty()
+                val older = client.fetchMessages(box.folder, skip = current.size)
+                if (older.size < MailClient.PAGE_SIZE) exhausted += box.key
+                val known = current.map { it.uid }.toSet()
+                val added = older.filter { it.uid !in known }
+                setMessages(box, current + added)
+                for (chunk in added.map { it.uid }.chunked(20)) {
+                    val previews = client.fetchPreviews(box.folder, chunk)
+                    val latest = _messages.value[box.key].orEmpty()
+                    setMessages(box, latest.map { m -> previews[m.uid]?.let { m.copy(preview = it) } ?: m })
+                }
+            } catch (e: Exception) {
+                report(box.accountId, e)
+            } finally {
+                _loadingMore.update { it - box.key }
+            }
         }
     }
 
@@ -248,36 +318,61 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     private fun archiveTarget(accountId: String) =
         mailbox(accountId, MailboxRole.ARCHIVE) ?: mailbox(accountId, MailboxRole.ALL)
 
-    fun archive(message: MessageSummary) {
-        val target = archiveTarget(message.accountId)
-        if (target == null || target.fullName == message.folder) {
+    /** Entfernt Nachrichten sofort aus der Liste und führt die Server-Aktion nach der Widerrufen-Frist aus. */
+    private fun removeBatch(messages: List<MessageSummary>, text: String, action: suspend (MailClient, MessageSummary) -> Unit) {
+        if (messages.isEmpty()) return
+        val restores = messages.map { removeLocally(it) }
+        scheduleUndoable(text, { restores.forEach { it() } }) {
+            messages.forEach { message -> client(message.accountId)?.let { action(it, message) } }
+        }
+    }
+
+    private fun countText(count: Int, single: String, plural: String) = if (count == 1) single else "$count $plural"
+
+    fun archive(message: MessageSummary) = archive(listOf(message))
+
+    fun archive(messages: List<MessageSummary>) {
+        val archivable = messages.filter { canArchive(it) }
+        if (archivable.isEmpty()) {
             _events.tryEmit(UiEvent.Info("Für dieses Konto gibt es kein Archiv-Postfach."))
             return
         }
-        val client = client(message.accountId) ?: return
-        val restore = removeLocally(message)
-        scheduleUndoable("Archiviert", restore) { client.move(message.folder, message.uid, target.fullName) }
+        removeBatch(archivable, countText(archivable.size, "Archiviert", "E-Mails archiviert")) { client, m ->
+            client.move(m.folder, m.uid, archiveTarget(m.accountId)!!.fullName)
+        }
     }
 
     fun isInTrash(message: MessageSummary) = mailbox(message.accountId, MailboxRole.TRASH)?.fullName == message.folder
 
-    fun delete(message: MessageSummary) {
-        val client = client(message.accountId) ?: return
-        val trash = mailbox(message.accountId, MailboxRole.TRASH)
-        val restore = removeLocally(message)
-        if (trash != null && trash.fullName != message.folder) {
-            scheduleUndoable("In den Papierkorb gelegt", restore) { client.move(message.folder, message.uid, trash.fullName) }
-        } else {
-            scheduleUndoable("Endgültig gelöscht", restore) { client.deletePermanently(message.folder, message.uid) }
+    fun delete(message: MessageSummary) = delete(listOf(message))
+
+    fun delete(messages: List<MessageSummary>) {
+        val permanent = messages.all { isInTrash(it) || mailbox(it.accountId, MailboxRole.TRASH) == null }
+        val text = if (permanent) countText(messages.size, "Endgültig gelöscht", "E-Mails endgültig gelöscht")
+            else countText(messages.size, "In den Papierkorb gelegt", "E-Mails in den Papierkorb gelegt")
+        removeBatch(messages, text) { client, m ->
+            val trash = mailbox(m.accountId, MailboxRole.TRASH)
+            if (trash != null && trash.fullName != m.folder) client.move(m.folder, m.uid, trash.fullName)
+            else client.deletePermanently(m.folder, m.uid)
         }
     }
 
-    fun moveTo(message: MessageSummary, target: Mailbox) {
-        if (target.fullName == message.folder) return
-        val client = client(message.accountId) ?: return
-        val restore = removeLocally(message)
-        scheduleUndoable("In „${target.displayName}“ bewegt", restore) { client.move(message.folder, message.uid, target.fullName) }
+    fun moveTo(message: MessageSummary, target: Mailbox) = moveTo(listOf(message), target)
+
+    fun moveTo(messages: List<MessageSummary>, target: Mailbox) {
+        val movable = messages.filter { it.accountId == target.accountId && it.folder != target.fullName }
+        removeBatch(movable, "In „${target.displayName}“ bewegt") { client, m -> client.move(m.folder, m.uid, target.fullName) }
     }
+
+    fun setSeen(messages: List<MessageSummary>, seen: Boolean) = messages.forEach { setSeen(it, seen) }
+
+    fun setFlagged(messages: List<MessageSummary>, flagged: Boolean) = messages.forEach { setFlagged(it, flagged) }
+
+    /** Wischen nach links: Papierkorb oder Archiv, wie in den Einstellungen gewählt. */
+    fun swipePrimary(message: MessageSummary) =
+        if (swipeArchives.value && canArchive(message)) archive(message) else delete(message)
+
+    fun swipePrimaryArchives(message: MessageSummary) = swipeArchives.value && canArchive(message)
 
     fun setSeen(message: MessageSummary, seen: Boolean) {
         if (message.seen == seen) return
@@ -305,12 +400,34 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _messages.value.values.asSequence().flatten().firstOrNull { it.key == key }
 
     suspend fun loadBody(message: MessageSummary): Result<MessageBody> = runCatching {
-        withContext(Dispatchers.IO) { cache.body(message) } ?: run {
+        // Leere Einträge stammen aus Versionen, die Mailinhalte nicht lesen konnten.
+        withContext(Dispatchers.IO) { cache.body(message) }?.takeIf { it.html != null || it.text != null } ?: run {
             val client = client(message.accountId) ?: error("Konto nicht gefunden")
             client.fetchBody(message.folder, message.uid).also { body ->
                 withContext(Dispatchers.IO) { cache.saveBody(message, body) }
             }
         }
+    }.recoverCatching { throw IllegalStateException(friendlyError(it)) }
+
+    suspend fun saveDraft(draft: Draft): Result<Unit> = runCatching {
+        val client = client(draft.accountId) ?: error("Konto nicht gefunden")
+        val drafts = mailbox(draft.accountId, MailboxRole.DRAFTS) ?: error("Für dieses Konto gibt es keinen Entwürfe-Ordner.")
+        client.saveDraft(draft, drafts.fullName)
+        _events.tryEmit(UiEvent.Info("Entwurf gesichert"))
+        Unit
+    }.recoverCatching { throw IllegalStateException(friendlyError(it)) }
+
+    /** Lädt einen Anhang in den Cache und liefert die Datei zum Öffnen. */
+    suspend fun downloadAttachment(message: MessageSummary, attachment: AttachmentInfo): Result<File> = runCatching {
+        val dir = File(getApplication<Application>().cacheDir, "attachments/${message.key.hashCode().toUInt()}").apply { mkdirs() }
+        val safeName = attachment.fileName.replace(Regex("[\\/:*?\"<>|]"), "_").ifBlank { "Anhang" }
+        val file = File(dir, "${attachment.index}-$safeName")
+        if (!file.exists() || file.length() == 0L) {
+            val client = client(message.accountId) ?: error("Konto nicht gefunden")
+            val bytes = client.fetchAttachment(message.folder, message.uid, attachment.index)
+            withContext(Dispatchers.IO) { file.writeBytes(bytes) }
+        }
+        file
     }.recoverCatching { throw IllegalStateException(friendlyError(it)) }
 
     suspend fun send(draft: Draft): Result<Unit> = runCatching {
@@ -354,6 +471,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val UNDO_WINDOW_MS = 4_500L
+        const val KEY_SWIPE_ARCHIVES = "swipe_archives"
+        const val KEY_NOTIFICATIONS = "notifications"
 
         fun friendlyError(e: Throwable): String {
             if (e is com.lunamail.app.data.ServerCheckException) return "${e.server}: ${friendlyError(e.cause ?: e)}"
