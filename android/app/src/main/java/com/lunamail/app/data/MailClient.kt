@@ -141,13 +141,15 @@ class MailClient(private val account: Account, private val password: String) {
     }
 
     suspend fun listMailboxes(): List<Mailbox> = withStore { store ->
-        store.defaultFolder.list("*")
+        val flagged = mutableSetOf<String>()
+        val boxes = store.defaultFolder.list("*")
             .filterIsInstance<IMAPFolder>()
             .mapNotNull { folder ->
                 val attributes = runCatching { folder.attributes.toList() }.getOrDefault(emptyList())
                 if (attributes.any { it.equals("\\Noselect", true) || it.equals("\\NonExistent", true) }) return@mapNotNull null
                 if (folder.type and Folder.HOLDS_MESSAGES == 0) return@mapNotNull null
                 val role = inferRole(folder.fullName, attributes)
+                if (attributes.any { it.lowercase() in SPECIAL_USE }) flagged += folder.fullName
                 val unread = runCatching { folder.unreadMessageCount }.getOrDefault(0)
                 val total = runCatching { folder.messageCount }.getOrDefault(0)
                 Mailbox(
@@ -159,6 +161,7 @@ class MailClient(private val account: Account, private val password: String) {
                     total = maxOf(total, 0),
                 )
             }
+        resolveRoleConflicts(boxes, flagged)
     }
 
     /** Lädt die neuesten [limit] Nachrichten, wobei die neuesten [skip] übersprungen werden. */
@@ -458,6 +461,30 @@ class MailClient(private val account: Account, private val password: String) {
                 name in setOf("junk", "spam", "junk e-mail", "spamverdacht", "werbung") -> MailboxRole.JUNK
                 name in setOf("archive", "archiv", "archives") -> MailboxRole.ARCHIVE
                 else -> MailboxRole.OTHER
+            }
+        }
+
+        private val SPECIAL_USE = setOf("\\drafts", "\\sent", "\\trash", "\\junk", "\\archive", "\\all")
+
+        /**
+         * Gibt jede Sonderrolle (Gesendet, Papierkorb …) nur einem Ordner. Hat ein Server zwei
+         * Ordner dafür, etwa „Sent“ und „Gesendet“, gewinnt der vom Server markierte, sonst der
+         * mit mehr Nachrichten; der andere erscheint als normaler Ordner mit seinem echten Namen.
+         */
+        fun resolveRoleConflicts(boxes: List<Mailbox>, serverMarked: Set<String>): List<Mailbox> {
+            val winners = boxes
+                .filter { it.role != MailboxRole.OTHER && it.role != MailboxRole.INBOX }
+                .groupBy { it.role }
+                .mapValues { (_, candidates) ->
+                    candidates.maxWith(compareBy<Mailbox>({ it.fullName in serverMarked }, { it.total }, { -it.fullName.length })).fullName
+                }
+            return boxes.map { box ->
+                val winner = winners[box.role]
+                if (winner == null || winner == box.fullName) box
+                else box.copy(
+                    role = MailboxRole.OTHER,
+                    displayName = box.fullName.substringAfterLast('/').substringAfterLast('.').ifBlank { box.fullName },
+                )
             }
         }
 

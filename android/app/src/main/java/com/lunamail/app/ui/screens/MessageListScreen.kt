@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.screens
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -26,19 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.rounded.Archive
-import androidx.compose.material.icons.rounded.AttachFile
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.FilterList
-import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.MarkEmailRead
-import androidx.compose.material.icons.rounded.MarkEmailUnread
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -208,24 +196,24 @@ fun MessageListScreen(
                         leading = listOf(
                             SwipeAction(
                                 if (message.seen) "Ungelesen" else "Gelesen",
-                                if (message.seen) Icons.Rounded.MarkEmailUnread else Icons.Rounded.MarkEmailRead,
+                                if (message.seen) LunaIcons.MailUnread else LunaIcons.MailOpen,
                                 Luna.colors.blue,
                             ) { vm.setSeen(message, !message.seen) },
                         ),
                         trailing = listOf(
                             if (archives) {
-                                SwipeAction("Archivieren", Icons.Rounded.Archive, Luna.colors.purple) { vm.archive(message) }
+                                SwipeAction("Archivieren", LunaIcons.Archive, Luna.colors.purple) { vm.archive(message) }
                             } else {
-                                SwipeAction(if (vm.isInTrash(message)) "Löschen" else "Papierkorb", Icons.Rounded.Delete, Luna.colors.red) {
+                                SwipeAction(if (vm.isInTrash(message)) "Löschen" else "Papierkorb", LunaIcons.Trash, Luna.colors.red) {
                                     vm.delete(message)
                                 }
                             },
                             SwipeAction(
                                 if (message.flagged) "Entfernen" else "Markieren",
-                                Icons.Rounded.Flag,
+                                LunaIcons.FlagFilled,
                                 Luna.colors.orange,
                             ) { vm.setFlagged(message, !message.flagged) },
-                            SwipeAction("Mehr", Icons.Rounded.MoreHoriz, Luna.colors.gray) { actionsFor = message },
+                            SwipeAction("Mehr", LunaIcons.More, Luna.colors.gray) { actionsFor = message },
                         ),
                         modifier = Modifier.animateItem(),
                     ) {
@@ -293,7 +281,7 @@ fun MessageListScreen(
                 val unread = messages.count { !it.seen }
                 BottomToolbar {
                     BarIcon(
-                        if (unreadOnly) Icons.Rounded.FilterList else Icons.Outlined.FilterList,
+                        if (unreadOnly) LunaIcons.Filter else LunaIcons.Filter,
                         "Nach ungelesen filtern",
                         onClick = { unreadOnly = !unreadOnly },
                     )
@@ -310,7 +298,7 @@ fun MessageListScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    BarIcon(Icons.Outlined.EditNote, "Neue E-Mail", onClick = onCompose)
+                    BarIcon(LunaIcons.Compose, "Neue E-Mail", onClick = onCompose)
                 }
             }
         }
@@ -370,7 +358,7 @@ fun MessageRow(
                         .border(1.5.dp, if (selected) Luna.colors.accent else Luna.colors.tertiaryLabel, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (selected) Icon(Icons.Rounded.Check, null, tint = Luna.colors.onAccent, modifier = Modifier.size(16.dp))
+                    if (selected) Icon(LunaIcons.Check, null, tint = Luna.colors.onAccent, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -393,16 +381,16 @@ fun MessageRow(
                         modifier = Modifier.weight(1f),
                     )
                     if (message.hasAttachments) {
-                        Icon(Icons.Rounded.AttachFile, null, tint = Luna.colors.secondaryLabel, modifier = Modifier.size(15.dp))
+                        Icon(LunaIcons.Paperclip, null, tint = Luna.colors.secondaryLabel, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))
                     }
                     if (message.flagged) {
-                        Icon(Icons.Rounded.Flag, null, tint = Luna.colors.orange, modifier = Modifier.size(15.dp))
+                        Icon(LunaIcons.FlagFilled, null, tint = Luna.colors.orange, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))
                     }
                     Text(formatListDate(message.date), style = LunaType.subhead, color = Luna.colors.secondaryLabel)
                     Icon(
-                        Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        LunaIcons.ChevronRight,
                         null,
                         tint = Luna.colors.tertiaryLabel,
                         modifier = Modifier.size(20.dp),

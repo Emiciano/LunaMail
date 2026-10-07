@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.components
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -18,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -85,7 +84,7 @@ fun AccountDropdown(
                 Spacer(Modifier.width(6.dp))
             }
             Icon(
-                Icons.Rounded.KeyboardArrowDown,
+                LunaIcons.ChevronDown,
                 contentDescription = if (expanded) "Zuklappen" else "Aufklappen",
                 tint = Luna.colors.tertiaryLabel,
                 modifier = Modifier.size(24.dp).rotate(rotation),

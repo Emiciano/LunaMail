@@ -1,5 +1,6 @@
 package com.lunamail.app.ui.screens
 
+import com.lunamail.app.ui.icons.LunaIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,16 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Reply
-import androidx.compose.material.icons.automirrored.outlined.ReplyAll
-import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.DriveFileMove
-import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.MarkEmailRead
-import androidx.compose.material.icons.outlined.MarkEmailUnread
-import androidx.compose.material.icons.outlined.Shortcut
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -81,28 +72,28 @@ fun MessageActionsSheet(
             }
             if (showReplies) {
                 SheetGroup {
-                    CellRow("Antworten", icon = Icons.AutoMirrored.Outlined.Reply, showChevron = false) { onDismiss(); onReply(ReplyKind.Reply) }
-                    CellRow("Allen antworten", icon = Icons.AutoMirrored.Outlined.ReplyAll, showChevron = false) { onDismiss(); onReply(ReplyKind.ReplyAll) }
-                    CellRow("Weiterleiten", icon = Icons.Outlined.Shortcut, showChevron = false, showDivider = false) { onDismiss(); onReply(ReplyKind.Forward) }
+                    CellRow("Antworten", icon = LunaIcons.Reply, showChevron = false) { onDismiss(); onReply(ReplyKind.Reply) }
+                    CellRow("Allen antworten", icon = LunaIcons.ReplyAll, showChevron = false) { onDismiss(); onReply(ReplyKind.ReplyAll) }
+                    CellRow("Weiterleiten", icon = LunaIcons.Forward, showChevron = false, showDivider = false) { onDismiss(); onReply(ReplyKind.Forward) }
                 }
             }
             SheetGroup {
                 CellRow(
                     if (message.flagged) "Markierung entfernen" else "Markieren",
-                    icon = Icons.Outlined.Flag,
+                    icon = LunaIcons.Flag,
                     iconTint = Luna.colors.orange,
                     showChevron = false,
                 ) { onDismiss(); vm.setFlagged(message, !message.flagged) }
                 CellRow(
                     if (message.seen) "Als ungelesen markieren" else "Als gelesen markieren",
-                    icon = if (message.seen) Icons.Outlined.MarkEmailUnread else Icons.Outlined.MarkEmailRead,
+                    icon = if (message.seen) LunaIcons.MailUnread else LunaIcons.MailOpen,
                     showChevron = false,
                 ) { onDismiss(); vm.setSeen(message, !message.seen) }
-                CellRow("E-Mail bewegen …", icon = Icons.Outlined.DriveFileMove, showChevron = false, showDivider = vm.canArchive(message)) {
+                CellRow("E-Mail bewegen …", icon = LunaIcons.Move, showChevron = false, showDivider = vm.canArchive(message)) {
                     onDismiss(); onMove()
                 }
                 if (vm.canArchive(message)) {
-                    CellRow("Archivieren", icon = Icons.Outlined.Archive, iconTint = Luna.colors.purple, showChevron = false, showDivider = false) {
+                    CellRow("Archivieren", icon = LunaIcons.Archive, iconTint = Luna.colors.purple, showChevron = false, showDivider = false) {
                         onDismiss(); vm.archive(message); onRemoved()
                     }
                 }
@@ -110,7 +101,7 @@ fun MessageActionsSheet(
             SheetGroup {
                 CellRow(
                     if (vm.isInTrash(message)) "Endgültig löschen" else "In den Papierkorb",
-                    icon = Icons.Outlined.Delete,
+                    icon = LunaIcons.Trash,
                     iconTint = Luna.colors.red,
                     titleColor = Luna.colors.red,
                     showChevron = false,
