@@ -83,4 +83,7 @@ dependencies {
 
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
+    testImplementation("junit:junit:4.13.2")
 }

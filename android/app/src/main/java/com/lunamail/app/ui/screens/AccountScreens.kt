@@ -63,22 +63,84 @@ import com.lunamail.app.ui.components.rememberCollapsed
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.ui.platform.LocalContext
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.lunamail.app.data.AccountConfig
+import com.lunamail.app.data.AccountConfigException
+import com.lunamail.app.data.AccountConfigParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Anbieterauswahl mit großen Wortmarken, wie beim Hinzufügen eines Accounts in iOS. */
 @Composable
-fun ProviderPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit) {
+fun ProviderPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit, onScanned: (AccountConfig) -> Unit) {
     val background = Luna.colors.groupedBackground
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun scan() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { barcode ->
+                val raw = barcode.rawValue ?: return@addOnSuccessListener
+                loading = true
+                scope.launch {
+                    runCatching { withContext(Dispatchers.IO) { AccountConfigParser.resolve(raw) } }
+                        .onSuccess { config ->
+                            if (config.popOnly) {
+                                error = "Dieser QR-Code richtet ein POP3-Konto ein. LunaMail braucht IMAP – bitte den QR-Code für IMAP scannen."
+                            } else {
+                                onScanned(config)
+                            }
+                        }
+                        .onFailure {
+                            error = (it as? AccountConfigException)?.message
+                                ?: "Die Einstellungen aus dem QR-Code konnten nicht geladen werden. Bitte die Internetverbindung prüfen."
+                        }
+                    loading = false
+                }
+            }
+            .addOnFailureListener {
+                error = "Der QR-Scanner konnte nicht gestartet werden. Er benötigt die Google-Play-Dienste."
+            }
+    }
+
     Column(Modifier.fillMaxSize().background(background)) {
         NavigationBar(
             title = "Account hinzufügen",
             collapsed = rememberCollapsed(listState),
             background = background,
             navigation = { BackButton("Zurück", onBack) },
+            actions = {
+                if (loading) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        color = Luna.colors.secondaryLabel,
+                        modifier = Modifier.padding(end = 16.dp).size(18.dp),
+                    )
+                }
+            },
         )
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
             item { LargeTitle("Account hinzufügen") }
+            item {
+                GroupedSection(footer = "Zum Beispiel den IMAP-QR-Code aus Hypnotic One oder deinem Hosting-Panel.") {
+                    CellRow(
+                        title = if (loading) "Einstellungen werden geladen …" else "QR-Code scannen",
+                        icon = Icons.Outlined.QrCodeScanner,
+                        showDivider = false,
+                        onClick = { if (!loading) scan() },
+                    )
+                }
+            }
             item {
                 GroupedSection {
                     (Providers.all.map { it.id to it.name } + ("other" to "Andere")).forEachIndexed { index, (id, name) ->
@@ -101,6 +163,15 @@ fun ProviderPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit) {
                 )
             }
         }
+    }
+
+    error?.let { message ->
+        AlertDialog(
+            onDismissRequest = { error = null },
+            title = { Text("QR-Code nicht verwendbar") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
+        )
     }
 }
 
@@ -128,20 +199,29 @@ private fun ProviderWordmark(id: String, name: String) {
 }
 
 @Composable
-fun AccountFormScreen(vm: MailViewModel, providerId: String, onCancel: () -> Unit, onDone: () -> Unit) {
+fun AccountFormScreen(
+    vm: MailViewModel,
+    providerId: String,
+    onCancel: () -> Unit,
+    onDone: () -> Unit,
+    prefill: AccountConfig? = null,
+) {
     val provider = Providers.byId(providerId)
-    var name by rememberSaveable { mutableStateOf("") }
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var description by rememberSaveable { mutableStateOf(provider?.name.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(prefill?.displayName.orEmpty()) }
+    var email by rememberSaveable { mutableStateOf(prefill?.email.orEmpty()) }
+    var password by rememberSaveable { mutableStateOf(prefill?.password.orEmpty()) }
+    var description by rememberSaveable {
+        mutableStateOf(provider?.name ?: prefill?.description?.ifBlank { null } ?: prefill?.email?.substringAfter('@', "").orEmpty())
+    }
 
-    var imapHost by rememberSaveable { mutableStateOf(provider?.imapHost.orEmpty()) }
-    var imapPort by rememberSaveable { mutableStateOf((provider?.imapPort ?: 993).toString()) }
-    var imapSsl by rememberSaveable { mutableStateOf(provider?.imapSecurity != Security.STARTTLS) }
-    var smtpHost by rememberSaveable { mutableStateOf(provider?.smtpHost.orEmpty()) }
-    var smtpPort by rememberSaveable { mutableStateOf((provider?.smtpPort ?: 587).toString()) }
-    var smtpSsl by rememberSaveable { mutableStateOf(provider?.smtpSecurity == Security.SSL) }
-    var username by rememberSaveable { mutableStateOf("") }
+    var imapHost by rememberSaveable { mutableStateOf(prefill?.imapHost ?: provider?.imapHost.orEmpty()) }
+    var imapPort by rememberSaveable { mutableStateOf((prefill?.imapPort ?: provider?.imapPort ?: 993).toString()) }
+    // Unverschlüsselte Verbindungen bietet das Formular nicht an; sie werden zu STARTTLS.
+    var imapSsl by rememberSaveable { mutableStateOf((prefill?.imapSecurity ?: provider?.imapSecurity ?: Security.SSL) == Security.SSL) }
+    var smtpHost by rememberSaveable { mutableStateOf(prefill?.smtpHost ?: provider?.smtpHost.orEmpty()) }
+    var smtpPort by rememberSaveable { mutableStateOf((prefill?.smtpPort ?: provider?.smtpPort ?: 587).toString()) }
+    var smtpSsl by rememberSaveable { mutableStateOf((prefill?.smtpSecurity ?: provider?.smtpSecurity) == Security.SSL) }
+    var username by rememberSaveable { mutableStateOf(prefill?.username.orEmpty()) }
     var showServers by rememberSaveable { mutableStateOf(provider == null) }
 
     var verifying by remember { mutableStateOf(false) }
@@ -150,7 +230,7 @@ fun AccountFormScreen(vm: MailViewModel, providerId: String, onCancel: () -> Uni
 
     fun onEmailChange(value: String) {
         val domain = value.substringAfter('@', "").lowercase()
-        if (provider == null && domain.contains('.')) {
+        if (provider == null && prefill == null && domain.contains('.')) {
             // Bekannte Anbieter automatisch erkennen, sonst die üblichen Hostnamen vorschlagen.
             val guess = Providers.guess(value)
             val oldDomain = email.substringAfter('@', "").lowercase()
@@ -199,7 +279,7 @@ fun AccountFormScreen(vm: MailViewModel, providerId: String, onCancel: () -> Uni
     val background = Luna.colors.groupedBackground
     Column(Modifier.fillMaxSize().background(background).imePadding()) {
         NavigationBar(
-            title = provider?.name ?: "Andere",
+            title = provider?.name ?: if (prefill != null) "QR-Code" else "Andere",
             collapsed = true,
             background = background,
             navigation = { TextAction("Abbrechen", onClick = onCancel) },
@@ -216,7 +296,11 @@ fun AccountFormScreen(vm: MailViewModel, providerId: String, onCancel: () -> Uni
             },
         )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-            GroupedSection(footer = provider?.hint) {
+            val footer = provider?.hint ?: if (prefill != null) {
+                if (prefill.password.isBlank()) "Einstellungen aus dem QR-Code übernommen. Bitte noch das Passwort eingeben."
+                else "Einstellungen aus dem QR-Code übernommen."
+            } else null
+            GroupedSection(footer = footer) {
                 FormField("Name", name, { name = it }, "Max Mustermann")
                 FormField("E-Mail", email, ::onEmailChange, "name@beispiel.de", KeyboardType.Email)
                 FormField("Passwort", password, { password = it }, "Erforderlich", KeyboardType.Password, secret = true)

@@ -44,6 +44,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.lunamail.app.data.AccountConfig
 import com.lunamail.app.data.BoxRef
 import com.lunamail.app.ui.screens.AccountFormScreen
 import com.lunamail.app.ui.screens.ComposeRequest
@@ -104,6 +105,7 @@ fun LunaMailApp(mailtoRequests: StateFlow<ComposeRequest?>, onMailtoHandled: () 
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     var compose by remember { mutableStateOf(ComposeRequest()) }
+    var scanned by remember { mutableStateOf<AccountConfig?>(null) }
 
     LifecycleStartEffect(Unit) {
         vm.refreshIfStale()
@@ -178,12 +180,21 @@ fun LunaMailApp(mailtoRequests: StateFlow<ComposeRequest?>, onMailtoHandled: () 
                 SettingsScreen(vm = vm, onBack = { nav.back(entry) }, onAddAccount = { nav.navigate("providers") })
             }
             sheet("providers") { entry ->
-                ProviderPickerScreen(onBack = { nav.back(entry) }, onPick = { nav.navigate("account/$it") })
+                ProviderPickerScreen(
+                    onBack = { nav.back(entry) },
+                    onPick = { nav.navigate("account/$it") },
+                    onScanned = { config ->
+                        scanned = config
+                        nav.navigate("account/qr")
+                    },
+                )
             }
             screen("account/{provider}") { entry ->
+                val providerId = entry.arguments?.getString("provider").orEmpty()
                 AccountFormScreen(
                     vm = vm,
-                    providerId = entry.arguments?.getString("provider").orEmpty(),
+                    providerId = providerId,
+                    prefill = scanned.takeIf { providerId == "qr" },
                     onCancel = { nav.back(entry) },
                     onDone = { nav.popBackStack("mailboxes", inclusive = false) },
                 )
