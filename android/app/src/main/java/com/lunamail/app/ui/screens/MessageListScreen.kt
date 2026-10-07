@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lunamail.app.data.BoxRef
 import com.lunamail.app.data.MessageSummary
 import com.lunamail.app.ui.MailViewModel
+import com.lunamail.app.ui.components.Avatar
 import com.lunamail.app.ui.components.BackButton
 import com.lunamail.app.ui.components.BarIcon
 import com.lunamail.app.ui.components.BottomToolbar
@@ -374,11 +375,13 @@ fun MessageRow(
             }
         }
         Row(Modifier.weight(1f).padding(top = 10.dp, end = 12.dp)) {
-            Box(Modifier.width(30.dp).padding(top = 6.dp), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.width(22.dp).padding(top = 16.dp), contentAlignment = Alignment.TopCenter) {
                 if (!message.seen) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(Luna.colors.accent))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Luna.colors.accent))
                 }
             }
+            Box(Modifier.padding(top = 2.dp)) { Avatar(message.senderLabel, size = 38.dp) }
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
