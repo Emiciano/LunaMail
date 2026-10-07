@@ -1,6 +1,7 @@
 package com.lunamail.app.ui.screens
 
 import com.lunamail.app.ui.icons.LunaIcons
+import android.os.SystemClock
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
@@ -12,6 +13,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebViewClient
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -73,6 +75,7 @@ import com.lunamail.app.ui.components.pressFade
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaColors
 import com.lunamail.app.ui.theme.LunaType
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -201,8 +204,13 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
     var body by remember(message.key) { mutableStateOf<MessageBody?>(null) }
     var error by remember(message.key) { mutableStateOf<String?>(null) }
     LaunchedEffect(message.key) {
+        val opened = SystemClock.uptimeMillis()
         vm.setSeen(message, true)
-        vm.loadBody(message)
+        val result = vm.loadBody(message)
+        // Den Inhalt (vor allem das WebView) erst nach der Einblend-Animation aufbauen,
+        // sonst ruckelt der Übergang, während das HTML gerendert wird.
+        delay((SETTLE_MS - (SystemClock.uptimeMillis() - opened)).coerceAtLeast(0))
+        result
             .onSuccess { body = it; onBody(it) }
             .onFailure { error = it.message }
     }
@@ -211,25 +219,39 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
         Header(message, body)
         HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
         Spacer(Modifier.height(12.dp))
-        when {
-            error != null -> Text(
-                error!!,
+        val state = when {
+            error != null -> BodyState.Error
+            body == null -> BodyState.Loading
+            else -> BodyState.Loaded
+        }
+        Crossfade(targetState = state, animationSpec = tween(220), label = "body") { shown ->
+        when (shown) {
+            BodyState.Error -> Text(
+                error.orEmpty(),
                 style = LunaType.body,
                 color = Luna.colors.secondaryLabel,
                 modifier = Modifier.padding(16.dp),
             )
-            body == null -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+            BodyState.Loading -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Luna.colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
             }
-            body!!.html != null -> HtmlBody(body!!.html!!, Luna.colors)
-            else -> SelectionContainer {
-                Text(
-                    body!!.text.orEmpty().trim(),
-                    style = LunaType.body,
-                    color = Luna.colors.label,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+            BodyState.Loaded -> {
+                val loaded = body ?: return@Crossfade
+                val html = loaded.html
+                if (html != null) {
+                    HtmlBody(html, Luna.colors)
+                } else {
+                    SelectionContainer {
+                        Text(
+                            loaded.text.orEmpty().trim(),
+                            style = LunaType.body,
+                            color = Luna.colors.label,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                }
             }
+        }
         }
         body?.attachments?.takeIf { it.isNotEmpty() }?.let { attachments ->
             Spacer(Modifier.height(16.dp))
@@ -238,6 +260,11 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
         Spacer(Modifier.height(32.dp))
     }
 }
+
+private enum class BodyState { Loading, Error, Loaded }
+
+/** So lange dauert der Übergang in die Leseansicht ungefähr (Push-Animation). */
+private const val SETTLE_MS = 380L
 
 /** Antippen lädt den Anhang und öffnet ihn mit einer passenden App. */
 @Composable

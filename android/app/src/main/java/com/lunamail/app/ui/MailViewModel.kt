@@ -17,7 +17,10 @@ import com.lunamail.app.data.MessageSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -126,8 +129,18 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         else -> mailbox(box)?.displayName ?: box.folder.substringAfterLast('/')
     }
 
-    fun messages(box: BoxRef): Flow<List<MessageSummary>> = combine(_messages, _accounts) { all, accounts ->
-        messagesIn(box, all, accounts)
+    private val boxFlows = ConcurrentHashMap<BoxRef, StateFlow<List<MessageSummary>>>()
+
+    /**
+     * Inhalt eines Postfachs als geteilter Flow. Er wird pro Postfach nur einmal angelegt, damit
+     * Recompositions nicht jedes Mal neu sammeln, und abseits des UI-Threads berechnet
+     * (Sortieren der zusammengeführten Eingänge).
+     */
+    fun messages(box: BoxRef): StateFlow<List<MessageSummary>> = boxFlows.getOrPut(box) {
+        combine(_messages, _accounts) { all, accounts -> messagesIn(box, all, accounts) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), messagesNow(box))
     }
 
     /** Aktueller Inhalt eines Postfachs, z. B. für „Nächste/Vorige E-Mail“ in der Leseansicht. */

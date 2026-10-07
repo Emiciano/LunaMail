@@ -1,6 +1,7 @@
 package com.lunamail.app.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -9,7 +10,6 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -77,8 +80,12 @@ fun SwipeActionsBox(
     val offset = remember { Animatable(0f) }
     var armed by remember { mutableStateOf(false) }
 
-    BoxWithConstraints(modifier.clipToBounds()) {
-        val width = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+    // Breite per onSizeChanged statt BoxWithConstraints: Letzteres setzt pro Listenzeile eine
+    // Subcomposition auf und macht das Scrollen spürbar teurer.
+    var widthPx by remember { mutableIntStateOf(0) }
+
+    Box(modifier.clipToBounds().onSizeChanged { widthPx = it.width }) {
+        val width = widthPx.toFloat().coerceAtLeast(1f)
         val leadingWidth = buttonWidth * leading.size
         val trailingWidth = buttonWidth * trailing.size
         val fullThreshold = width * 0.6f
@@ -128,6 +135,7 @@ fun SwipeActionsBox(
                         SwipeButton(
                             action = action,
                             width = with(density) { share.toDp() },
+                            emphasized = armed && isPrimary,
                             alignment = when {
                                 !armed -> Alignment.Center
                                 value > 0 -> Alignment.CenterEnd
@@ -201,7 +209,19 @@ fun SwipeActionsBox(
 }
 
 @Composable
-private fun SwipeButton(action: SwipeAction, width: androidx.compose.ui.unit.Dp, alignment: Alignment, onClick: () -> Unit) {
+private fun SwipeButton(
+    action: SwipeAction,
+    width: androidx.compose.ui.unit.Dp,
+    alignment: Alignment,
+    emphasized: Boolean,
+    onClick: () -> Unit,
+) {
+    // Beim Durchwischen springt das Symbol leicht auf, wie in Apple Mail.
+    val scale by animateFloatAsState(
+        if (emphasized) 1.18f else 1f,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "swipeIcon",
+    )
     Box(
         Modifier
             .width(width)
@@ -214,7 +234,12 @@ private fun SwipeButton(action: SwipeAction, width: androidx.compose.ui.unit.Dp,
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.width(76.dp).padding(horizontal = 4.dp),
         ) {
-            Icon(action.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(
+                action.icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(22.dp).graphicsLayer { scaleX = scale; scaleY = scale },
+            )
             Text(action.label, style = LunaType.caption, color = Color.White, maxLines = 1, overflow = TextOverflow.Clip)
         }
     }

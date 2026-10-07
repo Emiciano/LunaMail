@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Looper
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -31,6 +33,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             LunaMailTheme {
                 LunaMailApp(mailtoRequests = mailto, onMailtoHandled = { mailto.value = null })
+            }
+        }
+        // Das erste WebView lädt die ganze Chromium-Engine und blockiert dafür kurz den
+        // UI-Thread. Das passiert hier einmal im Leerlauf nach dem Start, statt beim Öffnen
+        // der ersten E-Mail mitten in der Animation.
+        if (savedInstanceState == null) {
+            Looper.myQueue().addIdleHandler {
+                runCatching { WebView(this).destroy() }
+                false
             }
         }
     }

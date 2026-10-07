@@ -2,6 +2,7 @@
 -keep class com.sun.mail.** { *; }
 -keep class javax.mail.** { *; }
 -keep class javax.activation.** { *; }
+-keep class com.sun.activation.** { *; }
 -keep class myjava.awt.datatransfer.** { *; }
 -dontwarn java.awt.**
 -dontwarn javax.security.sasl.**
@@ -15,3 +16,7 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep,includedescriptorclasses class com.lunamail.app.data.**$$serializer { *; }
+
+# Nur verkleinern und optimieren, nicht umbenennen: Fehlermeldungen und Stacktraces
+# bleiben so lesbar.
+-dontobfuscate

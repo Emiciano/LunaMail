@@ -71,8 +71,8 @@ fun MailboxesScreen(
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
     val expandedAccounts by vm.expandedAccounts.collectAsStateWithLifecycle()
     // Die ungelesen-Zähler hängen von den geladenen Nachrichten ab.
-    val unified by vm.messages(BoxRef.UnifiedInbox).collectAsStateWithLifecycle(emptyList())
-    val flagged by vm.messages(BoxRef.Flagged).collectAsStateWithLifecycle(emptyList())
+    val unified by vm.messages(BoxRef.UnifiedInbox).collectAsStateWithLifecycle()
+    val flagged by vm.messages(BoxRef.Flagged).collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val collapsed = rememberCollapsed(listState)
     val background = Luna.colors.groupedBackground
