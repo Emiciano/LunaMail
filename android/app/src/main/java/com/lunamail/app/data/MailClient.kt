@@ -220,9 +220,12 @@ class MailClient(private val account: Account, private val password: String) {
             val collector = BodyCollector()
             collector.walk(message)
             val html = collector.html?.let { source ->
-                collector.inline.entries.fold(source) { acc, (cid, dataUri) -> acc.replace("cid:$cid", dataUri) }
+                collector.inline.entries.fold(source) { acc, (cid, dataUri) ->
+                    acc.replace(Regex("cid:" + Regex.escape(cid), RegexOption.IGNORE_CASE), Regex.escapeReplacement(dataUri))
+                }
             }
             MessageBody(
+                formatVersion = BODY_FORMAT,
                 html = html,
                 text = collector.text,
                 to = formatAddresses(message.getRecipients(Message.RecipientType.TO)),
@@ -331,6 +334,14 @@ class MailClient(private val account: Account, private val password: String) {
         val inline = mutableMapOf<String, String>()
         var captured: ByteArray? = null
 
+        private fun contentId(part: Part) =
+            runCatching { part.getHeader("Content-ID")?.firstOrNull() }.getOrNull()?.trim('<', '>', ' ')?.takeIf { it.isNotEmpty() }
+
+        /** Wie [addAttachment], nur ohne Inhalt zu lesen (für die Anhangsliste). */
+        private fun attachmentsOnly(part: Part, name: String) {
+            attachments += AttachmentInfo(name, part.contentType.substringBefore(';').lowercase(), part.size, attachments.size)
+        }
+
         private fun addAttachment(part: Part, name: String) {
             val index = attachments.size
             attachments += AttachmentInfo(name, part.contentType.substringBefore(';').lowercase(), part.size, index)
@@ -346,19 +357,23 @@ class MailClient(private val account: Account, private val password: String) {
                     for (i in 0 until multipart.count) walk(multipart.getBodyPart(i))
                 }
                 part.isMimeType("message/rfc822") && disposition == null -> (part.content as? Part)?.let(::walk)
+                // Bilder mit Content-ID (Logos, Signaturen) werden im HTML über „cid:“ eingebunden,
+                // auch wenn der Absender sie als Anhang markiert. part.size ist bei base64 oft -1.
+                part.isMimeType("image/*") && contentId(part) != null && captureIndex < 0 -> {
+                    val bytes = part.inputStream.use { it.readBytes() }.takeIf { it.size <= MAX_INLINE_IMAGE }
+                    if (bytes != null) {
+                        val type = part.contentType.substringBefore(';').trim().lowercase()
+                        inline[contentId(part)!!] = "data:$type;base64," + Base64.getEncoder().encodeToString(bytes)
+                    }
+                    if (disposition.equals(Part.ATTACHMENT, true)) attachmentsOnly(part, fileName ?: "Bild")
+                }
+                part.isMimeType("image/*") && contentId(part) != null -> {
+                    if (disposition.equals(Part.ATTACHMENT, true)) addAttachment(part, fileName ?: "Bild")
+                }
                 disposition.equals(Part.ATTACHMENT, true) || (fileName != null && !part.isMimeType("image/*")) -> {
                     addAttachment(part, fileName ?: "Anhang")
                 }
-                part.isMimeType("image/*") -> {
-                    val cid = part.getHeader("Content-ID")?.firstOrNull()?.trim('<', '>', ' ')
-                    if (cid != null && part.size in 0..2_000_000) {
-                        val bytes = part.inputStream.use { it.readBytes() }
-                        val type = part.contentType.substringBefore(';').lowercase()
-                        inline[cid] = "data:$type;base64," + Base64.getEncoder().encodeToString(bytes)
-                    } else {
-                        addAttachment(part, fileName ?: "Bild")
-                    }
-                }
+                part.isMimeType("image/*") -> addAttachment(part, fileName ?: "Bild")
                 part.isMimeType("text/html") && html == null -> html = textContent(part)
                 part.isMimeType("text/plain") && text == null -> text = textContent(part)
             }
@@ -367,6 +382,10 @@ class MailClient(private val account: Account, private val password: String) {
 
     companion object {
         const val PAGE_SIZE = 60
+
+        /** Erhöhen, wenn sich die Aufbereitung ändert, damit zwischengespeicherte Inhalte neu geladen werden. */
+        const val BODY_FORMAT = 2
+        private const val MAX_INLINE_IMAGE = 5_000_000
 
         fun inferRole(fullName: String, attributes: List<String>): MailboxRole {
             val attrs = attributes.map { it.lowercase() }

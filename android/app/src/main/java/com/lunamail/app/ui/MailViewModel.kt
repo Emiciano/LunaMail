@@ -401,7 +401,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun loadBody(message: MessageSummary): Result<MessageBody> = runCatching {
         // Leere Einträge stammen aus Versionen, die Mailinhalte nicht lesen konnten.
-        withContext(Dispatchers.IO) { cache.body(message) }?.takeIf { it.html != null || it.text != null } ?: run {
+        withContext(Dispatchers.IO) { cache.body(message) }
+            ?.takeIf { (it.html != null || it.text != null) && it.formatVersion >= MailClient.BODY_FORMAT } ?: run {
             val client = client(message.accountId) ?: error("Konto nicht gefunden")
             client.fetchBody(message.folder, message.uid).also { body ->
                 withContext(Dispatchers.IO) { cache.saveBody(message, body) }
