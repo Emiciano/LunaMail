@@ -47,6 +47,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Gleicher Schlüssel wie bisher, damit sich die schnellere Release-APK über die
+            // installierte App installieren lässt.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
