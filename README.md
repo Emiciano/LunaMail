@@ -31,6 +31,27 @@ Der NSIS-Installer wird hier erzeugt:
 release\LunaMail-Setup-0.9.45.exe
 ```
 
+## Android-App
+
+Unter `android/` liegt eine native Android-App (Kotlin + Jetpack Compose), deren
+Oberfläche sich an Apple Mail orientiert: Postfach-Übersicht, große Titel,
+Wischgesten zum Archivieren und Löschen, Pull-to-Refresh und iOS-artige Übergänge.
+Sie spricht IMAP und SMTP direkt an und braucht kein Backend.
+
+Bauen (Android SDK und JDK 17 vorausgesetzt):
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+Die APK liegt danach unter `android/app/build/outputs/apk/debug/`. Der Workflow
+`Android-App` baut sie bei jeder Änderung unter `android/` und stellt sie als
+Artefakt bereit.
+
+Konten werden per Benutzername und Passwort (bzw. App-Passwort) eingerichtet;
+Google-OAuth gibt es in der Android-App noch nicht.
+
 ## Google-Konto verbinden
 
 Für die Google-Anmeldung benötigt LunaMail eine OAuth-Client-ID vom Typ **Desktop-App**:
