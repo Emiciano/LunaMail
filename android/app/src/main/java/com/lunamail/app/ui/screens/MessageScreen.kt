@@ -99,6 +99,8 @@ fun MessageScreen(
     onReply: (MessageSummary, MessageBody?, ReplyKind, String?) -> Unit,
     onClosed: () -> Unit = { onBack?.invoke() },
     onKeyChange: (String) -> Unit = {},
+    /** Aufgeklappt: schließt die Mail-Ansicht rechts wieder (X statt Zurück). */
+    onClose: (() -> Unit)? = null,
 ) {
     // Mit den Pfeilen oben blättert man durch das Postfach, ohne die Ansicht zu verlassen.
     var currentKey by rememberSaveable(messageKey) { mutableStateOf(messageKey) }
@@ -149,6 +151,7 @@ fun MessageScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (onBack != null) SquareButton(LunaIcons.ArrowLeft, "Zurück", onClick = onBack)
+            else if (onClose != null) SquareButton(LunaIcons.Close, "Schließen", onClick = onClose)
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (box != null) {

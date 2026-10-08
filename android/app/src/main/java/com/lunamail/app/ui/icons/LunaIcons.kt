@@ -128,6 +128,7 @@ object LunaIcons {
     val Search by lazy { icon("Search", circle(11f, 11f, 8f), "m21 21-4.3-4.3") }
     val Clear by lazy { icon("Clear", circle(12f, 12f, 10f), "m15 9-6 6", "m9 9 6 6") }
     val Check by lazy { icon("Check", "M20 6 9 17l-5-5") }
+    val Close by lazy { icon("Close", "M18 6 6 18", "m6 6 12 12") }
     val ArrowUp by lazy { icon("ArrowUp", "m5 12 7-7 7 7", "M12 19V5") }
     val ScanQr by lazy {
         icon("ScanQr", "M3 7V5a2 2 0 0 1 2-2h2", "M17 3h2a2 2 0 0 1 2 2v2", "M21 17v2a2 2 0 0 1-2 2h-2", "M7 21H5a2 2 0 0 1-2-2v-2", "M7 12h10")
