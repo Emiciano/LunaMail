@@ -63,6 +63,30 @@ import com.lunamail.app.ui.components.cellPress
 import com.lunamail.app.ui.components.rememberCollapsed
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
+import com.lunamail.app.ui.theme.SilverMetal
+import com.lunamail.app.ui.theme.ThemeMode
+import com.lunamail.app.ui.theme.screenBackground
+import com.lunamail.app.ui.components.AccountAvatar
+import com.lunamail.app.ui.components.PageTitle
+import com.lunamail.app.ui.components.SquareButton
+import com.lunamail.app.ui.components.pressFade
+import com.lunamail.app.ui.components.pressScale
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -112,7 +136,7 @@ fun ProviderPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit, onScanned
             }
     }
 
-    Column(Modifier.fillMaxSize().background(background)) {
+    Column(Modifier.fillMaxSize().screenBackground()) {
         NavigationBar(
             title = "Account hinzufügen",
             collapsed = rememberCollapsed(listState),
@@ -277,7 +301,7 @@ fun AccountFormScreen(
     }
 
     val background = Luna.colors.groupedBackground
-    Column(Modifier.fillMaxSize().background(background).imePadding()) {
+    Column(Modifier.fillMaxSize().screenBackground().imePadding()) {
         NavigationBar(
             title = provider?.name ?: if (prefill != null) "QR-Code" else "Andere",
             collapsed = true,
@@ -379,8 +403,8 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
             checked = checked,
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedTrackColor = Luna.colors.green,
-                checkedThumbColor = Color.White,
+                checkedTrackColor = Luna.colors.inverse,
+                checkedThumbColor = Luna.colors.onInverse,
                 checkedBorderColor = Color.Transparent,
                 uncheckedTrackColor = Luna.colors.fill,
                 uncheckedThumbColor = Color.White,
@@ -390,44 +414,111 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     }
 }
 
+/** Konto-Tab: Profil, Schnellzugriffe, Design-Auswahl, Konten mit Bild und Einstellungen. */
 @Composable
-fun SettingsScreen(vm: MailViewModel, onBack: () -> Unit, onAddAccount: () -> Unit) {
+fun AccountTabScreen(vm: MailViewModel, onAddAccount: () -> Unit, bottomInset: androidx.compose.ui.unit.Dp) {
     val accounts by vm.accounts.collectAsStateWithLifecycle()
-    var removing by remember { mutableStateOf<Account?>(null) }
+    val pictures by vm.pictures.collectAsStateWithLifecycle()
+    val theme by vm.theme.collectAsStateWithLifecycle()
     val notifications by vm.notifications.collectAsStateWithLifecycle()
     val swipeArchives by vm.swipeArchives.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
-    val background = Luna.colors.groupedBackground
+    var removing by remember { mutableStateOf<Account?>(null) }
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    val pickPicture = rememberPicturePicker(vm)
+    val colors = Luna.colors
+    val me = accounts.firstOrNull()
 
-    Column(Modifier.fillMaxSize().background(background)) {
-        NavigationBar(
-            title = "Einstellungen",
-            collapsed = rememberCollapsed(listState),
-            background = background,
-            navigation = { BackButton("Postfächer", onBack) },
-        )
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
-            item { LargeTitle("Einstellungen") }
-            item {
-                GroupedSection(header = "Accounts", footer = "Tippe auf einen Account, um ihn von diesem Gerät zu entfernen.") {
-                    accounts.forEach { account ->
-                        CellRow(title = account.description, value = account.email, showChevron = false) { removing = account }
+    LazyColumn(
+        Modifier.fillMaxSize().screenBackground().windowInsetsPadding(WindowInsets.statusBars),
+        contentPadding = PaddingValues(top = 8.dp, bottom = bottomInset + 24.dp),
+    ) {
+        item { PageTitle("Konto") }
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+                AccountAvatar(me, me?.let { vm.pictureFile(it.id) }, me?.let { pictures[it.id] }, size = 64.dp, radius = 32.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        me?.displayName?.ifBlank { null } ?: me?.description ?: "LunaMail",
+                        style = LunaType.title2.copy(fontSize = 24.sp),
+                        color = colors.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        when (accounts.size) {
+                            0 -> "Kein Konto verbunden"
+                            1 -> "1 Konto verbunden"
+                            else -> "${accounts.size} Konten verbunden"
+                        },
+                        style = LunaType.subhead,
+                        color = colors.secondaryLabel,
+                    )
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                QuickAction("Konto", LunaIcons.Plus, Modifier.weight(1f), onAddAccount)
+                QuickAction("QR-Setup", LunaIcons.ScanQr, Modifier.weight(1f), onAddAccount)
+            }
+        }
+        item {
+            SettingsGroup("Design") {
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    ThemeMode.entries.forEach { mode ->
+                        ThemeTile(mode, selected = mode == theme, modifier = Modifier.weight(1f)) { vm.setTheme(mode) }
                     }
-                    CellRow("Account hinzufügen", titleColor = Luna.colors.accent, showDivider = false, showChevron = false, onClick = onAddAccount)
                 }
             }
-            item {
-                GroupedSection(header = "E-Mails") {
-                    ToggleRow("Mitteilungen bei neuen E-Mails", notifications) { vm.setNotifications(it) }
-                    ToggleRow("Wischen nach links archiviert", swipeArchives, showDivider = false) { vm.setSwipeArchives(it) }
+        }
+        item {
+            SettingsGroup("Konten · Tippe aufs Bild, um es zu ändern") {
+                accounts.forEach { account ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AccountAvatar(account, vm.pictureFile(account.id), pictures[account.id], size = 52.dp, onEdit = { pickPicture(account.id) })
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                account.description,
+                                style = LunaType.headline.copy(fontWeight = FontWeight.Bold),
+                                color = colors.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(account.email, style = LunaType.footnote, color = colors.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Box {
+                            SquareButton(LunaIcons.More, "Optionen", size = 36.dp) { menuFor = account.id }
+                            DropdownMenu(expanded = menuFor == account.id, onDismissRequest = { menuFor = null }) {
+                                DropdownMenuItem(text = { Text("Bild ändern") }, onClick = { menuFor = null; pickPicture(account.id) })
+                                if (pictures.containsKey(account.id)) {
+                                    DropdownMenuItem(text = { Text("Bild entfernen") }, onClick = { menuFor = null; vm.removeAccountPicture(account.id) })
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Konto entfernen", color = colors.red) },
+                                    onClick = { menuFor = null; removing = account },
+                                )
+                            }
+                        }
+                    }
+                    HorizontalDivider(thickness = 1.dp, color = colors.separator)
                 }
             }
-            item {
-                GroupedSection(header = "Über") {
-                    CellRow("Version", value = BuildConfig.VERSION_NAME, showChevron = false, showDivider = false) {}
+        }
+        item {
+            SettingsGroup("Einstellungen") {
+                SettingRow(LunaIcons.Bell, "Mitteilungen", "Bei jeder neuen E-Mail", notifications) { vm.setNotifications(it) }
+                SettingRow(LunaIcons.Archive, "Wischen archiviert", "Nach links wischen legt ins Archiv statt in den Papierkorb", swipeArchives) {
+                    vm.setSwipeArchives(it)
                 }
+                Text(
+                    "LunaMail ${BuildConfig.VERSION_NAME}",
+                    style = LunaType.footnote,
+                    color = colors.tertiaryLabel,
+                    modifier = Modifier.padding(top = 18.dp),
+                )
             }
-            item { Spacer(Modifier.height(32.dp)) }
         }
     }
 
@@ -435,37 +526,125 @@ fun SettingsScreen(vm: MailViewModel, onBack: () -> Unit, onAddAccount: () -> Un
         AlertDialog(
             onDismissRequest = { removing = null },
             title = { Text("„${account.description}“ entfernen?") },
-            text = { Text("Der Account und seine zwischengespeicherten E-Mails werden von diesem Gerät gelöscht. Auf dem Server bleibt alles erhalten.") },
+            text = { Text("Das Konto und seine zwischengespeicherten E-Mails werden von diesem Gerät gelöscht. Auf dem Server bleibt alles erhalten.") },
             confirmButton = {
                 TextButton(onClick = { vm.removeAccount(account.id); removing = null }) {
-                    Text("Entfernen", color = Luna.colors.red)
+                    Text("Entfernen", color = colors.red)
                 }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Abbrechen") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Abbrechen", color = colors.label) } },
         )
     }
 }
 
 @Composable
-private fun ToggleRow(title: String, checked: Boolean, showDivider: Boolean = true, onChange: (Boolean) -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 46.dp).padding(start = 16.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 22.dp)) {
+        Text(title, style = LunaType.sectionLabel, color = Luna.colors.secondaryLabel, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+        content()
+    }
+}
+
+@Composable
+private fun QuickAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .height(86.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Luna.colors.cell)
+            .pressScale(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = Luna.colors.label, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(label, style = LunaType.subhead.copy(fontWeight = FontWeight.SemiBold), color = Luna.colors.label)
+    }
+}
+
+/** Vorschau eines Designs mit angedeuteten Karten, wie im Prototyp. */
+@Composable
+private fun ThemeTile(mode: ThemeMode, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = Luna.colors
+    val shape = RoundedCornerShape(12.dp)
+    val (background, bar, strong) = when (mode) {
+        ThemeMode.Light -> Triple<Brush, Brush, Brush>(SolidColor(Color.White), SolidColor(Color(0xFFF0F0F0)), SolidColor(Color.Black))
+        ThemeMode.Dark -> Triple<Brush, Brush, Brush>(SolidColor(Color.Black), SolidColor(Color(0xFF1C1C1C)), SolidColor(Color.White))
+        ThemeMode.Silver -> Triple(
+            Brush.radialGradient(0f to Color(0xFF8D9097), 0.6f to Color(0xFF3A3B3F), 1f to Color(0xFF1F2023), center = Offset(60f, 20f), radius = 420f),
+            SolidColor(Color(0x24FFFFFF)),
+            SilverMetal,
+        )
+    }
+    Column(modifier.pressScale(scale = 0.97f, onClick = onClick)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(118.dp)
+                .then(if (selected) Modifier.border(3.dp, colors.cellPressed, RoundedCornerShape(15.dp)).padding(3.dp) else Modifier.padding(3.dp))
+                .clip(shape)
+                .background(background)
+                .border(if (selected) 2.dp else 1.dp, if (selected) colors.label else Color(0x407F7F7F), shape),
         ) {
-            Text(title, style = LunaType.body, color = Luna.colors.label, modifier = Modifier.weight(1f))
-            Switch(
-                checked = checked,
-                onCheckedChange = onChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = androidx.compose.ui.graphics.Color.White,
-                    checkedTrackColor = Luna.colors.green,
-                    checkedBorderColor = Luna.colors.green,
-                ),
+            Box(Modifier.padding(start = 10.dp, end = 34.dp, top = 12.dp).fillMaxWidth().height(16.dp).clip(RoundedCornerShape(5.dp)).background(bar))
+            Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 36.dp).fillMaxWidth().height(30.dp).clip(RoundedCornerShape(5.dp)).background(strong))
+            Box(Modifier.padding(start = 10.dp, top = 72.dp).fillMaxWidth(0.4f).height(16.dp).clip(RoundedCornerShape(5.dp)).background(bar))
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 10.dp).size(16.dp).clip(CircleShape).background(strong))
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (selected) {
+                Icon(LunaIcons.Check, contentDescription = null, tint = colors.label, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(5.dp))
+            }
+            Text(
+                mode.label,
+                style = LunaType.subhead.copy(fontWeight = FontWeight.SemiBold),
+                color = if (selected) colors.label else colors.secondaryLabel,
             )
         }
-        if (showDivider) {
-            HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
-        }
     }
+}
+
+@Composable
+private fun SettingRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val colors = Luna.colors
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).pressFade { onChange(!checked) }, verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(colors.cell), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = colors.label, modifier = Modifier.size(21.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                Text(title, style = LunaType.headline, color = colors.label)
+                Text(subtitle, style = LunaType.footnote, color = colors.secondaryLabel)
+            }
+            Spacer(Modifier.width(8.dp))
+            LunaSwitch(checked, onChange)
+        }
+        HorizontalDivider(thickness = 1.dp, color = colors.separator)
+    }
+}
+
+@Composable
+private fun LunaSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = Luna.colors
+    Switch(
+        checked = checked,
+        onCheckedChange = onChange,
+        colors = SwitchDefaults.colors(
+            checkedTrackColor = colors.inverse,
+            checkedThumbColor = colors.onInverse,
+            checkedBorderColor = Color.Transparent,
+            uncheckedTrackColor = colors.strongFill,
+            uncheckedThumbColor = Color.White,
+            uncheckedBorderColor = Color.Transparent,
+        ),
+    )
 }

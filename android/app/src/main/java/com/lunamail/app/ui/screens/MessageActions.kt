@@ -29,7 +29,7 @@ import com.lunamail.app.data.Mailbox
 import com.lunamail.app.data.MailboxRole
 import com.lunamail.app.data.MessageSummary
 import com.lunamail.app.ui.MailViewModel
-import com.lunamail.app.ui.components.Avatar
+import com.lunamail.app.ui.components.SenderLogo
 import com.lunamail.app.ui.components.CellRow
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
@@ -57,7 +57,7 @@ fun MessageActionsSheet(
     ) {
         Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState())) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(message.senderLabel, 40.dp)
+                SenderLogo(message.fromAddress, message.senderLabel, size = 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(message.senderLabel, style = LunaType.headline, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -83,17 +83,17 @@ fun MessageActionsSheet(
                     icon = LunaIcons.Flag,
                     iconTint = Luna.colors.orange,
                     showChevron = false,
-                ) { onDismiss(); vm.setFlagged(message, !message.flagged) }
+                ) { onDismiss(); vm.markFlagged(message, !message.flagged) }
                 CellRow(
                     if (message.seen) "Als ungelesen markieren" else "Als gelesen markieren",
                     icon = if (message.seen) LunaIcons.MailUnread else LunaIcons.MailOpen,
                     showChevron = false,
-                ) { onDismiss(); vm.setSeen(message, !message.seen) }
+                ) { onDismiss(); vm.markSeen(message, !message.seen) }
                 CellRow("E-Mail bewegen …", icon = LunaIcons.Move, showChevron = false, showDivider = vm.canArchive(message)) {
                     onDismiss(); onMove()
                 }
                 if (vm.canArchive(message)) {
-                    CellRow("Archivieren", icon = LunaIcons.Archive, iconTint = Luna.colors.purple, showChevron = false, showDivider = false) {
+                    CellRow("Archivieren", icon = LunaIcons.Archive, showChevron = false, showDivider = false) {
                         onDismiss(); vm.archive(message); onRemoved()
                     }
                 }

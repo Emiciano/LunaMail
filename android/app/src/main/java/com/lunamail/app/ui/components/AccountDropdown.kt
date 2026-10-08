@@ -9,8 +9,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,8 +43,8 @@ import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
 
 /**
- * Aufklappbare Konto-Karte für die Postfächer-Übersicht: Zugeklappt steht nur die
- * E-Mail-Adresse mit Avatar und Ungelesen-Zahl da, aufgeklappt folgen die Postfächer.
+ * Aufklappbare Konto-Karte für den Ordner-Tab: Zugeklappt stehen Kontobild, Name, Adresse
+ * und die Zahl ungelesener E-Mails da, aufgeklappt folgen die Ordner.
  */
 @Composable
 fun AccountDropdown(
@@ -49,56 +54,129 @@ fun AccountDropdown(
     expanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    avatar: @Composable () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(220), label = "dropdownChevron")
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(350), label = "dropdownChevron")
+    val colors = Luna.colors
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Luna.colors.cell),
+            .padding(horizontal = 18.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.cell),
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .cellPress(onToggle)
+                .pressFade(onClick = onToggle)
                 .semantics {
                     role = Role.Button
                     stateDescription = if (expanded) "aufgeklappt" else "zugeklappt"
                 }
-                .heightIn(min = 60.dp)
-                .padding(start = 14.dp, end = 12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Avatar(name.ifBlank { email }, size = 36.dp)
-            Spacer(Modifier.width(12.dp))
+            avatar()
+            Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
-                Text(email, style = LunaType.headline, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    name.ifBlank { email },
+                    style = LunaType.headline.copy(fontWeight = FontWeight.Bold),
+                    color = colors.label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 if (name.isNotBlank() && !name.equals(email, ignoreCase = true)) {
-                    Text(name, style = LunaType.footnote, color = Luna.colors.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(email, style = LunaType.footnote, color = colors.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (unread > 0) {
-                Text(unread.toString(), style = LunaType.body, color = Luna.colors.secondaryLabel)
-                Spacer(Modifier.width(6.dp))
+            AnimatedVisibility(visible = unread > 0 && !expanded, enter = fadeIn(), exit = fadeOut()) {
+                Row {
+                    Box(
+                        Modifier
+                            .heightIn(min = 22.dp)
+                            .widthIn(min = 22.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.red)
+                            .padding(horizontal = 7.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(unread.toString(), style = LunaType.caption.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                }
             }
-            Icon(
-                LunaIcons.ChevronDown,
-                contentDescription = if (expanded) "Zuklappen" else "Aufklappen",
-                tint = Luna.colors.tertiaryLabel,
-                modifier = Modifier.size(24.dp).rotate(rotation),
-            )
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (colors.isSilver) colors.cellPressed else colors.background),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    LunaIcons.ChevronDown,
+                    contentDescription = if (expanded) "Zuklappen" else "Aufklappen",
+                    tint = colors.label,
+                    modifier = Modifier.size(20.dp).rotate(rotation),
+                )
+            }
         }
         AnimatedVisibility(
             visible = expanded,
-            enter = expandVertically(tween(240)) + fadeIn(tween(240)),
-            exit = shrinkVertically(tween(200)) + fadeOut(tween(160)),
+            enter = expandVertically(tween(400, easing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f))) + fadeIn(tween(240)),
+            exit = shrinkVertically(tween(320, easing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f))) + fadeOut(tween(160)),
         ) {
-            Column {
-                HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator)
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 6.dp)) {
                 content()
             }
+        }
+    }
+}
+
+/** Ordnerzeile mit Symbol-Kachel, Name, Zähler und Pfeil. */
+@Composable
+fun FolderRow(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: String?,
+    selected: Boolean = false,
+    showDivider: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val colors = Luna.colors
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(thickness = 1.dp, color = colors.separator)
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).pressFade(onClick = onClick),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val shape = RoundedCornerShape(10.dp)
+            Box(
+                Modifier
+                    .size(38.dp)
+                    .then(
+                        if (selected) Modifier.inverseSurface(colors.inverseBrush, shape)
+                        else Modifier.clip(shape).background(if (colors.isSilver) colors.cellPressed else colors.background)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = if (selected) colors.onInverse else colors.label, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Text(
+                title,
+                style = LunaType.headline,
+                color = colors.label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (count != null) {
+                Text(count, style = LunaType.subhead.copy(fontWeight = FontWeight.SemiBold), color = colors.secondaryLabel)
+                Spacer(Modifier.width(6.dp))
+            }
+            Icon(LunaIcons.ChevronRight, contentDescription = null, tint = colors.tertiaryLabel, modifier = Modifier.size(18.dp))
         }
     }
 }

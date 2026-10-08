@@ -59,9 +59,15 @@ import com.lunamail.app.data.Draft
 import com.lunamail.app.data.MessageBody
 import com.lunamail.app.data.MessageSummary
 import com.lunamail.app.ui.MailViewModel
-import com.lunamail.app.ui.components.TextAction
+import com.lunamail.app.ui.components.AccountAvatar
+import com.lunamail.app.ui.components.SquareButton
 import com.lunamail.app.ui.components.formatLongDate
+import com.lunamail.app.ui.components.inverseSurface
 import com.lunamail.app.ui.components.pressFade
+import com.lunamail.app.ui.theme.screenBackground
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
 import kotlinx.coroutines.launch
@@ -133,7 +139,6 @@ data class ComposeRequest(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Unit) {
     val accounts by vm.accounts.collectAsStateWithLifecycle()
@@ -147,15 +152,42 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
     var body by rememberSaveable { mutableStateOf(request.body) }
     var expanded by rememberSaveable { mutableStateOf(request.cc.isNotBlank()) }
     var sending by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var confirmDiscard by remember { mutableStateOf(false) }
+    var draftError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val toFocus = remember { FocusRequester() }
     val bodyFocus = remember { FocusRequester() }
+    val colors = Luna.colors
+
+    fun draft(sender: com.lunamail.app.data.Account) = Draft(
+        accountId = sender.id,
+        to = to,
+        cc = cc,
+        bcc = bcc,
+        subject = subject,
+        body = body,
+        inReplyTo = request.inReplyTo,
+        references = request.references,
+    )
 
     val dirty = to != request.to || subject != request.subject || body != request.body || cc != request.cc || bcc.isNotBlank()
+
+    /** Schließen sichert angefangene E-Mails automatisch als Entwurf, wie im Prototyp. */
     fun close() {
-        if (dirty && !sending) confirmDiscard = true else onClose()
+        if (sending || saving) return
+        val sender = account
+        if (!dirty || sender == null) {
+            onClose()
+            return
+        }
+        saving = true
+        scope.launch {
+            vm.saveDraft(draft(sender))
+                .onSuccess { onClose() }
+                .onFailure { draftError = MailViewModel.friendlyError(it) }
+            saving = false
+        }
     }
     BackHandler { close() }
 
@@ -164,96 +196,89 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
     Column(
         Modifier
             .fillMaxSize()
-            .background(Luna.colors.background)
+            .screenBackground()
             .windowInsetsPadding(WindowInsets.statusBars)
             .imePadding()
             .navigationBarsPadding(),
     ) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-            Box(Modifier.align(Alignment.CenterStart)) { TextAction("Abbrechen") { close() } }
-            Box(
+        Box(Modifier.padding(top = 8.dp).size(40.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(colors.strongFill).align(Alignment.CenterHorizontally))
+        Row(
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (saving) {
+                Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                }
+            } else {
+                SquareButton(LunaIcons.ChevronDown, "Schließen") { close() }
+            }
+            Spacer(Modifier.weight(1f))
+            Row(
                 Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(if (canSend || sending) Luna.colors.accent else Luna.colors.fill)
+                    .height(42.dp)
+                    .inverseSurface(colors.inverseBrush, RoundedCornerShape(8.dp))
                     .pressFade(enabled = canSend) {
                         val sender = account ?: return@pressFade
                         sending = true
                         scope.launch {
-                            vm.send(
-                                Draft(
-                                    accountId = sender.id,
-                                    to = to,
-                                    cc = cc,
-                                    bcc = bcc,
-                                    subject = subject,
-                                    body = body,
-                                    inReplyTo = request.inReplyTo,
-                                    references = request.references,
-                                )
-                            ).onSuccess { onClose() }
+                            vm.send(draft(sender))
+                                .onSuccess { onClose() }
                                 .onFailure { error = MailViewModel.friendlyError(it) }
                             sending = false
                         }
-                    },
-                contentAlignment = Alignment.Center,
+                    }
+                    .padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (sending) {
-                    CircularProgressIndicator(color = Luna.colors.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    CircularProgressIndicator(color = colors.onInverse, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                 } else {
-                    Icon(LunaIcons.ArrowUp, "Senden", tint = if (canSend) Luna.colors.onAccent else Luna.colors.tertiaryLabel, modifier = Modifier.size(20.dp))
+                    Icon(LunaIcons.Send, contentDescription = null, tint = colors.onInverse, modifier = Modifier.size(16.dp))
                 }
+                Spacer(Modifier.width(8.dp))
+                Text("Senden", style = LunaType.button.copy(fontSize = 14.5.sp), color = colors.onInverse)
             }
         }
 
         Text(
             subject.ifBlank { "Neue E-Mail" },
-            style = LunaType.title2,
-            color = Luna.colors.label,
+            style = LunaType.subjectTitle,
+            color = colors.label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 10.dp),
         )
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            HeaderField("An:", to, { to = it }, KeyboardType.Email, Modifier.focusRequester(toFocus))
+            HeaderField("An", to, { to = it }, KeyboardType.Email, Modifier.focusRequester(toFocus), placeholder = "Name oder E-Mail")
             if (expanded) {
-                HeaderField("Kopie:", cc, { cc = it }, KeyboardType.Email)
-                HeaderField("Blindkopie:", bcc, { bcc = it }, KeyboardType.Email)
-                FromField(
-                    current = account?.email.orEmpty(),
-                    options = accounts.map { it.id to "${it.displayName} <${it.email}>" },
-                    onSelect = { accountId = it },
-                )
-            } else {
-                Column(Modifier.fillMaxWidth().pressFade { expanded = true }) {
-                    Text(
-                        "Kopie/Blindkopie, Von: ${account?.email.orEmpty()}",
-                        style = LunaType.body,
-                        color = Luna.colors.secondaryLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                    HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
-                }
+                HeaderField("Kopie", cc, { cc = it }, KeyboardType.Email)
+                HeaderField("Blind", bcc, { bcc = it }, KeyboardType.Email)
             }
-            HeaderField("Betreff:", subject, { subject = it }, KeyboardType.Text, capitalize = true)
-
-            BasicTextField(
-                value = body,
-                onValueChange = { body = it },
-                textStyle = LunaType.body.copy(color = Luna.colors.label),
-                cursorBrush = SolidColor(Luna.colors.accent),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 320.dp)
-                    .padding(16.dp)
-                    .focusRequester(bodyFocus),
+            FromField(
+                vm = vm,
+                current = account,
+                options = accounts,
+                onSelect = { accountId = it },
+                onExpand = if (expanded) null else ({ expanded = true }),
             )
+            HeaderField("Betreff", subject, { subject = it }, KeyboardType.Text, capitalize = true)
+
+            Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+                if (body.isEmpty()) Text("Nachricht", style = LunaType.body.copy(fontSize = 16.5.sp), color = colors.tertiaryLabel)
+                BasicTextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    textStyle = LunaType.body.copy(color = colors.label, fontSize = 16.5.sp, lineHeight = 25.sp),
+                    cursorBrush = SolidColor(colors.label),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 320.dp)
+                        .focusRequester(bodyFocus),
+                )
+            }
         }
     }
 
@@ -261,46 +286,16 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
         runCatching { if (request.to.isBlank()) toFocus.requestFocus() else bodyFocus.requestFocus() }
     }
 
-    if (confirmDiscard) {
-        // Wie in Apple Mail: Entwurf löschen, sichern oder weiterschreiben.
-        ModalBottomSheet(
-            onDismissRequest = { confirmDiscard = false },
-            containerColor = Luna.colors.groupedBackground,
-        ) {
-            Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp)) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Luna.colors.cell)) {
-                    SheetButton("Entwurf löschen", Luna.colors.red) {
-                        confirmDiscard = false
-                        onClose()
-                    }
-                    HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator)
-                    SheetButton("Entwurf sichern", Luna.colors.accent) {
-                        val sender = account ?: return@SheetButton
-                        confirmDiscard = false
-                        scope.launch {
-                            vm.saveDraft(
-                                Draft(
-                                    accountId = sender.id,
-                                    to = to,
-                                    cc = cc,
-                                    bcc = bcc,
-                                    subject = subject,
-                                    body = body,
-                                    inReplyTo = request.inReplyTo,
-                                    references = request.references,
-                                )
-                            ).onSuccess { onClose() }
-                                .onFailure { error = MailViewModel.friendlyError(it) }
-                        }
-                    }
-                }
-                Spacer(Modifier.heightIn(min = 8.dp))
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Luna.colors.cell)) {
-                    SheetButton("Abbrechen", Luna.colors.accent, bold = true) { confirmDiscard = false }
-                }
-                Spacer(Modifier.heightIn(min = 16.dp))
-            }
-        }
+    draftError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { draftError = null },
+            title = { Text("Entwurf nicht gespeichert") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { draftError = null }) { Text("Weiterschreiben", color = colors.label) } },
+            dismissButton = {
+                TextButton(onClick = { draftError = null; onClose() }) { Text("Verwerfen", color = colors.red) }
+            },
+        )
     }
 
     error?.let { message ->
@@ -308,7 +303,7 @@ fun ComposeScreen(vm: MailViewModel, request: ComposeRequest, onClose: () -> Uni
             onDismissRequest = { error = null },
             title = { Text("Das hat nicht geklappt") },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { error = null }) { Text("OK", color = colors.label) } },
         )
     }
 }
@@ -321,64 +316,81 @@ private fun HeaderField(
     keyboardType: KeyboardType,
     modifier: Modifier = Modifier,
     capitalize: Boolean = false,
+    placeholder: String = "",
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = LunaType.body, color = Luna.colors.secondaryLabel)
-            Spacer(Modifier.width(6.dp))
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = LunaType.body.copy(color = Luna.colors.label),
-                cursorBrush = SolidColor(Luna.colors.accent),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = keyboardType,
-                    capitalization = if (capitalize) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
-                    autoCorrectEnabled = capitalize,
-                ),
-                modifier = modifier.weight(1f),
-            )
+    val colors = Luna.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Row(Modifier.heightIn(min = 50.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = LunaType.callout.copy(fontWeight = FontWeight.Medium), color = colors.secondaryLabel, modifier = Modifier.width(66.dp))
+            Box(Modifier.weight(1f)) {
+                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = LunaType.callout, color = colors.tertiaryLabel)
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = LunaType.callout.copy(color = colors.label),
+                    cursorBrush = SolidColor(colors.label),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = keyboardType,
+                        capitalization = if (capitalize) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
+                        autoCorrectEnabled = capitalize,
+                    ),
+                    modifier = modifier.fillMaxWidth(),
+                )
+            }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
+        HorizontalDivider(thickness = 1.dp, color = colors.separator)
     }
 }
 
+/** „Von“ als Chip mit Kontobild; bei mehreren Konten öffnet Antippen die Auswahl. */
 @Composable
-private fun FromField(current: String, options: List<Pair<String, String>>, onSelect: (String) -> Unit) {
+private fun FromField(
+    vm: MailViewModel,
+    current: com.lunamail.app.data.Account?,
+    options: List<com.lunamail.app.data.Account>,
+    onSelect: (String) -> Unit,
+    onExpand: (() -> Unit)?,
+) {
     var open by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth()) {
-        Box {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .pressFade(enabled = options.size > 1) { open = true }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text("Von:", style = LunaType.body, color = Luna.colors.secondaryLabel)
-                Spacer(Modifier.width(6.dp))
-                Text(current, style = LunaType.body, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                options.forEach { (id, label) ->
-                    DropdownMenuItem(text = { Text(label) }, onClick = { open = false; onSelect(id) })
+    val pictures by vm.pictures.collectAsStateWithLifecycle()
+    val colors = Luna.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Row(Modifier.heightIn(min = 50.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Von", style = LunaType.callout.copy(fontWeight = FontWeight.Medium), color = colors.secondaryLabel, modifier = Modifier.width(66.dp))
+            Box(Modifier.weight(1f)) {
+                Row(
+                    Modifier
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.cell)
+                        .pressFade(enabled = options.size > 1) { open = true }
+                        .padding(start = 4.dp, end = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AccountAvatar(current, current?.let { vm.pictureFile(it.id) }, current?.let { pictures[it.id] }, size = 24.dp, radius = 12.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(current?.email.orEmpty(), style = LunaType.subhead.copy(fontWeight = FontWeight.SemiBold), color = colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (options.size > 1) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(LunaIcons.ChevronDown, contentDescription = null, tint = colors.label, modifier = Modifier.size(14.dp))
+                    }
+                }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    options.forEach { account ->
+                        DropdownMenuItem(text = { Text("${account.displayName} <${account.email}>") }, onClick = { open = false; onSelect(account.id) })
+                    }
                 }
             }
+            if (onExpand != null) {
+                Text(
+                    "Kopie",
+                    style = LunaType.subhead.copy(fontWeight = FontWeight.SemiBold),
+                    color = colors.secondaryLabel,
+                    modifier = Modifier.pressFade(onClick = onExpand).padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
+                )
+            }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
+        HorizontalDivider(thickness = 1.dp, color = colors.separator)
     }
-}
-
-@Composable
-private fun SheetButton(label: String, color: Color, bold: Boolean = false, onClick: () -> Unit) {
-    Text(
-        label,
-        style = if (bold) LunaType.headline else LunaType.body,
-        color = color,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressFade(onClick = onClick)
-            .padding(vertical = 16.dp),
-    )
 }

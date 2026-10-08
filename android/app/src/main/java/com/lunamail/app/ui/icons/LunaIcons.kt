@@ -138,4 +138,20 @@ object LunaIcons {
     val ChevronLeft by lazy { icon("ChevronLeft", "m15 18-6-6 6-6") }
     val ChevronDown by lazy { icon("ChevronDown", "m6 9 6 6 6-6") }
     val ChevronUp by lazy { icon("ChevronUp", "m18 15-6-6-6 6") }
+
+    // Navigation und Neues Design
+    val Plus by lazy { icon("Plus", "M5 12h14", "M12 5v14") }
+    val Home by lazy {
+        icon("Home", "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8", "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z")
+    }
+    val User by lazy { icon("User", circle(12f, 7f, 4f), "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2") }
+    val Camera by lazy {
+        icon("Camera", "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z", circle(12f, 13f, 3f))
+    }
+    val Bell by lazy { icon("Bell", "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M10.3 21a1.94 1.94 0 0 0 3.4 0") }
+    val ArrowLeft by lazy { icon("ArrowLeft", "m12 19-7-7 7-7", "M19 12H5") }
+    val ArrowRight by lazy { icon("ArrowRight", "M5 12h14", "m12 5 7 7-7 7") }
+    val Mail by lazy { icon("Mail", rect(2f, 4f, 20f, 16f, 2f), "m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7") }
+    val Alert by lazy { icon("Alert", circle(12f, 12f, 10f), "M12 8v4", "M12 16h.01") }
+    val Swipe by lazy { icon("Swipe", "M3 12h18", "m15 6 6 6-6 6") }
 }
