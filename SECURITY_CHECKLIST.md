@@ -1,8 +1,8 @@
 # Security Checklist – Pflicht für jedes Projekt
 
 > Diese Datei gilt für alle Projekte von All Seasons Production.
-> Lege sie ins Repo (z. B. als `SECURITY_CHECKLIST.md`) und verweise in `AGENTS.md` / `CLAUDE.md` darauf.
-> **Jeder Coding-Agent (Codex, Claude Code usw.) muss diese Punkte bei jeder neuen Funktion, jedem Endpoint und jedem Refactor berücksichtigen und selbstständig umsetzen.**
+> Lege sie ins Repo und verweise in `CLAUDE.md` darauf.
+> **Claude Code (und jeder andere Coding-Agent) muss diese Punkte bei jeder neuen Funktion, jedem Endpoint und jedem Refactor berücksichtigen und selbstständig umsetzen.**
 
 ---
 
