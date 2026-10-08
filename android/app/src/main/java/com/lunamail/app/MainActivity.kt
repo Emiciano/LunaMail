@@ -12,17 +12,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.lunamail.app.ui.LunaMailApp
 import com.lunamail.app.ui.screens.ComposeRequest
-import com.lunamail.app.ui.theme.LunaMailTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
     private val mailto = MutableStateFlow<ComposeRequest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Die Oberfläche ist immer dunkel, also auch helle Symbole in Status- und Navigationsleiste.
+        // Die Symbolfarbe der Systemleisten setzt LunaMailTheme passend zum gewählten Design.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handle(intent)
@@ -31,9 +30,7 @@ class MainActivity : ComponentActivity() {
             getSharedPreferences("settings", MODE_PRIVATE).getBoolean(com.lunamail.app.ui.MailViewModel.KEY_NOTIFICATIONS, true),
         )
         setContent {
-            LunaMailTheme {
-                LunaMailApp(mailtoRequests = mailto, onMailtoHandled = { mailto.value = null })
-            }
+            LunaMailApp(mailtoRequests = mailto, onMailtoHandled = { mailto.value = null })
         }
         // Das erste WebView lädt die ganze Chromium-Engine und blockiert dafür kurz den
         // UI-Thread. Das passiert hier einmal im Leerlauf nach dem Start, statt beim Öffnen

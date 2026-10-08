@@ -65,13 +65,24 @@ import com.lunamail.app.data.BoxRef
 import com.lunamail.app.data.MessageBody
 import com.lunamail.app.data.MessageSummary
 import com.lunamail.app.ui.MailViewModel
-import com.lunamail.app.ui.components.Avatar
-import com.lunamail.app.ui.components.BackButton
-import com.lunamail.app.ui.components.BarIcon
-import com.lunamail.app.ui.components.BottomToolbar
-import com.lunamail.app.ui.components.NavigationBar
-import com.lunamail.app.ui.components.formatLongDate
+import com.lunamail.app.ui.components.Chip
+import com.lunamail.app.ui.components.LunaButton
+import com.lunamail.app.ui.components.SenderLogo
+import com.lunamail.app.ui.components.SquareButton
+import com.lunamail.app.ui.components.formatListDate
+import com.lunamail.app.ui.components.inverseSurface
 import com.lunamail.app.ui.components.pressFade
+import com.lunamail.app.ui.theme.screenBackground
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaColors
 import com.lunamail.app.ui.theme.LunaType
@@ -83,13 +94,13 @@ fun MessageScreen(
     vm: MailViewModel,
     messageKey: String,
     box: BoxRef?,
-    backLabel: String,
-    onBack: () -> Unit,
-    onReply: (MessageSummary, MessageBody?, ReplyKind) -> Unit,
-    onCompose: () -> Unit,
+    /** Ohne Zurück-Knopf, wenn die Mail aufgeklappt rechts neben der Liste steht. */
+    onBack: (() -> Unit)?,
+    onReply: (MessageSummary, MessageBody?, ReplyKind, String?) -> Unit,
+    onClosed: () -> Unit = { onBack?.invoke() },
+    onKeyChange: (String) -> Unit = {},
 ) {
-    // Mit den Pfeilen oben rechts blättert man wie in Apple Mail durch das Postfach,
-    // ohne die Ansicht zu verlassen.
+    // Mit den Pfeilen oben blättert man durch das Postfach, ohne die Ansicht zu verlassen.
     var currentKey by rememberSaveable(messageKey) { mutableStateOf(messageKey) }
     var direction by remember { mutableStateOf(1) }
 
@@ -101,7 +112,7 @@ fun MessageScreen(
     if (live != null && live != lastKnown) lastKnown = live
     val message = live ?: lastKnown
     if (message == null) {
-        LaunchedEffect(Unit) { onBack() }
+        LaunchedEffect(Unit) { onClosed() }
         return
     }
 
@@ -114,6 +125,7 @@ fun MessageScreen(
         if (target == null) return
         direction = if (down) 1 else -1
         currentKey = target.key
+        onKeyChange(target.key)
     }
 
     /** Nach Löschen/Archivieren/Bewegen zur nächsten E-Mail wechseln, wie Apple Mail. */
@@ -121,28 +133,40 @@ fun MessageScreen(
         when {
             older != null -> show(older, down = true)
             newer != null -> show(newer, down = false)
-            else -> onBack()
+            else -> onClosed()
         }
     }
 
     var body by remember(currentKey) { mutableStateOf<MessageBody?>(null) }
     var showActions by remember { mutableStateOf(false) }
     var showMove by remember { mutableStateOf(false) }
-    val background = Luna.colors.background
+    val colors = Luna.colors
+    val archives = vm.swipeArchives.collectAsStateWithLifecycle().value && vm.canArchive(message)
 
-    Column(Modifier.fillMaxSize().background(background)) {
-        NavigationBar(
-            title = "",
-            collapsed = true,
-            background = background,
-            navigation = { BackButton(backLabel, onBack) },
-            actions = {
+    Column(Modifier.fillMaxSize().screenBackground().windowInsetsPadding(WindowInsets.statusBars)) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onBack != null) SquareButton(LunaIcons.ArrowLeft, "Zurück", onClick = onBack)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (box != null) {
-                    BarIcon(LunaIcons.ChevronUp, "Vorherige E-Mail", enabled = newer != null) { show(newer, down = false) }
-                    BarIcon(LunaIcons.ChevronDown, "Nächste E-Mail", enabled = older != null) { show(older, down = true) }
+                    SquareButton(LunaIcons.ChevronUp, "Vorherige E-Mail", enabled = newer != null) { show(newer, down = false) }
+                    SquareButton(LunaIcons.ChevronDown, "Nächste E-Mail", enabled = older != null) { show(older, down = true) }
                 }
-            },
-        )
+                SquareButton(if (message.seen) LunaIcons.Mail else LunaIcons.MailOpen, if (message.seen) "Als ungelesen markieren" else "Als gelesen markieren") {
+                    vm.markSeen(message, !message.seen)
+                }
+                if (vm.canArchive(message) && !archives) {
+                    SquareButton(LunaIcons.Archive, "Archivieren") {
+                        vm.archive(message)
+                        afterRemoval()
+                    }
+                }
+                SquareButton(LunaIcons.More, "Mehr") { showActions = true }
+            }
+        }
 
         AnimatedContent(
             targetState = message,
@@ -154,30 +178,54 @@ fun MessageScreen(
             modifier = Modifier.weight(1f),
             label = "message",
         ) { shown ->
-            MessageContent(vm, shown) { loaded -> if (shown.key == currentKey) body = loaded }
+            MessageContent(
+                vm,
+                shown,
+                onQuickReply = { text -> onReply(shown, body, ReplyKind.Reply, text) },
+            ) { loaded -> if (shown.key == currentKey) body = loaded }
         }
 
-        val archives = vm.swipeArchives.collectAsStateWithLifecycle().value && vm.canArchive(message)
-        BottomToolbar {
-            BarIcon(
-                if (message.flagged) LunaIcons.FlagFilled else LunaIcons.Flag,
-                if (message.flagged) "Markierung entfernen" else "Markieren",
-                tint = if (message.flagged) Luna.colors.orange else Luna.colors.accent,
-            ) { vm.setFlagged(message, !message.flagged) }
-            BarIcon(LunaIcons.Move, "Bewegen") { showMove = true }
-            if (archives) {
-                BarIcon(LunaIcons.Archive, "Archivieren") {
-                    vm.archive(message)
-                    afterRemoval()
+        // Untere Leiste: Markieren, Löschen/Archivieren und groß „Antworten“.
+        Column(Modifier.fillMaxWidth().background(if (colors.isSilver) Color(0x5928292D) else colors.background)) {
+            HorizontalDivider(thickness = 1.dp, color = colors.separator)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SquareButton(
+                    LunaIcons.Flag,
+                    if (message.flagged) "Markierung entfernen" else "Markieren",
+                    size = 54.dp,
+                    tint = if (message.flagged) colors.orange else colors.label,
+                ) { vm.markFlagged(message, !message.flagged) }
+                if (archives) {
+                    SquareButton(LunaIcons.Archive, "Archivieren", size = 54.dp) {
+                        vm.archive(message)
+                        afterRemoval()
+                    }
+                } else {
+                    SquareButton(LunaIcons.Trash, "Löschen", size = 54.dp, tint = colors.red) {
+                        vm.delete(message)
+                        afterRemoval()
+                    }
                 }
-            } else {
-                BarIcon(LunaIcons.Trash, "Löschen") {
-                    vm.delete(message)
-                    afterRemoval()
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(54.dp)
+                        .inverseSurface(colors.inverseBrush, RoundedCornerShape(10.dp))
+                        .pressFade { onReply(message, body, ReplyKind.Reply, null) },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(LunaIcons.Reply, contentDescription = null, tint = colors.onInverse, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(9.dp))
+                    Text("Antworten", style = LunaType.headline.copy(fontWeight = FontWeight.Bold), color = colors.onInverse)
                 }
             }
-            BarIcon(LunaIcons.Reply, "Antworten") { showActions = true }
-            BarIcon(LunaIcons.Compose, "Neue E-Mail", onClick = onCompose)
         }
     }
 
@@ -186,7 +234,7 @@ fun MessageScreen(
             vm = vm,
             message = message,
             onDismiss = { showActions = false },
-            onReply = { kind -> onReply(message, body, kind) },
+            onReply = { kind -> onReply(message, body, kind, null) },
             onMove = { showMove = true },
             onRemoved = { afterRemoval() },
         )
@@ -199,8 +247,12 @@ fun MessageScreen(
     }
 }
 
+/** Antworten mit einem Tipp, wie im Prototyp unter der E-Mail. */
+private val QuickReplies = listOf("Danke, passt so!", "Ich melde mich morgen.", "Kurz telefonieren?")
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (MessageBody) -> Unit) {
+private fun MessageContent(vm: MailViewModel, message: MessageSummary, onQuickReply: (String) -> Unit, onBody: (MessageBody) -> Unit) {
     var body by remember(message.key) { mutableStateOf<MessageBody?>(null) }
     var error by remember(message.key) { mutableStateOf<String?>(null) }
     LaunchedEffect(message.key) {
@@ -216,9 +268,7 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Header(message, body)
-        HorizontalDivider(thickness = 0.5.dp, color = Luna.colors.separator, modifier = Modifier.padding(start = 16.dp))
-        Spacer(Modifier.height(12.dp))
+        Header(vm, message, body)
         val state = when {
             error != null -> BodyState.Error
             body == null -> BodyState.Loading
@@ -230,7 +280,7 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
                 error.orEmpty(),
                 style = LunaType.body,
                 color = Luna.colors.secondaryLabel,
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(20.dp),
             )
             BodyState.Loading -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Luna.colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
@@ -244,9 +294,9 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
                     SelectionContainer {
                         Text(
                             loaded.text.orEmpty().trim(),
-                            style = LunaType.body,
+                            style = LunaType.body.copy(fontSize = 16.5.sp, lineHeight = 26.sp),
                             color = Luna.colors.label,
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = 20.dp),
                         )
                     }
                 }
@@ -254,8 +304,15 @@ private fun MessageContent(vm: MailViewModel, message: MessageSummary, onBody: (
         }
         }
         body?.attachments?.takeIf { it.isNotEmpty() }?.let { attachments ->
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(6.dp))
             attachments.forEach { attachment -> AttachmentRow(vm, message, attachment) }
+        }
+        FlowRow(
+            Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            QuickReplies.forEach { text -> Chip(text, selected = false) { onQuickReply(text) } }
         }
         Spacer(Modifier.height(32.dp))
     }
@@ -266,81 +323,113 @@ private enum class BodyState { Loading, Error, Loaded }
 /** So lange dauert der Übergang in die Leseansicht ungefähr (Push-Animation). */
 private const val SETTLE_MS = 380L
 
-/** Antippen lädt den Anhang und öffnet ihn mit einer passenden App. */
+/** Anhang als Karte; Antippen lädt ihn und öffnet ihn mit einer passenden App. */
 @Composable
 private fun AttachmentRow(vm: MailViewModel, message: MessageSummary, attachment: AttachmentInfo) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
+    val colors = Luna.colors
+    fun open() {
+        loading = true
+        failed = null
+        scope.launch {
+            vm.downloadAttachment(message, attachment)
+                .onSuccess { file ->
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                    val mime = attachment.mimeType.substringBefore(';').trim().lowercase()
+                        .takeIf { it.contains('/') && it != "application/octet-stream" }
+                        ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+                        ?: "*/*"
+                    val intent = Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, mime)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    runCatching { context.startActivity(Intent.createChooser(intent, attachment.fileName)) }
+                        .onFailure { failed = "Keine App zum Öffnen gefunden" }
+                }
+                .onFailure { failed = it.message }
+            loading = false
+        }
+    }
     Row(
         Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Luna.colors.fill)
-            .pressFade(enabled = !loading) {
-                loading = true
-                failed = null
-                scope.launch {
-                    vm.downloadAttachment(message, attachment)
-                        .onSuccess { file ->
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-                            val mime = attachment.mimeType.substringBefore(';').trim().lowercase()
-                                .takeIf { it.contains('/') && it != "application/octet-stream" }
-                                ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
-                                ?: "*/*"
-                            val intent = Intent(Intent.ACTION_VIEW)
-                                .setDataAndType(uri, mime)
-                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            runCatching { context.startActivity(Intent.createChooser(intent, attachment.fileName)) }
-                                .onFailure { failed = "Keine App zum Öffnen gefunden" }
-                        }
-                        .onFailure { failed = it.message }
-                    loading = false
-                }
-            }
+            .background(colors.cell)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(LunaIcons.Paperclip, null, tint = Luna.colors.accent, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            Text(attachment.fileName, style = LunaType.subhead, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            failed?.let { Text(it, style = LunaType.caption, color = Luna.colors.red, maxLines = 2) }
+        val ext = attachment.fileName.substringAfterLast('.', "").take(4).uppercase().ifBlank { "DATEI" }
+        Box(
+            Modifier.size(44.dp, 52.dp).inverseSurface(colors.inverseBrush, RoundedCornerShape(7.dp)).padding(bottom = 8.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Text(ext, style = LunaType.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.4.sp), color = colors.onInverse)
         }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(attachment.fileName, style = LunaType.subhead.copy(fontWeight = FontWeight.SemiBold), color = colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            when {
+                failed != null -> Text(failed.orEmpty(), style = LunaType.caption, color = colors.red, maxLines = 2)
+                attachment.size > 0 -> Text(formatSize(attachment.size), style = LunaType.footnote, color = colors.secondaryLabel)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
         if (loading) {
-            CircularProgressIndicator(color = Luna.colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-        } else if (attachment.size > 0) {
-            Text(formatSize(attachment.size), style = LunaType.footnote, color = Luna.colors.secondaryLabel)
+            CircularProgressIndicator(color = colors.secondaryLabel, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        } else {
+            LunaButton("Öffnen", primary = false) { open() }
         }
     }
 }
 
 @Composable
-private fun Header(message: MessageSummary, body: MessageBody?) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Avatar(message.senderLabel, 44.dp)
+private fun Header(vm: MailViewModel, message: MessageSummary, body: MessageBody?) {
+    val colors = Luna.colors
+    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp)) {
+        Text(message.subject.ifBlank { "(Kein Betreff)" }, style = LunaType.subjectTitle, color = colors.label)
+        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            vm.account(message.accountId)?.description?.let { Tag(it) }
+            if (message.flagged) Tag("Markiert", LunaIcons.Flag, colors.orange)
+            body?.attachments?.size?.takeIf { it > 0 }?.let { Tag(if (it == 1) "1 Anhang" else "$it Anhänge", LunaIcons.Paperclip) }
+        }
+        Row(Modifier.padding(top = 18.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            SenderLogo(message.fromAddress, message.senderLabel, size = 44.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(message.senderLabel, style = LunaType.headline, color = Luna.colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(message.senderLabel, style = LunaType.headline.copy(fontWeight = FontWeight.Bold), color = colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val to = body?.to?.takeIf { it.isNotBlank() } ?: message.to
-                if (to.isNotBlank()) {
-                    Text("An: $to", style = LunaType.subhead, color = Luna.colors.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                if (!body?.cc.isNullOrBlank()) {
-                    Text("Kopie: ${body!!.cc}", style = LunaType.subhead, color = Luna.colors.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+                Text(
+                    buildString {
+                        append(message.fromAddress)
+                        if (to.isNotBlank()) append(" · An: ").append(to)
+                        if (!body?.cc.isNullOrBlank()) append(" · Kopie: ").append(body!!.cc)
+                    },
+                    style = LunaType.footnote.copy(fontSize = 13.5.sp),
+                    color = colors.secondaryLabel,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            if (message.flagged) {
-                Icon(LunaIcons.FlagFilled, null, tint = Luna.colors.orange, modifier = Modifier.size(16.dp))
-            }
+            Spacer(Modifier.width(8.dp))
+            Text(formatListDate(message.date), style = LunaType.footnote, color = colors.secondaryLabel, modifier = Modifier.align(Alignment.Top).padding(top = 3.dp))
         }
-        Spacer(Modifier.height(14.dp))
-        Text(message.subject.ifBlank { "(Kein Betreff)" }, style = LunaType.title3, color = Luna.colors.label)
-        Spacer(Modifier.height(2.dp))
-        Text(formatLongDate(message.date), style = LunaType.subhead, color = Luna.colors.secondaryLabel)
+    }
+}
+
+@Composable
+private fun Tag(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, tint: Color = Luna.colors.label) {
+    Row(
+        Modifier.height(26.dp).clip(RoundedCornerShape(6.dp)).background(Luna.colors.cell).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(text, style = LunaType.caption.copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold), color = tint, maxLines = 1)
     }
 }
 

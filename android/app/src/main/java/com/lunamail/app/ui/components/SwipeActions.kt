@@ -40,7 +40,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.lunamail.app.ui.theme.Luna
 import com.lunamail.app.ui.theme.LunaType
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -49,6 +52,7 @@ data class SwipeAction(
     val label: String,
     val icon: ImageVector,
     val color: Color,
+    val contentColor: Color = Color.White,
     val onClick: () -> Unit,
 )
 
@@ -151,9 +155,13 @@ fun SwipeActionsBox(
             }
         }
 
+        val rowBackground = Luna.colors.swipeRow
         Box(
             Modifier
                 .offset { IntOffset(offset.value.roundToInt(), 0) }
+                // Im Silber-Design sind Zeilen durchsichtig; beim Wischen brauchen sie eine
+                // Fläche, damit die Aktionen nicht durchscheinen.
+                .drawBehind { if (offset.value != 0f) drawRect(rowBackground) }
                 .draggable(
                     state = draggableState,
                     orientation = Orientation.Horizontal,
@@ -237,10 +245,10 @@ private fun SwipeButton(
             Icon(
                 action.icon,
                 contentDescription = null,
-                tint = Color.White,
+                tint = action.contentColor,
                 modifier = Modifier.size(22.dp).graphicsLayer { scaleX = scale; scaleY = scale },
             )
-            Text(action.label, style = LunaType.caption, color = Color.White, maxLines = 1, overflow = TextOverflow.Clip)
+            Text(action.label, style = LunaType.caption.copy(fontWeight = FontWeight.Bold), color = action.contentColor, maxLines = 1, overflow = TextOverflow.Clip)
         }
     }
 }

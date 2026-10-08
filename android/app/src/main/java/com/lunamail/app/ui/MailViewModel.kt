@@ -14,6 +14,7 @@ import com.lunamail.app.data.Mailbox
 import com.lunamail.app.data.MailboxRole
 import com.lunamail.app.data.MessageBody
 import com.lunamail.app.data.MessageSummary
+import com.lunamail.app.ui.theme.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -40,9 +41,15 @@ import javax.mail.AuthenticationFailedException
 import javax.mail.Flags
 import javax.mail.MessagingException
 
+/** Art einer Aktion, bestimmt Symbol und Animation der Aktions-Insel. */
+enum class IslandKind { Delete, Move, Read, Unread, Flag, Unflag, Sent, Draft, Picture, Done, Error }
+
 sealed interface UiEvent {
-    data class Info(val text: String) : UiEvent
-    data class Undoable(val text: String, val actionId: Long) : UiEvent
+    val text: String
+    val kind: IslandKind
+
+    data class Info(override val text: String, override val kind: IslandKind = IslandKind.Error) : UiEvent
+    data class Undoable(override val text: String, val actionId: Long, override val kind: IslandKind) : UiEvent
 }
 
 class MailViewModel(app: Application) : AndroidViewModel(app) {
@@ -96,6 +103,63 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _notifications.value = value
         prefs.edit().putBoolean(KEY_NOTIFICATIONS, value).apply()
         com.lunamail.app.NewMailWorker.schedule(getApplication(), value)
+    }
+
+    private val _theme = MutableStateFlow(ThemeMode.fromKey(prefs.getString(KEY_THEME, null)))
+    /** Gewähltes Design (Hell, Dunkel, Silber). */
+    val theme: StateFlow<ThemeMode> = _theme.asStateFlow()
+
+    fun setTheme(mode: ThemeMode) {
+        _theme.value = mode
+        prefs.edit().putString(KEY_THEME, mode.key).apply()
+    }
+
+    private val avatarDir = File(app.filesDir, "avatars")
+
+    /** Stand der Kontobilder; ändert sich, wenn ein Bild gesetzt oder entfernt wird. */
+    private val _pictures = MutableStateFlow(
+        avatarDir.listFiles().orEmpty().filter { it.extension == "jpg" }.associate { it.nameWithoutExtension to it.lastModified() }
+    )
+    val pictures: StateFlow<Map<String, Long>> = _pictures.asStateFlow()
+
+    fun pictureFile(accountId: String) = File(avatarDir, "$accountId.jpg")
+
+    /** Übernimmt ein Bild aus der Fotoauswahl als Kontobild, quadratisch zugeschnitten. */
+    fun setAccountPicture(accountId: String, uri: android.net.Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val resolver = getApplication<Application>().contentResolver
+                    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+                    var sample = 1
+                    while (bounds.outWidth / (sample * 2) >= AVATAR_SIZE && bounds.outHeight / (sample * 2) >= AVATAR_SIZE) sample *= 2
+                    val source = resolver.openInputStream(uri)?.use {
+                        android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+                    } ?: error("Bild nicht lesbar")
+                    val side = minOf(source.width, source.height)
+                    val square = android.graphics.Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(square, AVATAR_SIZE, AVATAR_SIZE, true)
+                    avatarDir.mkdirs()
+                    val target = pictureFile(accountId)
+                    val tmp = File(avatarDir, "$accountId.tmp")
+                    tmp.outputStream().use { scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+                    tmp.renameTo(target)
+                }.isSuccess
+            }
+            if (ok) {
+                _pictures.update { it + (accountId to System.currentTimeMillis()) }
+                _events.tryEmit(UiEvent.Info("Profilbild gesetzt", IslandKind.Picture))
+            } else {
+                _events.tryEmit(UiEvent.Info("Das Bild konnte nicht geladen werden."))
+            }
+        }
+    }
+
+    fun removeAccountPicture(accountId: String) {
+        pictureFile(accountId).delete()
+        _pictures.update { it - accountId }
+        _events.tryEmit(UiEvent.Info("Profilbild entfernt", IslandKind.Picture))
     }
 
     private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
@@ -311,7 +375,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Führt eine Server-Aktion nach kurzer Wartezeit aus, damit sie noch widerrufen werden kann. */
-    private fun scheduleUndoable(text: String, restore: () -> Unit, action: suspend () -> Unit) {
+    private fun scheduleUndoable(text: String, kind: IslandKind, restore: () -> Unit, action: suspend () -> Unit) {
         val id = actionIds.incrementAndGet()
         val job = viewModelScope.launch {
             delay(UNDO_WINDOW_MS)
@@ -324,7 +388,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         pending[id] = PendingAction(job, restore)
-        _events.tryEmit(UiEvent.Undoable(text, id))
+        _events.tryEmit(UiEvent.Undoable(text, id, kind))
     }
 
     fun undo(actionId: Long) {
@@ -343,10 +407,15 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         mailbox(accountId, MailboxRole.ARCHIVE) ?: mailbox(accountId, MailboxRole.ALL)
 
     /** Entfernt Nachrichten sofort aus der Liste und führt die Server-Aktion nach der Widerrufen-Frist aus. */
-    private fun removeBatch(messages: List<MessageSummary>, text: String, action: suspend (MailClient, MessageSummary) -> Unit) {
+    private fun removeBatch(
+        messages: List<MessageSummary>,
+        text: String,
+        kind: IslandKind,
+        action: suspend (MailClient, MessageSummary) -> Unit,
+    ) {
         if (messages.isEmpty()) return
         val restores = messages.map { removeLocally(it) }
-        scheduleUndoable(text, { restores.forEach { it() } }) {
+        scheduleUndoable(text, kind, { restores.forEach { it() } }) {
             messages.forEach { message -> client(message.accountId)?.let { action(it, message) } }
         }
     }
@@ -361,7 +430,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
             _events.tryEmit(UiEvent.Info("Für dieses Konto gibt es kein Archiv-Postfach."))
             return
         }
-        removeBatch(archivable, countText(archivable.size, "Archiviert", "E-Mails archiviert")) { client, m ->
+        removeBatch(archivable, countText(archivable.size, "Ins Archiv verschoben", "E-Mails archiviert"), IslandKind.Move) { client, m ->
             client.move(m.folder, m.uid, archiveTarget(m.accountId)!!.fullName)
         }
     }
@@ -374,7 +443,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         val permanent = messages.all { isInTrash(it) || mailbox(it.accountId, MailboxRole.TRASH) == null }
         val text = if (permanent) countText(messages.size, "Endgültig gelöscht", "E-Mails endgültig gelöscht")
             else countText(messages.size, "In den Papierkorb gelegt", "E-Mails in den Papierkorb gelegt")
-        removeBatch(messages, text) { client, m ->
+        removeBatch(messages, text, IslandKind.Delete) { client, m ->
             val trash = mailbox(m.accountId, MailboxRole.TRASH)
             if (trash != null && trash.fullName != m.folder) client.move(m.folder, m.uid, trash.fullName)
             else client.deletePermanently(m.folder, m.uid)
@@ -385,12 +454,42 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
 
     fun moveTo(messages: List<MessageSummary>, target: Mailbox) {
         val movable = messages.filter { it.accountId == target.accountId && it.folder != target.fullName }
-        removeBatch(movable, "In „${target.displayName}“ bewegt") { client, m -> client.move(m.folder, m.uid, target.fullName) }
+        removeBatch(movable, "In „${target.displayName}“ bewegt", IslandKind.Move) { client, m -> client.move(m.folder, m.uid, target.fullName) }
     }
 
     fun setSeen(messages: List<MessageSummary>, seen: Boolean) = messages.forEach { setSeen(it, seen) }
 
     fun setFlagged(messages: List<MessageSummary>, flagged: Boolean) = messages.forEach { setFlagged(it, flagged) }
+
+    /** Gelesen/ungelesen durch eine Aktion des Nutzers, mit Rückmeldung in der Aktions-Insel. */
+    fun markSeen(messages: List<MessageSummary>, seen: Boolean) {
+        if (messages.isEmpty()) return
+        setSeen(messages, seen)
+        val text = when {
+            messages.size == 1 && seen -> "Als gelesen markiert"
+            messages.size == 1 -> "Als ungelesen markiert"
+            seen -> "${messages.size} als gelesen markiert"
+            else -> "${messages.size} als ungelesen markiert"
+        }
+        _events.tryEmit(UiEvent.Info(text, if (seen) IslandKind.Read else IslandKind.Unread))
+    }
+
+    fun markSeen(message: MessageSummary, seen: Boolean) = markSeen(listOf(message), seen)
+
+    /** Markieren durch eine Aktion des Nutzers, mit Rückmeldung in der Aktions-Insel. */
+    fun markFlagged(messages: List<MessageSummary>, flagged: Boolean) {
+        if (messages.isEmpty()) return
+        setFlagged(messages, flagged)
+        val text = when {
+            messages.size == 1 && flagged -> "Markiert"
+            messages.size == 1 -> "Markierung entfernt"
+            flagged -> "${messages.size} markiert"
+            else -> "${messages.size} Markierungen entfernt"
+        }
+        _events.tryEmit(UiEvent.Info(text, if (flagged) IslandKind.Flag else IslandKind.Unflag))
+    }
+
+    fun markFlagged(message: MessageSummary, flagged: Boolean) = markFlagged(listOf(message), flagged)
 
     /** Wischen nach links: Papierkorb oder Archiv, wie in den Einstellungen gewählt. */
     fun swipePrimary(message: MessageSummary) =
@@ -438,7 +537,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         val client = client(draft.accountId) ?: error("Konto nicht gefunden")
         val drafts = mailbox(draft.accountId, MailboxRole.DRAFTS) ?: error("Für dieses Konto gibt es keinen Entwürfe-Ordner.")
         client.saveDraft(draft, drafts.fullName)
-        _events.tryEmit(UiEvent.Info("Entwurf gesichert"))
+        _events.tryEmit(UiEvent.Info("Entwurf gespeichert", IslandKind.Draft))
         Unit
     }.recoverCatching { throw IllegalStateException(friendlyError(it)) }
 
@@ -458,6 +557,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun send(draft: Draft): Result<Unit> = runCatching {
         val client = client(draft.accountId) ?: error("Konto nicht gefunden")
         client.send(draft, mailbox(draft.accountId, MailboxRole.SENT)?.fullName)
+        _events.tryEmit(UiEvent.Info("Gesendet", IslandKind.Sent))
+        Unit
     }.recoverCatching { throw IllegalStateException(friendlyError(it)) }
 
     // endregion
@@ -476,6 +577,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
     fun removeAccount(accountId: String) {
         clients.remove(accountId)?.close()
         accountStore.remove(accountId)
+        pictureFile(accountId).delete()
+        _pictures.update { it - accountId }
         viewModelScope.launch(Dispatchers.IO) { cache.clearAccount(accountId) }
         _accounts.value = accountStore.accounts()
         _mailboxes.update { it - accountId }
@@ -499,6 +602,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_SWIPE_ARCHIVES = "swipe_archives"
         const val KEY_NOTIFICATIONS = "notifications"
         const val KEY_EXPANDED_ACCOUNTS = "expanded_accounts"
+        const val KEY_THEME = "theme"
+        const val AVATAR_SIZE = 256
 
         fun friendlyError(e: Throwable): String {
             if (e is com.lunamail.app.data.ServerCheckException) return "${e.server}: ${friendlyError(e.cause ?: e)}"
