@@ -114,6 +114,13 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString(KEY_THEME, mode.key).apply()
     }
 
+    /** Aufgeklappt: gespeicherte Breite der Liste neben der Mail-Ansicht (in dp). */
+    fun listWidth(): Float = prefs.getFloat(KEY_LIST_WIDTH, DEFAULT_LIST_WIDTH)
+
+    fun setListWidth(dp: Float) {
+        prefs.edit().putFloat(KEY_LIST_WIDTH, dp).apply()
+    }
+
     private val avatarDir = File(app.filesDir, "avatars")
 
     /** Stand der Kontobilder; ändert sich, wenn ein Bild gesetzt oder entfernt wird. */
@@ -603,6 +610,8 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_NOTIFICATIONS = "notifications"
         const val KEY_EXPANDED_ACCOUNTS = "expanded_accounts"
         const val KEY_THEME = "theme"
+        const val KEY_LIST_WIDTH = "list_width"
+        const val DEFAULT_LIST_WIDTH = 372f
         const val AVATAR_SIZE = 256
 
         fun friendlyError(e: Throwable): String {

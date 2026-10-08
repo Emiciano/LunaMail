@@ -12,6 +12,8 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,6 +23,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,13 +67,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -365,6 +376,7 @@ private fun HomeScaffold(
     fun selectTab(next: Tab) {
         tab = next
         midKey = null
+        selectedKey = null
         editing = false
     }
 
@@ -397,6 +409,8 @@ private fun HomeScaffold(
 
     BackHandler(enabled = wide && midKey != null) { midKey = null }
     BackHandler(enabled = !editing && tab != Tab.Start && (!wide || midKey == null)) { selectTab(Tab.Start) }
+    // Zuletzt registriert, damit Zurück zuerst die offene Mail rechts schließt.
+    BackHandler(enabled = wide && selectedKey != null) { selectedKey = null }
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -501,70 +515,129 @@ private fun HomeScaffold(
             }
         }
         VerticalDivider(thickness = 1.dp, color = colors.separator)
-        Box(Modifier.width(372.dp).fillMaxHeight()) {
-            val mid = midKey?.let(::boxOf)
-            Crossfade(targetState = mid to tab, animationSpec = tween(200), label = "middle") { (box, current) ->
-                if (box != null) {
-                    MessageListScreen(
-                        vm = vm,
-                        box = box,
-                        onBack = { midKey = null },
-                        onOpen = { openMessage(it, box) },
-                        onCompose = { onCompose(ComposeRequest(accountId = box.accountId.takeUnless { box.isUnified })) },
-                        onReply = onReplyFromList,
-                        selectedKey = selectedKey,
-                        bottomInset = navBottom,
-                        showFab = false,
-                    )
-                } else {
-                    TabContent(current, navBottom)
+        // Ohne gewählte E-Mail nutzt die Liste die ganze Breite; beim Antippen schiebt sich die
+        // Mail-Ansicht von rechts herein. Den Steg dazwischen kann man ziehen.
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
+            val total = maxWidth
+            val maxList = (total - MinReaderWidth - GripWidth).coerceAtLeast(MinListWidth)
+            var savedList by remember { mutableFloatStateOf(vm.listWidth()) }
+            var dragging by remember { mutableStateOf(false) }
+            val listTarget = savedList.dp.coerceIn(MinListWidth, maxList)
+            val reading = selectedKey != null
+            val listWidth by animateDpAsState(
+                targetValue = if (reading) listTarget else total,
+                animationSpec = if (dragging) snap() else tween(PUSH_MS, easing = IosEasing),
+                label = "listWidth",
+            )
+            // Beim Schließen bleibt die Mail sichtbar, bis sie ganz hinausgeschoben ist.
+            var lastKey by remember { mutableStateOf(selectedKey) }
+            LaunchedEffect(selectedKey) { if (selectedKey != null) lastKey = selectedKey }
+            val shownKey = selectedKey ?: lastKey
+            val readerVisible = shownKey != null && listWidth < total - 0.5.dp
+
+            Box(Modifier.width(listWidth).fillMaxHeight()) {
+                val mid = midKey?.let(::boxOf)
+                Crossfade(targetState = mid to tab, animationSpec = tween(200), label = "middle") { (box, current) ->
+                    if (box != null) {
+                        MessageListScreen(
+                            vm = vm,
+                            box = box,
+                            onBack = { midKey = null },
+                            onOpen = { openMessage(it, box) },
+                            onCompose = { onCompose(ComposeRequest(accountId = box.accountId.takeUnless { box.isUnified })) },
+                            onReply = onReplyFromList,
+                            selectedKey = selectedKey,
+                            bottomInset = navBottom,
+                            showFab = false,
+                        )
+                    } else {
+                        TabContent(current, navBottom)
+                    }
+                }
+            }
+
+            if (readerVisible) {
+                val density = LocalDensity.current
+                SplitGrip(
+                    active = dragging,
+                    modifier = Modifier
+                        .offset { IntOffset(listWidth.roundToPx(), 0) }
+                        .width(GripWidth)
+                        .fillMaxHeight()
+                        .draggable(
+                            orientation = Orientation.Horizontal,
+                            state = rememberDraggableState { delta ->
+                                val next = savedList.dp.coerceIn(MinListWidth, maxList) + with(density) { delta.toDp() }
+                                savedList = next.coerceIn(MinListWidth, maxList).value
+                            },
+                            onDragStarted = { dragging = true },
+                            onDragStopped = {
+                                dragging = false
+                                vm.setListWidth(savedList)
+                            },
+                        )
+                        .pointerInput(Unit) {
+                            detectTapGestures(onDoubleTap = {
+                                savedList = MailViewModel.DEFAULT_LIST_WIDTH
+                                vm.setListWidth(savedList)
+                            })
+                        },
+                )
+                Box(
+                    Modifier
+                        .offset { IntOffset((listWidth + GripWidth).roundToPx(), 0) }
+                        .width(total - listTarget - GripWidth)
+                        .fillMaxHeight()
+                        .background(if (colors.isSilver) Color.Transparent else colors.cell)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(end = 14.dp, top = 6.dp, bottom = 18.dp + navBottom),
+                ) {
+                    val paperShape = RoundedCornerShape(12.dp)
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .shadow(if (colors.isSilver) 0.dp else 14.dp, paperShape)
+                            .clip(paperShape)
+                            .background(if (colors.isSilver) Color(0x6128292D) else colors.background)
+                            .then(if (colors.isSilver) Modifier.border(1.dp, Color(0x1AFFFFFF), paperShape) else Modifier),
+                    ) {
+                        key(shownKey) {
+                            MessageScreen(
+                                vm = vm,
+                                messageKey = shownKey!!,
+                                box = boxOf(selectedBoxKey),
+                                onBack = null,
+                                onReply = onReply,
+                                onClosed = { selectedKey = null },
+                                onKeyChange = { selectedKey = it },
+                                onClose = { selectedKey = null },
+                            )
+                        }
+                    }
                 }
             }
         }
-        VerticalDivider(thickness = 1.dp, color = colors.separator)
+    }
+}
+
+private val MinListWidth = 300.dp
+private val MinReaderWidth = 340.dp
+private val GripWidth = 14.dp
+
+/** Steg zwischen Liste und Mail-Ansicht: Linie mit Griff, der beim Ziehen wächst. */
+@Composable
+private fun SplitGrip(active: Boolean, modifier: Modifier = Modifier) {
+    val colors = Luna.colors
+    val pillWidth by animateDpAsState(if (active) 8.dp else 6.dp, label = "gripW")
+    val pillHeight by animateDpAsState(if (active) 64.dp else 46.dp, label = "gripH")
+    Box(modifier.background(if (colors.isSilver) Color.Transparent else colors.cell), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(1.dp).fillMaxHeight().background(colors.separator))
         Box(
             Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .background(if (colors.isSilver) Color.Transparent else colors.cell)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 18.dp + navBottom),
-        ) {
-            val paperShape = RoundedCornerShape(12.dp)
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .shadow(if (colors.isSilver) 0.dp else 14.dp, paperShape)
-                    .clip(paperShape)
-                    .background(if (colors.isSilver) Color(0x6128292D) else colors.background)
-                    .then(if (colors.isSilver) Modifier.border(1.dp, Color(0x1AFFFFFF), paperShape) else Modifier),
-            ) {
-                val current = selectedKey
-                if (current == null) {
-                    Column(
-                        Modifier.fillMaxSize().padding(30.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text("Keine E-Mail ausgewählt", style = LunaType.title2.copy(fontSize = 19.sp, fontWeight = FontWeight.Bold), color = colors.label)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Wähle links eine Nachricht.", style = LunaType.subhead, color = colors.secondaryLabel, textAlign = TextAlign.Center)
-                    }
-                } else {
-                    key(current) {
-                        MessageScreen(
-                            vm = vm,
-                            messageKey = current,
-                            box = boxOf(selectedBoxKey),
-                            onBack = null,
-                            onReply = onReply,
-                            onClosed = { selectedKey = null },
-                            onKeyChange = { selectedKey = it },
-                        )
-                    }
-                }
-            }
-        }
+                .size(pillWidth, pillHeight)
+                .clip(RoundedCornerShape(50))
+                .background(if (active) colors.label else colors.tertiaryLabel),
+        )
     }
 }
 
