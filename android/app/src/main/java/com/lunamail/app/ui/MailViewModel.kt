@@ -103,6 +103,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _notifications.value = value
         prefs.edit().putBoolean(KEY_NOTIFICATIONS, value).apply()
         com.lunamail.app.NewMailWorker.schedule(getApplication(), value)
+        com.lunamail.app.PushService.sync(getApplication())
     }
 
     private val _theme = MutableStateFlow(ThemeMode.fromKey(prefs.getString(KEY_THEME, null)))
@@ -178,6 +179,13 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refreshAll()
+        // Kommt über die Push-Verbindung neue Post, die offene Liste gleich nachladen.
+        viewModelScope.launch {
+            com.lunamail.app.MailEvents.inboxChanged.collect { accountId ->
+                val box = BoxRef(accountId, "INBOX")
+                if (box.key !in _refreshing.value) refreshBox(box)
+            }
+        }
     }
 
     private fun client(accountId: String): MailClient? {
@@ -578,6 +586,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) { accountStore.upsert(account, password) }
         clients.put(account.id, client)?.close()
         _accounts.value = accountStore.accounts()
+        com.lunamail.app.PushService.sync(getApplication())
         refreshAll()
     }.recoverCatching { throw IllegalStateException(friendlyError(it)) }
 
@@ -590,6 +599,7 @@ class MailViewModel(app: Application) : AndroidViewModel(app) {
         _accounts.value = accountStore.accounts()
         _mailboxes.update { it - accountId }
         _messages.update { all -> all.filterKeys { !it.startsWith("$accountId|") } }
+        com.lunamail.app.PushService.sync(getApplication())
     }
 
     // endregion

@@ -91,6 +91,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.lunamail.app.PushService
 import com.lunamail.app.data.AccountConfig
 import com.lunamail.app.data.BoxRef
 import com.lunamail.app.data.MailboxRole
@@ -195,13 +196,21 @@ private fun LunaMailContent(vm: MailViewModel, mailtoRequests: StateFlow<Compose
 
     // Ab Android 13 braucht es die Erlaubnis für Mitteilungen über neue E-Mails.
     val accounts by vm.accounts.collectAsStateWithLifecycle()
-    val notifyPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    // Danach einmal fragen, ob LunaMail vom Akku-Sparen ausgenommen werden darf, damit die
+    // Verbindung für neue E-Mails im Hintergrund nicht gekappt wird.
     val context = LocalContext.current
+    val notifyPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        PushService.askBatteryExemption(context)
+    }
     LaunchedEffect(accounts.isNotEmpty()) {
-        if (accounts.isNotEmpty() && Build.VERSION.SDK_INT >= 33 && vm.notifications.value &&
+        if (accounts.isEmpty() || !vm.notifications.value) return@LaunchedEffect
+        PushService.sync(context)
+        if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            PushService.askBatteryExemption(context)
         }
     }
 

@@ -35,14 +35,14 @@ class MailClient(private val account: Account, private val password: String) {
     private val socketFactory = MultiAddressSocketFactory()
     private var store: IMAPStore? = null
 
-    private fun imapSession(): Session {
+    private fun imapSession(readTimeoutMs: Int = 30_000): Session {
         val protocol = if (account.imapSecurity == Security.SSL) "imaps" else "imap"
         val props = Properties().apply {
             put("mail.store.protocol", protocol)
             put("mail.$protocol.host", account.imapHost)
             put("mail.$protocol.port", account.imapPort.toString())
             put("mail.$protocol.connectiontimeout", "15000")
-            put("mail.$protocol.timeout", "30000")
+            put("mail.$protocol.timeout", readTimeoutMs.toString())
             put("mail.$protocol.peek", "true")
             put("mail.$protocol.partialfetch", "false")
             if (account.imapSecurity == Security.SSL) {
@@ -326,6 +326,55 @@ class MailClient(private val account: Account, private val password: String) {
         store = null
     }
 
+    @Volatile private var idleStore: IMAPStore? = null
+    @Volatile private var idleFolder: IMAPFolder? = null
+
+    /**
+     * Hält eine eigene Verbindung zum Eingang offen (IMAP IDLE) und ruft [onNewMail], sobald der
+     * Server neue Nachrichten meldet. Blockiert, bis die Verbindung abbricht oder [stopIdle] sie
+     * schließt. Gibt false zurück, wenn der Server IDLE nicht beherrscht.
+     */
+    fun idleInbox(onNewMail: () -> Unit): Boolean {
+        // Lange Lese-Zeitspanne: Im IDLE schweigt der Server, bis etwas passiert.
+        val s = imapSession(readTimeoutMs = IDLE_READ_TIMEOUT_MS)
+            .getStore(if (account.imapSecurity == Security.SSL) "imaps" else "imap") as IMAPStore
+        idleStore = s
+        try {
+            s.connect(account.imapHost, account.imapPort, account.username, password)
+            if (!s.hasCapability("IDLE")) return false
+            val folder = s.getFolder("INBOX") as IMAPFolder
+            folder.open(Folder.READ_ONLY)
+            folder.addMessageCountListener(object : javax.mail.event.MessageCountAdapter() {
+                override fun messagesAdded(e: javax.mail.event.MessageCountEvent) = onNewMail()
+            })
+            idleFolder = folder
+            while (folder.isOpen && s.isConnected) folder.idle()
+            return true
+        } finally {
+            idleFolder = null
+            idleStore = null
+            runCatching { s.close() }
+        }
+    }
+
+    /**
+     * Unterbricht das laufende IDLE kurz mit einer Abfrage. Das hält die Verbindung wach und
+     * fällt auf, wenn sie still abgerissen ist (dann endet [idleInbox] mit einem Fehler).
+     */
+    fun pingIdle() {
+        val folder = idleFolder ?: return
+        try {
+            folder.messageCount
+        } catch (_: Exception) {
+            runCatching { idleStore?.close() }
+        }
+    }
+
+    /** Beendet [idleInbox] von außen. */
+    fun stopIdle() {
+        runCatching { idleStore?.close() }
+    }
+
     /** Ein im HTML eingebundener Mailteil (Logo, Signaturbild) mit seinen Bezeichnern. */
     class InlineResource(val contentId: String?, val location: String?, val fileName: String?, val mimeType: String, val bytes: ByteArray)
 
@@ -389,6 +438,7 @@ class MailClient(private val account: Account, private val password: String) {
 
     companion object {
         const val PAGE_SIZE = 60
+        private const val IDLE_READ_TIMEOUT_MS = 20 * 60_000
 
         /** Erhöhen, wenn sich die Aufbereitung ändert, damit zwischengespeicherte Inhalte neu geladen werden. */
         const val BODY_FORMAT = 3
