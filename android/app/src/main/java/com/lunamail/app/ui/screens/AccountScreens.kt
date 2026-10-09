@@ -509,6 +509,12 @@ fun AccountTabScreen(vm: MailViewModel, onAddAccount: () -> Unit, bottomInset: a
         item {
             SettingsGroup("Einstellungen") {
                 SettingRow(LunaIcons.Bell, "Mitteilungen", "Bei jeder neuen E-Mail", notifications) { vm.setNotifications(it) }
+                if (notifications) {
+                    val context = LocalContext.current
+                    LinkRow(LunaIcons.Bell, "Dauer-Meldung ausblenden", "„Wartet auf neue E-Mails“ abschalten, neue E-Mails kommen weiter") {
+                        com.lunamail.app.PushService.openStatusSettings(context)
+                    }
+                }
                 SettingRow(LunaIcons.Archive, "Wischen archiviert", "Nach links wischen legt ins Archiv statt in den Papierkorb", swipeArchives) {
                     vm.setSwipeArchives(it)
                 }
@@ -627,6 +633,32 @@ private fun SettingRow(
             }
             Spacer(Modifier.width(8.dp))
             LunaSwitch(checked, onChange)
+        }
+        HorizontalDivider(thickness = 1.dp, color = colors.separator)
+    }
+}
+
+/** Einstellungszeile, die woanders hinführt (Pfeil statt Schalter). */
+@Composable
+private fun LinkRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    val colors = Luna.colors
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).pressFade(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(colors.cell), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = colors.label, modifier = Modifier.size(21.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                Text(title, style = LunaType.headline, color = colors.label)
+                Text(subtitle, style = LunaType.footnote, color = colors.secondaryLabel)
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(LunaIcons.ChevronRight, contentDescription = null, tint = colors.tertiaryLabel, modifier = Modifier.size(20.dp))
         }
         HorizontalDivider(thickness = 1.dp, color = colors.separator)
     }
