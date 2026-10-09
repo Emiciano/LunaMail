@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -49,6 +50,8 @@ import com.lunamail.app.data.MailboxRole
 import com.lunamail.app.data.MessageSummary
 import com.lunamail.app.ui.MailViewModel
 import com.lunamail.app.ui.components.AccountAvatar
+import com.lunamail.app.ui.components.appearIn
+import com.lunamail.app.ui.components.rememberShownAt
 import com.lunamail.app.ui.components.LunaButton
 import com.lunamail.app.ui.components.SectionHeader
 import com.lunamail.app.ui.components.SenderLogo
@@ -90,6 +93,9 @@ fun StartScreen(
 
     val drafts = mailboxes.values.flatten().filter { it.role == MailboxRole.DRAFTS }.sumOf { it.total }
 
+    // Beim Öffnen gleiten die Abschnitte nacheinander herein (nur beim ersten Aufbau).
+    val shownAt = rememberShownAt()
+
     PullToRefreshBox(
         isRefreshing = refreshing.isNotEmpty(),
         onRefresh = { vm.refreshAll() },
@@ -100,116 +106,128 @@ fun StartScreen(
             contentPadding = PaddingValues(bottom = bottomInset + 20.dp),
         ) {
             item(key = "top") {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Box(Modifier.appearIn(shownAt, 0)) {
                     Row(
-                        Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.cell)
-                            .pressScale(scale = 0.98f, onClick = onCompose)
-                            .padding(start = 13.dp, end = 5.dp),
+                        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 20.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(LunaIcons.Search, contentDescription = null, tint = colors.label, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(9.dp))
-                        Text(
-                            "Wem schreibst du?",
-                            style = LunaType.callout.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-                            color = colors.label,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Box(
+                        Row(
                             Modifier
-                                .size(34.dp)
-                                .shadow(1.dp, RoundedCornerShape(8.dp))
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (colors.isSilver) colors.cellPressed else colors.background),
-                            contentAlignment = Alignment.Center,
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(colors.cell)
+                                .pressScale(scale = 0.98f, onClick = onCompose)
+                                .padding(start = 13.dp, end = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(LunaIcons.Plus, contentDescription = "Neue E-Mail", tint = colors.label, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                    if (onProfile != null) {
-                        Spacer(Modifier.width(12.dp))
-                        val me = accounts.firstOrNull()
-                        Box(Modifier.pressScale(onClick = onProfile)) {
-                            AccountAvatar(
-                                account = me,
-                                picture = me?.let { vm.pictureFile(it.id) },
-                                version = me?.let { pictures[it.id] },
-                                size = 40.dp,
-                                radius = 20.dp,
+                            Icon(LunaIcons.Search, contentDescription = null, tint = colors.label, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(9.dp))
+                            Text(
+                                "Wem schreibst du?",
+                                style = LunaType.callout.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                                color = colors.label,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f),
                             )
+                            Box(
+                                Modifier
+                                    .size(34.dp)
+                                    .shadow(1.dp, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (colors.isSilver) colors.cellPressed else colors.background),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(LunaIcons.Plus, contentDescription = "Neue E-Mail", tint = colors.label, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        if (onProfile != null) {
+                            Spacer(Modifier.width(12.dp))
+                            val me = accounts.firstOrNull()
+                            Box(Modifier.pressScale(onClick = onProfile)) {
+                                AccountAvatar(
+                                    account = me,
+                                    picture = me?.let { vm.pictureFile(it.id) },
+                                    version = me?.let { pictures[it.id] },
+                                    size = 40.dp,
+                                    radius = 20.dp,
+                                )
+                            }
                         }
                     }
                 }
             }
 
             item(key = "tiles") {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 28.dp),
-                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                ) {
-                    Tile("Eingang", LunaIcons.Inbox, unread.size, Modifier.weight(1f)) { onTile(StartTile.Inbox) }
-                    Tile("Markiert", LunaIcons.Flag, flagged.size, Modifier.weight(1f)) { onTile(StartTile.Flagged) }
-                    Tile("Gesendet", LunaIcons.Send, 0, Modifier.weight(1f)) { onTile(StartTile.Sent) }
-                    Tile("Entwürfe", LunaIcons.Draft, drafts, Modifier.weight(1f)) { onTile(StartTile.Drafts) }
+                Box(Modifier.appearIn(shownAt, 1)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 28.dp),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        Tile("Eingang", LunaIcons.Inbox, unread.size, Modifier.weight(1f)) { onTile(StartTile.Inbox) }
+                        Tile("Markiert", LunaIcons.Flag, flagged.size, Modifier.weight(1f)) { onTile(StartTile.Flagged) }
+                        Tile("Gesendet", LunaIcons.Send, 0, Modifier.weight(1f)) { onTile(StartTile.Sent) }
+                        Tile("Entwürfe", LunaIcons.Draft, drafts, Modifier.weight(1f)) { onTile(StartTile.Drafts) }
+                    }
                 }
             }
 
             item(key = "unreadHeader") {
-                SectionHeader("Ungelesen", count = unread.size, action = "Alle ansehen", onAction = onShowUnread)
+                Box(Modifier.appearIn(shownAt, 2)) {
+                    SectionHeader("Ungelesen", count = unread.size, action = "Alle ansehen", onAction = onShowUnread)
+                }
             }
             item(key = "unreadCards") {
-                LazyRow(
-                    contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 28.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (unread.isEmpty()) {
-                        item(key = "none") {
-                            Column(
-                                Modifier
-                                    .width(272.dp)
-                                    .height(164.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(colors.cell)
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                Text("Alles gelesen", style = LunaType.cardTitle, color = colors.label)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Keine ungelesenen E-Mails", style = LunaType.footnote.copy(fontWeight = FontWeight.SemiBold), color = colors.secondaryLabel)
+                Box(Modifier.appearIn(shownAt, 3)) {
+                    LazyRow(
+                        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 28.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (unread.isEmpty()) {
+                            item(key = "none") {
+                                Column(
+                                    Modifier
+                                        .width(272.dp)
+                                        .height(164.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.cell)
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Text("Alles gelesen", style = LunaType.cardTitle, color = colors.label)
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("Keine ungelesenen E-Mails", style = LunaType.footnote.copy(fontWeight = FontWeight.SemiBold), color = colors.secondaryLabel)
+                                }
                             }
                         }
-                    }
-                    items(unread.take(5), key = { it.key }) { message ->
-                        val index = unread.indexOf(message)
-                        UnreadCard(
-                            message = message,
-                            account = vm.account(message.accountId)?.description.orEmpty(),
-                            strong = index == 0,
-                            modifier = Modifier.animateItem(),
-                        ) { onOpenMessage(message) }
+                        items(unread.take(5), key = { it.key }) { message ->
+                            val index = unread.indexOf(message)
+                            UnreadCard(
+                                message = message,
+                                account = vm.account(message.accountId)?.description.orEmpty(),
+                                strong = index == 0,
+                                modifier = Modifier.animateItem(),
+                            ) { onOpenMessage(message) }
+                        }
                     }
                 }
             }
 
             if (unread.isNotEmpty()) {
                 item(key = "promo") {
-                    PromoCard(unread.size) { vm.markSeen(unread, true) }
+                    Box(Modifier.appearIn(shownAt, 4)) {
+                        PromoCard(unread.size) { vm.markSeen(unread, true) }
+                    }
                 }
             }
 
             item(key = "recentHeader") {
-                SectionHeader("Zuletzt", action = "Posteingang", onAction = onShowInbox)
+                Box(Modifier.appearIn(shownAt, 5)) {
+                    SectionHeader("Zuletzt", action = "Posteingang", onAction = onShowInbox)
+                }
             }
-            items(inbox.take(3), key = { "recent:" + it.key }) { message ->
-                MessageRow(message, onClick = { onOpenMessage(message) }, modifier = Modifier.animateItem())
+            itemsIndexed(inbox.take(RECENT_COUNT), key = { _, m -> "recent:" + m.key }) { index, message ->
+                MessageRow(message, onClick = { onOpenMessage(message) }, modifier = Modifier.animateItem().appearIn(shownAt, 6 + index))
             }
         }
     }
@@ -354,3 +372,6 @@ private fun PromoCard(count: Int, onReadAll: () -> Unit) {
         }
     }
 }
+
+/** So viele der neuesten E-Mails zeigt „Zuletzt“ auf der Startseite. */
+private const val RECENT_COUNT = 15

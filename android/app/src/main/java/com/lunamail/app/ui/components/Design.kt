@@ -290,16 +290,14 @@ fun SenderLogo(
     Box(Modifier.size(size)) {
         val current = logo
         if (current != null) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(shape)
-                    .background(Color.White)
-                    .border(1.dp, Color(0x14000000), shape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(current, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            }
+            // Das Logo ist schon quadratisch und ohne Polster aufbereitet, ohne Rahmen darum.
+            Image(
+                current,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+                modifier = Modifier.fillMaxSize().clip(shape),
+            )
         } else {
             val initials = remember(name) { initialsOf(name) }
             Box(
@@ -408,5 +406,28 @@ fun formatDayGroup(timestamp: Long, now: Long = System.currentTimeMillis()): Str
         days < 7 -> java.text.SimpleDateFormat("EEEE", java.util.Locale.GERMANY).format(timestamp)
         day.get(Calendar.YEAR) == today.get(Calendar.YEAR) -> java.text.SimpleDateFormat("d. MMMM", java.util.Locale.GERMANY).format(timestamp)
         else -> java.text.SimpleDateFormat("d. MMMM yyyy", java.util.Locale.GERMANY).format(timestamp)
+    }
+}
+
+/** Zeitpunkt, zu dem ein Bildschirm aufgebaut wurde; für [appearIn]. */
+@Composable
+fun rememberShownAt(): Long = remember { android.os.SystemClock.uptimeMillis() }
+
+/**
+ * Lässt ein Element beim Öffnen eines Bildschirms von unten einblenden, gestaffelt nach
+ * [index]. Was erst später (z. B. beim Scrollen) erscheint, steht sofort da.
+ */
+@Composable
+fun Modifier.appearIn(shownAt: Long, index: Int): Modifier {
+    val animate = remember { android.os.SystemClock.uptimeMillis() - shownAt < 700 }
+    val progress = remember { androidx.compose.animation.core.Animatable(if (animate) 0f else 1f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!animate) return@LaunchedEffect
+        kotlinx.coroutines.delay(index.coerceAtMost(12) * 45L)
+        progress.animateTo(1f, tween(480, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.9f, 0.25f, 1f)))
+    }
+    return this.graphicsLayer {
+        alpha = progress.value
+        translationY = (1f - progress.value) * 22.dp.toPx()
     }
 }

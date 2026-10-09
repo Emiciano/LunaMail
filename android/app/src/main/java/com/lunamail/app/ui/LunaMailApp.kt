@@ -7,20 +7,26 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.Orientation
@@ -69,8 +75,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -470,14 +481,33 @@ private fun HomeScaffold(
 
     if (!wide) {
         val barSpace = 64.dp + 18.dp + navBottom
-        Box(Modifier.fillMaxSize().screenBackground()) {
-            Crossfade(targetState = tab, animationSpec = tween(180), label = "tab") { current ->
+        // Beim Runterscrollen taucht die Leiste ab, beim Hochscrollen kommt sie zurück.
+        var barHidden by remember { mutableStateOf(false) }
+        LaunchedEffect(tab) { barHidden = false }
+        val hideOnScroll = remember {
+            object : NestedScrollConnection {
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (consumed.y < -4f) barHidden = true
+                    if (consumed.y > 4f || available.y > 4f) barHidden = false
+                    return Offset.Zero
+                }
+            }
+        }
+        Box(Modifier.fillMaxSize().screenBackground().nestedScroll(hideOnScroll)) {
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    (fadeIn(tween(260, delayMillis = 60)) + scaleIn(tween(320, easing = IosEasing), initialScale = 0.97f)) togetherWith
+                        fadeOut(tween(140))
+                },
+                label = "tab",
+            ) { current ->
                 TabContent(current, barSpace)
             }
             FloatingTabBar(
                 tab = tab,
                 unread = unread.size,
-                visible = !editing,
+                visible = !editing && !barHidden,
                 onSelect = ::selectTab,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -661,7 +691,7 @@ private fun FloatingTabBar(tab: Tab, unread: Int, visible: Boolean, onSelect: (T
         modifier = modifier,
     ) {
         val shape = RoundedCornerShape(14.dp)
-        Row(
+        BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
                 .height(64.dp)
@@ -671,9 +701,23 @@ private fun FloatingTabBar(tab: Tab, unread: Int, visible: Boolean, onSelect: (T
                 .border(1.dp, if (colors.isSilver) Color(0x24FFFFFF) else colors.separator, shape)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
         ) {
-            Tab.entries.forEach { item ->
-                TabButton(item, selected = tab == item, badge = if (item == Tab.Inbox) unread else 0, modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    onSelect(item)
+            // Die Markierung des aktiven Tabs gleitet federnd zum neuen Tab.
+            val slot = maxWidth / Tab.entries.size
+            val x by animateDpAsState(slot * tab.ordinal, spring(dampingRatio = 0.72f, stiffness = 420f), label = "tabIndicator")
+            Box(
+                Modifier
+                    .offset { IntOffset(x.roundToPx(), 0) }
+                    .width(slot)
+                    .fillMaxHeight()
+                    .padding(horizontal = 2.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.cell),
+            )
+            Row(Modifier.fillMaxSize()) {
+                Tab.entries.forEach { item ->
+                    TabButton(item, selected = tab == item, badge = if (item == Tab.Inbox) unread else 0, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        onSelect(item)
+                    }
                 }
             }
         }
@@ -683,10 +727,26 @@ private fun FloatingTabBar(tab: Tab, unread: Int, visible: Boolean, onSelect: (T
 @Composable
 private fun TabButton(tab: Tab, selected: Boolean, badge: Int, modifier: Modifier, onClick: () -> Unit) {
     val colors = Luna.colors
-    val tint = if (selected) colors.label else colors.tertiaryLabel
+    val tint by animateColorAsState(if (selected) colors.label else colors.tertiaryLabel, tween(220), label = "tabTint")
+    // Beim Auswählen hüpft das Symbol kurz.
+    val bounce = remember { Animatable(1f) }
+    LaunchedEffect(selected) {
+        if (selected) {
+            bounce.snapTo(0.78f)
+            bounce.animateTo(1f, spring(dampingRatio = 0.38f, stiffness = 520f))
+        }
+    }
     Box(modifier.pressFade(onClick = onClick), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(tab.icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+            Icon(
+                tab.icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp).graphicsLayer {
+                    scaleX = bounce.value
+                    scaleY = bounce.value
+                },
+            )
             Spacer(Modifier.height(4.dp))
             Text(
                 tab.label,
