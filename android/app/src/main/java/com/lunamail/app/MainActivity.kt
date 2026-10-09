@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
             this,
             getSharedPreferences("settings", MODE_PRIVATE).getBoolean(com.lunamail.app.ui.MailViewModel.KEY_NOTIFICATIONS, true),
         )
+        PushService.sync(this)
         setContent {
             LunaMailApp(mailtoRequests = mailto, onMailtoHandled = { mailto.value = null })
         }
