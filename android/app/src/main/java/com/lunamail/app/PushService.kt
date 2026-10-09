@@ -99,28 +99,24 @@ class PushService : Service() {
 
     /** Gibt false zurück, wenn Android den Vordergrund-Start gerade nicht erlaubt. */
     private fun startInForeground(): Boolean {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Verbindung zum Postfach", NotificationManager.IMPORTANCE_MIN).apply {
-                description = "Hält die Verbindung offen, damit neue E-Mails sofort ankommen. Kann ausgeblendet werden."
-                setShowBadge(false)
-            }
-        )
-        val open = PendingIntent.getActivity(
+        ensureStatusChannel(this)
+        // Antippen führt direkt zur Einstellung, mit der man diese Meldung ausblendet.
+        val hide = PendingIntent.getActivity(
             this,
             1,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            statusSettingsIntent(this),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_mail)
             .setContentTitle("Wartet auf neue E-Mails")
+            .setContentText("Antippen, um diese Meldung auszublenden")
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentIntent(open)
+            .setContentIntent(hide)
             .build()
         return runCatching {
             ServiceCompat.startForeground(
@@ -258,6 +254,38 @@ class PushService : Service() {
         private const val KEY_BATTERY_ASKED = "battery_asked"
 
         private fun prefs(context: Context) = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+        private fun ensureStatusChannel(context: Context) {
+            context.getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Verbindung zum Postfach", NotificationManager.IMPORTANCE_MIN).apply {
+                    description = "Hält die Verbindung offen, damit neue E-Mails sofort ankommen. Kann ausgeblendet werden."
+                    setShowBadge(false)
+                }
+            )
+        }
+
+        private fun statusSettingsIntent(context: Context): Intent =
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        /**
+         * Öffnet die Android-Einstellung für die dauerhafte Meldung „Wartet auf neue E-Mails“.
+         * Dort ausgeschaltet verschwindet sie, neue E-Mails werden trotzdem gemeldet.
+         */
+        fun openStatusSettings(context: Context) {
+            ensureStatusChannel(context)
+            runCatching { context.startActivity(statusSettingsIntent(context)) }.onFailure {
+                runCatching {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
+        }
 
         fun enabled(context: Context) = prefs(context).getBoolean(MailViewModel.KEY_NOTIFICATIONS, true)
 
