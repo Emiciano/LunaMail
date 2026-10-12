@@ -425,7 +425,7 @@ private fun Header(vm: MailViewModel, message: MessageSummary, body: MessageBody
 @Composable
 private fun Tag(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, tint: Color = Luna.colors.label) {
     Row(
-        Modifier.height(26.dp).clip(RoundedCornerShape(6.dp)).background(Luna.colors.cell).padding(horizontal = 10.dp),
+        Modifier.heightIn(min = 26.dp).clip(RoundedCornerShape(6.dp)).background(Luna.colors.cell).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
