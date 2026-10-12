@@ -70,7 +70,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -83,8 +82,10 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -92,6 +93,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -337,6 +339,15 @@ private fun LunaMailContent(vm: MailViewModel, mailtoRequests: StateFlow<Compose
             }
         }
 
+        // Die Insel wächst aus dem Kameraloch: Ihre Mitte richtet sich nach der Aussparung
+        // des Displays (S26 Ultra oben mittig, Fold aufgeklappt rechts oben).
+        val view = LocalView.current
+        val cameraX = remember(maxWidth, maxHeight) {
+            ViewCompat.getRootWindowInsets(view)?.displayCutout?.boundingRects
+                ?.filter { it.top <= 0 || it.top < it.height() }
+                ?.minByOrNull { it.top }
+                ?.centerX()
+        }
         island?.let { message ->
             key(message.id) {
                 ActionIsland(
@@ -347,10 +358,17 @@ private fun LunaMailContent(vm: MailViewModel, mailtoRequests: StateFlow<Compose
                         island = IslandMessage(islandIds, "Widerrufen", IslandKind.Done)
                     },
                     onDone = { if (island?.id == message.id) island = null },
-                    // Zugeklappt sitzt die Kamera oben mittig, aufgeklappt rechts oben.
                     modifier = Modifier
-                        .align(if (wide) BiasAlignment(0.5f, -1f) else Alignment.TopCenter)
-                        .padding(top = 6.dp, start = 16.dp, end = 16.dp),
+                        .align(Alignment.TopStart)
+                        .padding(top = 6.dp)
+                        .layout { measurable, constraints ->
+                            val margin = 16.dp.roundToPx()
+                            val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = constraints.maxWidth - 2 * margin))
+                            // Ohne bekannte Aussparung wie bisher: zugeklappt mittig, aufgeklappt rechts.
+                            val center = cameraX ?: if (wide) constraints.maxWidth * 3 / 4 else constraints.maxWidth / 2
+                            val x = (center - placeable.width / 2).coerceIn(margin, (constraints.maxWidth - margin - placeable.width).coerceAtLeast(margin))
+                            layout(constraints.maxWidth, placeable.height) { placeable.place(x, 0) }
+                        },
                 )
             }
         }

@@ -188,7 +188,7 @@ fun StartScreen(
                                 Column(
                                     Modifier
                                         .width(272.dp)
-                                        .height(164.dp)
+                                        .heightIn(min = 164.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(colors.cell)
                                         .padding(16.dp),
@@ -272,7 +272,7 @@ private fun UnreadCard(message: MessageSummary, account: String, strong: Boolean
     Column(
         modifier
             .width(272.dp)
-            .height(164.dp)
+            .heightIn(min = 164.dp)
             .then(
                 if (strong) Modifier.shadow(if (colors.isSilver) 14.dp else 0.dp, shape).inverseSurface(colors.inverseBrush, shape)
                 else Modifier.clip(shape).background(colors.cell)
