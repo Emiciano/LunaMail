@@ -137,8 +137,8 @@ export function Composer() {
   }
 
   return (
-    <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-scrim/40 p-3 backdrop-blur-sm sm:p-6">
-      <form onSubmit={onSubmit} className="tr-panel flex h-[min(760px,calc(100vh-3rem))] w-[min(940px,calc(100vw-3rem))] overflow-hidden rounded-[20px] shadow-[0_32px_100px_rgba(0,0,0,0.65)]">
+    <div className="overlay-enter fixed inset-0 z-[2147483647] flex items-center justify-center bg-scrim/40 p-3 backdrop-blur-sm sm:p-6">
+      <form onSubmit={onSubmit} className="dialog-enter tr-panel flex h-[min(760px,calc(100vh-3rem))] w-[min(940px,calc(100vw-3rem))] overflow-hidden rounded-[20px] shadow-[0_32px_100px_rgba(0,0,0,0.65)]">
         <aside className="hidden w-60 border-r border-ink/[0.07] bg-canvas p-4 md:block">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">Entwürfe</div>
           <div className="mail-scroll max-h-[640px] space-y-2 overflow-y-auto">

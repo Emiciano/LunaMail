@@ -2,6 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, sh
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LunaBackend } from "./backend.mjs";
+import { SenderLogos } from "./sender-logos.mjs";
+import { AppUpdater } from "./updater.mjs";
 
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=128");
 app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling");
@@ -13,6 +15,8 @@ let mainWindow;
 let tray;
 let quitting = false;
 let backend;
+let senderLogos;
+let updater;
 
 function emit(event, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -140,6 +144,18 @@ function registerIpc() {
     }
     return backend.invoke(command, args || {});
   });
+  ipcMain.handle("lunamail:sender-logo", async (_event, address) => {
+    if (typeof address !== "string" || address.length > 320 || backend.settings.senderLogos === false) return null;
+    senderLogos ??= new SenderLogos(path.join(app.getPath("userData"), "sender-logos"));
+    return senderLogos.get(address);
+  });
+  ipcMain.handle("lunamail:update", async (_event, action) => {
+    if (action === "status") return updater.state;
+    if (action === "check") return updater.check();
+    if (action === "download") return updater.download();
+    if (action === "install") return updater.install(() => { quitting = true; });
+    throw new Error("Unbekannte Update-Aktion.");
+  });
   ipcMain.handle("lunamail:app-version", () => app.getVersion());
   ipcMain.handle("lunamail:open-dialog", async (_event, options = {}) => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -198,9 +214,11 @@ app.whenReady().then(async () => {
     openExternal: (url) => shell.openExternal(url)
   });
   await backend.init();
+  updater = new AppUpdater(emit);
   registerIpc();
   createWindow();
   createTray();
+  updater.start();
 });
 
 app.on("before-quit", () => { quitting = true; });

@@ -31,8 +31,8 @@ export function QuickLook({ email, onClose }: Props) {
   }, [preview]);
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-scrim/40 p-8" onClick={onClose}>
-      <div className="tr-panel grid h-[80vh] w-[80vw] grid-cols-[320px_1fr] gap-4 rounded-[10px] p-4 text-ink" onClick={(event) => event.stopPropagation()}>
+    <div className="overlay-enter fixed inset-0 z-[1200] flex items-center justify-center bg-scrim/40 p-8" onClick={onClose}>
+      <div className="dialog-enter tr-panel grid h-[80vh] w-[80vw] grid-cols-[320px_1fr] gap-4 rounded-[10px] p-4 text-ink" onClick={(event) => event.stopPropagation()}>
         <div className="overflow-auto rounded-xl border border-ink/10 bg-ink/[0.03] p-3">
           <div className="mb-2 text-sm font-semibold">Quick Look</div>
           <div className="mb-2 text-xs text-slate-400">{email.sender}</div>

@@ -1,11 +1,12 @@
 import { AlertCircle, Archive, CheckCheck, MailOpen, Paperclip, RefreshCw, Search, Star, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "../lib/cn";
 import { useMailStore } from "../stores/mailStore";
 import type { Email } from "../types";
 import { folderLabel } from "./MailSidebar";
+import { SenderAvatar } from "./SenderAvatar";
 
 const PAGE_SIZE = 30;
 
@@ -59,6 +60,9 @@ export function MailList() {
   const allSelected = emails.length > 0 && emails.every((email) => selectedIdSet.has(email.id));
   const permanentlyDeletes = selectedView === "folder"
     && folders.some((folder) => folder.id === selectedFolderId && folder.role === "trash");
+  // In Gesendet und Entwürfe zählt, an wen die Mail ging, nicht man selbst.
+  const showsRecipient = selectedView === "folder"
+    && folders.some((folder) => folder.id === selectedFolderId && (folder.role === "sent" || folder.role === "drafts"));
   const showsMailList = selectedView !== "dashboard" && selectedView !== "health";
   const selectedFolder = selectedView === "folder" ? folders.find((folder) => folder.id === selectedFolderId) : undefined;
   const title = selectedFolder ? folderLabel(selectedFolder) : viewTitle(selectedView, selectedCategoryId);
@@ -125,13 +129,13 @@ export function MailList() {
             </label>
             {selectedView === "unifiedInbox" && categories.length > 0 ? (
               <div className="scrollbar-hidden mt-2.5 flex gap-1.5 overflow-x-auto text-[13px] font-semibold">
-                <button className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 transition-colors ${!selectedCategoryId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`} onClick={() => void selectCategory(undefined)}>
+                <button className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${!selectedCategoryId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`} onClick={() => void selectCategory(undefined)}>
                   Alle
                 </button>
                 {categories.map((category) => (
                   <button
                     key={category.id}
-                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 transition-colors ${selectedCategoryId === category.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
+                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${selectedCategoryId === category.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
                     onClick={() => void selectCategory(category.id)}
                   >
                     {category.label}
@@ -142,7 +146,7 @@ export function MailList() {
             {tags.length > 0 ? (
               <div className="scrollbar-hidden mt-2.5 flex gap-1.5 overflow-x-auto text-[13px] font-semibold">
                 <button
-                  className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 transition-colors ${!searchFilters.tagId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
+                  className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${!searchFilters.tagId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
                   onClick={() => void setSearchFilters({ ...searchFilters, tagId: undefined })}
                 >
                   Alle
@@ -150,7 +154,7 @@ export function MailList() {
                 {tags.map((tag) => (
                   <button
                     key={tag.id}
-                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 transition-colors ${searchFilters.tagId === tag.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
+                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${searchFilters.tagId === tag.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
                     onClick={() => void setSearchFilters({ ...searchFilters, tagId: tag.id })}
                   >
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
@@ -207,7 +211,7 @@ export function MailList() {
                 ) : null}
               </div>
             ) : null}
-            {visibleEmails.map((email) => (
+            {visibleEmails.map((email, index) => (
               <MailRow
                 key={email.id}
                 email={email}
@@ -217,6 +221,8 @@ export function MailList() {
                 accountLabel={accountById.get(email.accountId)?.displayName}
                 accountColor={settings.accountAppearance?.[String(email.accountId)]?.color}
                 permanentlyDeletes={permanentlyDeletes}
+                showsRecipient={showsRecipient}
+                enterIndex={index < 15 ? index : 0}
                 onSelect={selectEmail}
                 onToggleSelection={toggleEmailSelection}
                 onQuickAction={quickAction}
@@ -227,8 +233,8 @@ export function MailList() {
       ) : null}
 
       {tagPickerOpen ? (
-        <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-scrim/40 p-6" onClick={() => setTagPickerOpen(false)}>
-          <section className="w-[min(420px,calc(100vw-2rem))] rounded-xl border border-ink/[0.08] bg-surface p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="overlay-enter fixed inset-0 z-[2147483646] flex items-center justify-center bg-scrim/40 p-6" onClick={() => setTagPickerOpen(false)}>
+          <section className="dialog-enter w-[min(420px,calc(100vw-2rem))] rounded-xl border border-ink/[0.08] bg-surface p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold">Tags zuweisen</h2>
@@ -319,7 +325,7 @@ function ToolbarButton({ label, icon, onClick, disabled = false, danger = false 
 }
 
 const MailRow = memo(function MailRow({
-  email, active, selected, anySelected, accountLabel, accountColor, permanentlyDeletes,
+  email, active, selected, anySelected, accountLabel, accountColor, permanentlyDeletes, showsRecipient, enterIndex,
   onSelect, onToggleSelection, onQuickAction
 }: {
   email: Email;
@@ -329,12 +335,15 @@ const MailRow = memo(function MailRow({
   accountLabel?: string;
   accountColor?: string;
   permanentlyDeletes: boolean;
+  showsRecipient: boolean;
+  enterIndex: number;
   onSelect: (email: Email) => Promise<void>;
   onToggleSelection: (id: number, selected: boolean) => void;
   onQuickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive") => Promise<void>;
 }) {
   const timeLabel = useMemo(() => formatMailTime(email.receivedAt), [email.receivedAt]);
-  const sender = senderName(email.sender) || accountLabel || "Unbekannter Absender";
+  const counterpart = showsRecipient && email.recipients ? email.recipients.split(",")[0] : email.sender;
+  const sender = senderName(counterpart) || accountLabel || "Unbekannter Absender";
   const unread = !email.isRead;
 
   function openFromKeyboard(event: KeyboardEvent<HTMLDivElement>) {
@@ -352,11 +361,12 @@ const MailRow = memo(function MailRow({
         "after:pointer-events-none after:absolute after:bottom-0 after:left-[68px] after:right-3 after:h-px after:bg-line",
         active ? "bg-surface after:opacity-0" : selected ? "bg-ink/[0.05] after:opacity-0" : "hover:bg-ink/[0.03] hover:after:opacity-0"
       )}
+      style={{ "--i": enterIndex } as CSSProperties}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
     >
       <span className="group/tile relative mt-0.5 shrink-0">
-        <SenderTile name={sender} hidden={selected || anySelected} />
+        <SenderTile address={counterpart} name={sender} hidden={selected || anySelected} />
         <input
           type="checkbox"
           checked={selected}
@@ -407,11 +417,13 @@ const MailRow = memo(function MailRow({
 });
 
 /** Runde Kachel mit Initialen, wie die Absender-Kacheln der Android-App. */
-function SenderTile({ name, hidden }: { name: string; hidden: boolean }) {
+function SenderTile({ address, name, hidden }: { address: string; name: string; hidden: boolean }) {
   return (
-    <span className={cn("flex h-11 w-11 items-center justify-center rounded-full bg-[#2A2A2A] text-[15px] font-semibold text-white transition-opacity", hidden ? "opacity-0" : "group-hover/tile:opacity-0")}>
-      {initials(name)}
-    </span>
+    <SenderAvatar
+      address={address}
+      name={name}
+      className={cn("h-11 w-11 text-[15px] transition-opacity", hidden ? "opacity-0" : "group-hover/tile:opacity-0")}
+    />
   );
 }
 
@@ -454,12 +466,6 @@ function MailListSkeleton() {
 function senderName(sender: string) {
   const name = sender.replace(/<[^>]*>/g, "").replace(/["']/g, "").trim();
   return name || sender.match(/<([^>]+)>/)?.[1] || sender;
-}
-
-function initials(name: string) {
-  const parts = name.split(/[\s._-]+/).filter((part) => /\p{L}/u.test(part.charAt(0)));
-  const letters = parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("");
-  return letters || name.charAt(0).toUpperCase() || "?";
 }
 
 function viewTitle(view: ReturnType<typeof useMailStore.getState>["selectedView"], selectedCategoryId?: number) {

@@ -43,8 +43,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[2147483647] flex items-start justify-center bg-scrim/40 px-4 pt-[12vh]" onClick={onClose}>
-      <div className="tr-panel w-[min(760px,calc(100vw-2rem))] overflow-hidden rounded-[10px]" onClick={(event) => event.stopPropagation()}>
+    <div className="overlay-enter fixed inset-0 z-[2147483647] flex items-start justify-center bg-scrim/40 px-4 pt-[12vh]" onClick={onClose}>
+      <div className="dialog-enter tr-panel w-[min(760px,calc(100vw-2rem))] overflow-hidden rounded-[10px]" onClick={(event) => event.stopPropagation()}>
         <input
           autoFocus
           value={query}

@@ -8,6 +8,7 @@ import { useMailStore } from "../stores/mailStore";
 import type { AccentColor, Contact, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings, Tag, ThemeMode } from "../types";
 import packageJson from "../../package.json";
 import { useShallow } from "zustand/react/shallow";
+import { useAppUpdate } from "../hooks/useAppUpdate";
 
 type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
 
@@ -475,10 +476,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div
-      className="flex items-center justify-center bg-scrim/40 p-6"
+      className="overlay-enter flex items-center justify-center bg-scrim/40 p-6"
       style={{ position: "fixed", inset: 0, zIndex: 2147483647, ...accentVars[draft.accentColor] }}
     >
-      <section className="tr-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(980px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[10px]">
+      <section className="dialog-enter tr-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(980px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[10px]">
         <header className="flex h-16 items-center justify-between border-b border-ink/[0.06] px-6">
           <div>
             <h2 className="text-lg font-semibold tracking-[-0.03em]">Einstellungen</h2>
@@ -696,6 +697,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     <div className="space-y-3">
                       <ModernSelect label="Darstellung" value={draft.layoutMode} onChange={(value) => applySettings({ ...draft, layoutMode: value as Settings["layoutMode"] })} options={[["compact", "Kompakt"], ["standard", "Standard"], ["comfortable", "Komfortabel"]]} />
                       <ModernSelect label="Externe Bilder" value={draft.externalImages} onChange={(value) => applySettings({ ...draft, externalImages: value as Settings["externalImages"] })} options={[["never", "Nie laden"], ["ask", "Fragen"], ["always", "Immer laden"]]} />
+                      <ModernToggle
+                        label="Absender-Logos"
+                        description="Lädt das Logo der Absender-Domain von deren Website oder über DuckDuckGo. Privatadressen wie Gmail bleiben bei Initialen."
+                        checked={draft.senderLogos}
+                        onChange={(checked) => applySettings({ ...draft, senderLogos: checked })}
+                      />
                     </div>
                   </div>
                 </SettingsSection>
@@ -1166,9 +1173,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-ink/[0.08] dark:text-slate-300">
                     Installierte Version: <span className="font-semibold text-ink/80">{appVersion}</span>
                   </div>
-                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-xs text-slate-600 dark:border-ink/[0.08] dark:bg-ink/[0.03] dark:text-slate-300">
-                    Updates werden zentral über den LunaSuite Launcher verwaltet.
-                  </div>
+                  <UpdateStatusRow />
                 </section>
 
                 <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-ink/[0.08] dark:bg-ink/[0.025]">
@@ -1319,5 +1324,38 @@ function DiagBadge({ label, active }: { label: string; active: boolean }) {
     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "bg-ink/[0.08] text-ink/65"}`}>
       {label}
     </span>
+  );
+}
+
+function UpdateStatusRow() {
+  const { state, check, download, install } = useAppUpdate();
+  if (state.status === "unsupported") {
+    return <div className="mt-4 rounded-xl border border-line px-3 py-2 text-xs text-label-2">Updates gibt es nur in der installierten App.</div>;
+  }
+  const text = {
+    idle: "Noch nicht nach Updates gesucht.",
+    checking: "Suche nach Updates …",
+    current: "LunaMail ist auf dem neuesten Stand.",
+    available: `Version ${state.version} ist verfügbar.`,
+    downloading: `Version ${state.version} wird geladen … ${state.progress ?? 0} %`,
+    ready: `Version ${state.version} wird beim Neustart installiert.`,
+    error: `Update fehlgeschlagen: ${state.error ?? "Unbekannter Fehler"}`
+  }[state.status];
+  const action = state.status === "available" || (state.status === "error" && state.version)
+    ? { label: "Jetzt installieren", run: download }
+    : state.status === "ready"
+      ? { label: "Neu starten", run: install }
+      : state.status === "checking" || state.status === "downloading"
+        ? undefined
+        : { label: "Nach Updates suchen", run: check };
+  return (
+    <div className="mt-4 flex items-center gap-3 rounded-xl border border-line px-3 py-2">
+      <span className="min-w-0 flex-1 text-xs text-label-2">{text}</span>
+      {action ? (
+        <button className="pressable shrink-0 rounded-full bg-ink px-3 py-1.5 text-xs font-bold text-canvas hover:opacity-90" onClick={action.run}>
+          {action.label}
+        </button>
+      ) : null}
+    </div>
   );
 }

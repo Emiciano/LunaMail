@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useMailStore } from "../stores/mailStore";
 import type { Account, Folder as MailFolder } from "../types";
+import { UpdateBanner } from "./UpdateBanner";
 
 const folderIcons: Record<MailFolder["role"], typeof Inbox> = {
   inbox: Inbox,
@@ -154,7 +155,10 @@ export function MailSidebar() {
         </div>
       </div>
 
-      <div className="mt-auto shrink-0 border-t border-line pt-3">
+      <div className="mt-auto shrink-0">
+        <UpdateBanner />
+      </div>
+      <div className="shrink-0 border-t border-line pt-3">
         <SideButton active={false} icon={<Settings size={17} />} label="Einstellungen" onClick={openSettings} />
       </div>
     </aside>
@@ -164,7 +168,7 @@ export function MailSidebar() {
 function SideButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
   return (
     <button
-      className={`flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] transition-colors duration-150 ${
+      className={`pressable flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] ${
         active ? "bg-ink/[0.08] font-semibold text-ink" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
       }`}
       onClick={onClick}

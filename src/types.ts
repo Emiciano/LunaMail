@@ -166,6 +166,7 @@ export type Settings = {
   fontSize: number;
   syncIntervalMinutes: number;
   externalImages: "never" | "ask" | "always";
+  senderLogos: boolean;
   allowLocalSecretFallback: boolean;
   notificationsEnabled: boolean;
   notificationSound: boolean;
