@@ -24,7 +24,7 @@
     bodyText: `${preview}\n\nViele Grüße\n${sender.replace(/<.*>/, "").trim()}`,
     receivedAt: ago(minutes), isRead: false, isFavorite: false, isImportant: false, hasAttachments: false, attachments: [], tags: [], ...extra
   });
-  const emails = [
+  let emails = [
     mail(101, "Hypnotic One <support@hypnotic.one>", "Dein Postfach ist eingerichtet", "Willkommen bei Hypnotic One. Deine Zugangsdaten für IMAP und SMTP findest du in dieser Nachricht.", 12),
     mail(102, "Lena Hoffmann <lena@studio.example>", "Drehplan für Freitag", "Hi Emilio, anbei der finale Drehplan. Treffpunkt ist um 8 Uhr am Studio, Catering ist bestellt.", 48, { hasAttachments: true, attachments: [{ id: 1, fileName: "Drehplan_Freitag.pdf", contentType: "application/pdf", size: 248_000 }], tags: [tags[0]], isFavorite: true }),
     mail(103, "GitHub <noreply@github.com>", "[LunaMail] Release android-latest veröffentlicht", "Ein neuer Build der Android-App steht zum Download bereit.", 130, { isRead: true }),
@@ -61,7 +61,9 @@
     get_health_status: () => health,
     get_mail_counts: () => counts,
     get_drafts: () => [],
-    get_emails: () => emails,
+    get_emails: () => emails.slice(),
+    move_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },
+    delete_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },
     search_emails: () => emails,
     get_email: ({ id }) => emails.find((email) => email.id === id),
     hydrate_email: ({ id }) => emails.find((email) => email.id === id),
