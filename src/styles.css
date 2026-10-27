@@ -2,22 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/Inter.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter Tight";
+  src: url("./assets/fonts/InterTight.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/*
+ * Design-Tokens wie in der Android-App (android/.../ui/theme/Theme.kt):
+ * neutrale Flächen, Schwarz bzw. Weiß als Akzent, Inter und Inter Tight.
+ * Werte sind RGB-Tripel, damit Tailwind Deckkraft ergänzen kann (z. B. bg-ink/[0.06]).
+ */
 :root,
-:root.dark {
-  color-scheme: dark;
-  background: #000;
-  --accent: 255 255 255;
-  --accent-soft: 21 21 21;
-  --accent-contrast: 11 11 11;
-  --surface: 13 13 13;
-  --surface-elevated: 21 21 21;
-  --text-primary: 255 255 255;
-  --text-secondary: 255 255 255 / 0.55;
-  --glass-bg: 13 13 13 / 1;
-  --glass-border: 31 31 31 / 1;
-  --glass-shadow: none;
-  --glass-blur: 0px;
+:root.theme-light {
+  color-scheme: light;
+  --canvas: 255 255 255;
+  --sidebar: 246 246 246;
+  --surface: 243 243 243;
+  --surface-2: 232 232 232;
+  --line: 236 236 236;
+  --ink: 0 0 0;
+  --label-2: 94 94 94;
+  --label-3: 158 158 158;
+  --scrim: 0 0 0;
+  --danger: 225 25 0;
+  --flag: 194 124 14;
+  --accent: 0 0 0;
+  --accent-soft: 243 243 243;
+  --accent-contrast: 255 255 255;
   --app-font-size: 16px;
+}
+
+:root.theme-dark {
+  color-scheme: dark;
+  --canvas: 0 0 0;
+  --sidebar: 10 10 10;
+  --surface: 22 22 22;
+  --surface-2: 35 35 35;
+  --line: 34 34 34;
+  --ink: 255 255 255;
+  --label-2: 166 166 166;
+  --label-3: 107 107 107;
+  --danger: 255 90 71;
+  --flag: 245 166 35;
+  --accent: 255 255 255;
+  --accent-soft: 22 22 22;
+  --accent-contrast: 0 0 0;
+}
+
+:root.theme-silver {
+  color-scheme: dark;
+  --canvas: 45 46 50;
+  --sidebar: 38 39 43;
+  --surface: 62 63 67;
+  --surface-2: 75 76 80;
+  --line: 61 62 66;
+  --ink: 243 243 245;
+  --label-2: 173 175 180;
+  --label-3: 126 128 134;
+  --danger: 255 107 90;
+  --flag: 242 182 79;
+  --accent: 231 232 235;
+  --accent-soft: 62 63 67;
+  --accent-contrast: 18 18 20;
 }
 
 html,
@@ -31,8 +86,8 @@ body {
   overflow: hidden;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: var(--app-font-size);
-  background: #000;
-  color: #fff;
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeSpeed;
 }
@@ -69,17 +124,18 @@ select:focus-visible,
 
 .tr-shell {
   border: 0;
-  background: #000;
+  background: rgb(var(--sidebar));
 }
 
 .tr-panel {
-  background: #111;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgb(var(--canvas));
+  border: 1px solid rgb(var(--line));
+  box-shadow: 0 24px 70px rgb(0 0 0 / 0.18);
 }
 
 .tr-card {
-  background: #151515;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgb(var(--surface));
+  border: 1px solid transparent;
 }
 
 .tr-card-hover {
@@ -87,16 +143,15 @@ select:focus-visible,
 }
 
 .tr-card-hover:hover {
-  background: #1b1b1b;
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--surface-2));
 }
 
 .tr-muted {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgb(var(--label-2));
 }
 
 .tr-faint {
-  color: rgba(255, 255, 255, 0.34);
+  color: rgb(var(--label-3));
 }
 
 .mail-scroll {
@@ -123,9 +178,9 @@ select:focus-visible,
   -webkit-appearance: none;
   display: inline-grid;
   place-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: transparent;
-  border-radius: 4px;
+  border: 1.5px solid rgb(var(--ink) / 0.3);
+  background: rgb(var(--canvas));
+  border-radius: 999px;
 }
 
 .mail-checkbox::after {
@@ -158,7 +213,7 @@ select:focus-visible,
 
 .mail-row {
   content-visibility: auto;
-  contain-intrinsic-size: 78px;
+  contain-intrinsic-size: 92px;
   contain: layout paint style;
 }
 
@@ -174,77 +229,25 @@ select:focus-visible,
   animation: mail-reader-panel 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.mail-list-pane {
-  width: min(480px, 42%);
-  max-width: 520px;
-}
-
-.pane-resizer {
-  position: relative;
-  z-index: 40;
-  width: 9px;
-  flex: 0 0 9px;
-  cursor: col-resize;
-  align-items: center;
-  justify-content: center;
-  touch-action: none;
-  margin-inline: -4px;
-}
-
-.pane-resizer span {
-  width: 1px;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.07);
-  transition: width 120ms ease, background-color 120ms ease;
-}
-
-.pane-resizer:hover span,
-.pane-resizer:active span,
-.is-resizing-pane .pane-resizer span {
-  width: 3px;
-  background: rgb(var(--accent) / 0.62);
-}
-
-.is-resizing-pane,
-.is-resizing-pane * {
-  cursor: col-resize !important;
-  user-select: none !important;
-}
-
 .reader-icon-button {
   display: inline-flex;
   width: 2rem;
   height: 2rem;
   align-items: center;
   justify-content: center;
-  border-radius: 0.55rem;
-  color: rgba(255, 255, 255, 0.52);
+  border-radius: 999px;
+  color: rgb(var(--label-2));
   transition: background-color 120ms ease, color 120ms ease;
 }
 
 .reader-icon-button:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
 }
 
 .reader-icon-danger:hover {
-  background: rgba(239, 68, 68, 0.14);
-  color: rgb(252 165 165);
-}
-
-@media (max-width: 1279px) {
-  .mail-list-pane {
-    width: auto;
-    max-width: none;
-  }
-
-  .mail-reader-pane {
-    position: absolute;
-    inset: 0;
-    z-index: 35;
-    border-left: 0;
-    animation: mail-reader-panel 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
+  background: rgb(var(--danger) / 0.1);
+  color: rgb(var(--danger));
 }
 
 @keyframes mail-row-enter {
@@ -289,22 +292,22 @@ select:focus-visible,
 
 .glass-panel,
 .glass-subtle {
-  background: #111;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
   box-shadow: none;
 }
 
 .glass-pill-active {
-  background: #1d1d1d;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgb(var(--surface-2));
+  border: 1px solid rgb(var(--line));
 }
 
 .surface-text-primary {
-  color: #fff;
+  color: rgb(var(--ink));
 }
 
 .surface-text-secondary {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgb(var(--label-2));
 }
 
 .motion-soft {
@@ -339,4 +342,15 @@ select:focus-visible,
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.font-display {
+  letter-spacing: -0.03em;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }

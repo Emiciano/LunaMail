@@ -53,7 +53,7 @@ export type MailQueryFilters = {
 };
 
 let browserSettings: Settings = {
-  theme: "dark",
+  theme: "light",
   accentColor: "white",
   layoutMode: "standard",
   fontSize: 16,

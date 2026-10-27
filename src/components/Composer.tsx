@@ -137,24 +137,24 @@ export function Composer() {
   }
 
   return (
-    <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/78 p-3 backdrop-blur-sm sm:p-6">
+    <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-scrim/40 p-3 backdrop-blur-sm sm:p-6">
       <form onSubmit={onSubmit} className="tr-panel flex h-[min(760px,calc(100vh-3rem))] w-[min(940px,calc(100vw-3rem))] overflow-hidden rounded-[20px] shadow-[0_32px_100px_rgba(0,0,0,0.65)]">
-        <aside className="hidden w-60 border-r border-white/[0.07] bg-[#0b0b0b] p-4 md:block">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/45">Entwürfe</div>
+        <aside className="hidden w-60 border-r border-ink/[0.07] bg-canvas p-4 md:block">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">Entwürfe</div>
           <div className="mail-scroll max-h-[640px] space-y-2 overflow-y-auto">
             {drafts.length === 0 ? (
-              <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-xs text-white/45">
+              <div className="rounded-lg bg-ink/[0.04] px-3 py-2 text-xs text-ink/45">
                 Keine Entwürfe
               </div>
             ) : null}
             {drafts.map((draft) => (
-              <div key={draft.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5 transition hover:bg-white/[0.05]">
+              <div key={draft.id} className="rounded-xl border border-ink/[0.06] bg-ink/[0.025] px-3 py-2.5 transition hover:bg-ink/[0.05]">
                 <button type="button" className="w-full text-left" onClick={() => editDraft(draft)}>
                   <div className="truncate text-sm font-medium">{draft.subject || "(Kein Betreff)"}</div>
-                  <div className="truncate text-xs text-white/45">{draft.to || "Unbekannter Empfänger"}</div>
+                  <div className="truncate text-xs text-ink/45">{draft.to || "Unbekannter Empfänger"}</div>
                 </button>
                 <div className="mt-2 flex justify-end">
-                  <button type="button" className="text-xs text-white/45 hover:text-white" onClick={() => draft.id && void deleteComposerDraft(draft.id)}>
+                  <button type="button" className="text-xs text-ink/45 hover:text-ink" onClick={() => draft.id && void deleteComposerDraft(draft.id)}>
                     Löschen
                   </button>
                 </div>
@@ -163,19 +163,19 @@ export function Composer() {
           </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-between border-b border-white/[0.07] px-5 sm:px-6">
+          <header className="flex h-16 items-center justify-between border-b border-ink/[0.07] px-5 sm:px-6">
             <div>
               <h2 className="text-sm font-semibold">Neue Nachricht</h2>
-              <p className="mt-0.5 text-[11px] text-white/38">{autosaveInfo || "Wird automatisch als Entwurf gespeichert"}</p>
+              <p className="mt-0.5 text-[11px] text-ink/38">{autosaveInfo || "Wird automatisch als Entwurf gespeichert"}</p>
             </div>
-            <button type="button" className="rounded-lg p-2 text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={closeComposer} title="Schließen">
+            <button type="button" className="rounded-lg p-2 text-ink/55 hover:bg-ink/[0.06] hover:text-ink" onClick={closeComposer} title="Schließen">
               <X size={18} />
             </button>
           </header>
-          <div className="grid gap-0 border-b border-white/[0.07] px-5 py-2 text-sm sm:px-6">
+          <div className="grid gap-0 border-b border-ink/[0.07] px-5 py-2 text-sm sm:px-6">
             <label className="grid h-9 grid-cols-[70px_1fr] items-center">
-              <span className="text-white/45">Von</span>
-              <select value={accountId} onChange={(event) => setAccountId(Number(event.target.value))} className="h-full bg-transparent text-white outline-none">
+              <span className="text-ink/45">Von</span>
+              <select value={accountId} onChange={(event) => setAccountId(Number(event.target.value))} className="h-full bg-transparent text-ink outline-none">
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>{account.email}</option>
                 ))}
@@ -197,21 +197,21 @@ export function Composer() {
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Schreibe deine Nachricht …"
-            className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-5 leading-7 text-white outline-none placeholder:text-white/30 sm:px-6"
+            className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-5 leading-7 text-ink outline-none placeholder:text-ink/30 sm:px-6"
           />
-          {error ? <div className="mx-5 mb-2 rounded-lg border border-white/[0.08] bg-[#151515] px-4 py-3 text-sm text-white">{error}</div> : null}
+          {error ? <div className="mx-5 mb-2 rounded-lg border border-ink/[0.08] bg-surface px-4 py-3 text-sm text-ink">{error}</div> : null}
           {totalAttachmentBytes >= WARN_ATTACHMENT_BYTES ? (
-            <div className="mx-5 mb-2 rounded-lg border border-white/[0.08] bg-[#151515] px-4 py-2 text-xs text-white/65">
+            <div className="mx-5 mb-2 rounded-lg border border-ink/[0.08] bg-surface px-4 py-2 text-xs text-ink/65">
               Große Anhänge erkannt ({formatBytes(totalAttachmentBytes)}).
             </div>
           ) : null}
           {attachments.length > 0 ? (
-            <div className="grid gap-2 border-t border-white/[0.06] px-5 py-3 text-sm">
+            <div className="grid gap-2 border-t border-ink/[0.06] px-5 py-3 text-sm">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="flex items-center justify-between rounded-lg bg-[#151515] px-3 py-2">
+                <div key={attachment.id} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2">
                   <div className="min-w-0">
                     <div className="truncate">{attachment.fileName}</div>
-                    <div className="text-xs text-white/45">{attachment.contentType} · {formatBytes(attachment.size || 0)}</div>
+                    <div className="text-xs text-ink/45">{attachment.contentType} · {formatBytes(attachment.size || 0)}</div>
                   </div>
                   <button type="button" onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))}>
                     <X size={15} />
@@ -220,15 +220,15 @@ export function Composer() {
               ))}
             </div>
           ) : null}
-          <footer className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-3 sm:px-6">
+          <footer className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-t border-ink/[0.07] px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => void attachFile()} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.06] px-3 py-2 text-sm text-white/75 hover:bg-white/[0.05] hover:text-white">
+              <button type="button" onClick={() => void attachFile()} className="inline-flex items-center gap-2 rounded-lg border border-ink/[0.06] px-3 py-2 text-sm text-ink/75 hover:bg-ink/[0.05] hover:text-ink">
                 <Paperclip size={16} />
                 Anhang
               </button>
               <button
                 type="button"
-                className="rounded-lg border border-white/[0.06] px-3 py-2 text-sm text-white/75 hover:bg-white/[0.05] hover:text-white"
+                className="rounded-lg border border-ink/[0.06] px-3 py-2 text-sm text-ink/75 hover:bg-ink/[0.05] hover:text-ink"
                 onClick={() => setSignatureEnabled((value) => !value)}
               >
                 Signatur {signatureEnabled ? "an" : "aus"}
@@ -247,14 +247,14 @@ export function Composer() {
 
 function LineInput(props: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
   return (
-    <label className="grid h-9 grid-cols-[70px_1fr] items-center border-t border-white/[0.06]">
-      <span className="text-white/45">{props.label}</span>
+    <label className="grid h-9 grid-cols-[70px_1fr] items-center border-t border-ink/[0.06]">
+      <span className="text-ink/45">{props.label}</span>
       <input
         value={props.value}
         required={props.required}
         onChange={(event) => props.onChange(event.target.value)}
         list={props.label === "Betreff" ? undefined : "contact-suggestions"}
-        className="h-full bg-transparent text-white outline-none"
+        className="h-full bg-transparent text-ink outline-none"
       />
     </label>
   );

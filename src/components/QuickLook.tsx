@@ -31,9 +31,9 @@ export function QuickLook({ email, onClose }: Props) {
   }, [preview]);
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-8" onClick={onClose}>
-      <div className="tr-panel grid h-[80vh] w-[80vw] grid-cols-[320px_1fr] gap-4 rounded-[10px] p-4 text-white" onClick={(event) => event.stopPropagation()}>
-        <div className="overflow-auto rounded-xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-scrim/40 p-8" onClick={onClose}>
+      <div className="tr-panel grid h-[80vh] w-[80vw] grid-cols-[320px_1fr] gap-4 rounded-[10px] p-4 text-ink" onClick={(event) => event.stopPropagation()}>
+        <div className="overflow-auto rounded-xl border border-ink/10 bg-ink/[0.03] p-3">
           <div className="mb-2 text-sm font-semibold">Quick Look</div>
           <div className="mb-2 text-xs text-slate-400">{email.sender}</div>
           <div className="mb-3 text-sm font-medium">{email.subject || "(Kein Betreff)"}</div>
@@ -42,7 +42,7 @@ export function QuickLook({ email, onClose }: Props) {
             {email.attachments.map((attachment) => (
               <button
                 key={attachment.id}
-                className={`w-full rounded-lg px-2 py-1 text-left text-xs transition ${activeAttachmentId === attachment.id ? "bg-white/15" : "bg-white/[0.04] hover:bg-white/[0.1]"}`}
+                className={`w-full rounded-lg px-2 py-1 text-left text-xs transition ${activeAttachmentId === attachment.id ? "bg-ink/15" : "bg-ink/[0.04] hover:bg-ink/[0.1]"}`}
                 onClick={() => setActiveAttachmentId(attachment.id)}
               >
                 {attachment.fileName}
@@ -50,7 +50,7 @@ export function QuickLook({ email, onClose }: Props) {
             ))}
           </div>
         </div>
-        <div className="overflow-auto rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="overflow-auto rounded-xl border border-ink/10 bg-ink/[0.03] p-3">
           {!preview ? <div className="text-sm text-slate-400">Kein Vorschauformat verfügbar.</div> : null}
           {preview?.contentType.startsWith("image/") && src ? <img src={src} alt={preview.fileName} className="max-h-full max-w-full object-contain" /> : null}
           {preview?.contentType === "application/pdf" && src ? <iframe title={preview.fileName} src={src} className="h-full min-h-[60vh] w-full rounded-lg" /> : null}

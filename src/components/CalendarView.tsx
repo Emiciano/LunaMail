@@ -13,33 +13,33 @@ export function CalendarView() {
       <div className="p-4">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Mai 2025</h2>
-          <div className="flex gap-2 text-white/55">
+          <div className="flex gap-2 text-ink/55">
             <span>‹</span>
-            <span className="rounded bg-white/[0.08] px-2">›</span>
+            <span className="rounded bg-ink/[0.08] px-2">›</span>
           </div>
         </div>
-        <div className="mb-3 grid grid-cols-7 text-center text-[10px] text-white/45">
+        <div className="mb-3 grid grid-cols-7 text-center text-[10px] text-ink/45">
           {days.map((day) => <span key={day}>{day}</span>)}
         </div>
         <div className="grid grid-cols-7 gap-y-3 text-center text-[11px]">
           {dates.map((date, index) => (
             <span
               key={`${date ?? "blank"}-${index}`}
-              className={`mx-auto inline-flex h-6 w-6 items-center justify-center rounded-full ${date === 15 ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "text-white"}`}
+              className={`mx-auto inline-flex h-6 w-6 items-center justify-center rounded-full ${date === 15 ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "text-ink"}`}
             >
               {date}
             </span>
           ))}
         </div>
       </div>
-      <aside className="border-l border-white/[0.06] p-4">
+      <aside className="border-l border-ink/[0.06] p-4">
         <h3 className="text-sm font-semibold">Heute</h3>
-        <p className="mt-1 text-[10px] text-white/45">Do. 15 Mai</p>
+        <p className="mt-1 text-[10px] text-ink/45">Do. 15 Mai</p>
         <div className="mt-4 space-y-3">
           {agenda.map(([time, label]) => (
             <div key={time} className="text-[10px] leading-4">
-              <div className="text-white/55">{time}</div>
-              <div className="truncate text-white">{label}</div>
+              <div className="text-ink/55">{time}</div>
+              <div className="truncate text-ink">{label}</div>
             </div>
           ))}
         </div>

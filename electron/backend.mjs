@@ -11,7 +11,7 @@ import { simpleParser } from "mailparser";
 const AUTO_SYNC_INTERVAL_MS = 30000;
 
 const defaultSettings = {
-  theme: "dark",
+  theme: "light",
   accentColor: "white",
   layoutMode: "standard",
   fontSize: 16,
