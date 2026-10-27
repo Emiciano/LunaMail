@@ -12,7 +12,7 @@ const PAGE_SIZE = 30;
 export function MailList() {
   const {
     accounts, folders, emails, selectedEmail, selectedFolderId, selectedView, selectedEmailIds,
-    selectedCategoryId, categories, query, mailCounts, syncStatus, lastSyncAt, databaseSizeBytes,
+    selectedCategoryId, categories, query, databaseSizeBytes,
     healthStatus, search, selectCategory, selectEmail, toggleEmailSelection, setEmailSelection,
     deleteSelected, markReadSelected, archiveSelected, toggleFavoriteSelected, toggleImportantSelected,
     quickAction, sync, loading, hasSynced, syncError, settings, tags, searchFilters, setSearchFilters, setSelectedEmailTags
@@ -27,9 +27,6 @@ export function MailList() {
     selectedCategoryId: state.selectedCategoryId,
     categories: state.categories,
     query: state.query,
-    mailCounts: state.mailCounts,
-    syncStatus: state.syncStatus,
-    lastSyncAt: state.lastSyncAt,
     databaseSizeBytes: state.databaseSizeBytes,
     healthStatus: state.healthStatus,
     search: state.search,
@@ -68,9 +65,7 @@ export function MailList() {
   const selectedFolder = selectedView === "folder" ? folders.find((folder) => folder.id === selectedFolderId) : undefined;
   const title = selectedFolder ? folderLabel(selectedFolder) : viewTitle(selectedView, selectedCategoryId);
   const unreadCount = useMemo(() => emails.filter((email) => !email.isRead).length, [emails]);
-  const subtitle = selectedView === "dashboard"
-    ? "Deine Konten auf einen Blick"
-    : selectedView === "health"
+  const subtitle = selectedView === "health"
       ? "Lokaler Status und Synchronisation"
       : selectedCount > 0
         ? `${selectedCount} ausgewählt`
@@ -184,20 +179,6 @@ export function MailList() {
             onDelete={() => void deleteSelected()}
           />
         </>
-      ) : null}
-
-      {selectedView === "dashboard" ? (
-        <div className="mail-scroll grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto px-1 pb-24 pt-2 xl:grid-cols-3">
-          <DashboardCard label="Ungelesen" value={mailCounts.unread} icon={<CheckCheck size={17} />} />
-          <DashboardCard label="Favoriten" value={mailCounts.favorites} icon={<Star size={17} />} />
-          <DashboardCard label="Wichtig" value={mailCounts.important} icon={<AlertCircle size={17} />} />
-          <DashboardCard label="Mit Anhang" value={mailCounts.withAttachments} icon={<Paperclip size={17} />} />
-          <DashboardCard label="Heute" value={mailCounts.today} />
-          <DashboardCard label="Diese Woche" value={mailCounts.thisWeek} />
-          <DashboardCard label="Konten" value={accounts.length} />
-          <DashboardCard label="Datenbankgröße" value={formatBytes(databaseSizeBytes)} compact />
-          <DashboardCard label="Letzte Synchronisierung" value={lastSyncAt ? new Date(lastSyncAt).toLocaleString("de-DE") : (syncStatus || "–")} compact />
-        </div>
       ) : null}
 
       {selectedView === "health" ? (

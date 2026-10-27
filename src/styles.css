@@ -124,7 +124,7 @@ select:focus-visible,
 
 .tr-shell {
   border: 0;
-  background: rgb(var(--canvas));
+  background: rgb(var(--sidebar));
 }
 
 .tr-panel {

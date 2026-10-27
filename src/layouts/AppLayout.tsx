@@ -1,5 +1,6 @@
 import { Minus, Square, SquarePen, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { Dashboard } from "../components/Dashboard";
 import { MailList } from "../components/MailList";
 import { MailReader } from "../components/MailReader";
 import { MailSidebar } from "../components/MailSidebar";
@@ -8,8 +9,9 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 
 export function AppLayout() {
-  const { accounts, openComposer } = useMailStore(useShallow((state) => ({
+  const { accounts, selectedView, openComposer } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
+    selectedView: state.selectedView,
     openComposer: state.openComposer
   })));
   const hasAccounts = accounts.length > 0;
@@ -31,11 +33,11 @@ export function AppLayout() {
         </div>
       ) : null}
 
-      <section className="tr-shell flex h-full min-h-0 overflow-hidden">
+      <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-sidebar">
         <MailSidebar />
-        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas">
+        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas lg:my-2.5 lg:mr-2.5 lg:rounded-[22px] lg:border lg:border-line lg:shadow-[0_8px_30px_rgb(0_0_0/0.06)]">
           <div className="relative min-w-0 flex-1 overflow-hidden">
-            <MailList />
+            {selectedView === "dashboard" ? <Dashboard /> : <MailList />}
           </div>
           <MailReader />
           <button

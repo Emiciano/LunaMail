@@ -73,7 +73,7 @@ export function MailSidebar() {
   }
 
   return (
-    <aside className="flex min-h-0 w-[260px] shrink-0 flex-col border-r border-line bg-sidebar px-3 pb-4 pt-5 lg:w-[272px]">
+    <aside className="flex min-h-0 w-[260px] shrink-0 flex-col border-r border-line bg-sidebar lg:border-r-0 px-3 pb-4 pt-5 lg:w-[272px]">
       <div className="mb-6 flex items-center px-2">
         <button className="titlebar-no-drag flex items-center gap-2.5 text-left" onClick={openSettings} title="Einstellungen">
           <img src="./icon.png" alt="" className="h-9 w-9 object-contain" />

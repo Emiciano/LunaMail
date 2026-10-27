@@ -11,9 +11,8 @@ const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail, selectedView, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
+  const { selectedEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
-    selectedView: state.selectedView,
     settings: state.settings,
     contacts: state.contacts,
     closeEmail: state.closeEmail,
@@ -29,7 +28,6 @@ export function MailReader() {
     return sanitizeEmailHtml(selectedEmail.bodyHtml, settings.externalImages === "always");
   }, [selectedEmail?.bodyHtml, settings.externalImages]);
 
-  if (selectedView === "dashboard" || selectedView === "health") return null;
 
   if (!selectedEmail) return null;
 
