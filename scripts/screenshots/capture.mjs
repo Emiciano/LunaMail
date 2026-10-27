@@ -33,11 +33,11 @@ for (const theme of themes) {
   await page.getByText("Drehplan für Freitag").first().click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(outDir, `${theme}-nachricht.png`) });
+  await page.keyboard.press("Escape");
 
   await page.keyboard.press("n");
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(outDir, `${theme}-verfassen.png`) });
-  await page.keyboard.press("Escape");
   await page.getByTitle("Schließen").last().click().catch(() => undefined);
   await page.getByRole("button", { name: "Einstellungen" }).last().click();
   await page.getByRole("button", { name: "Design", exact: true }).click();

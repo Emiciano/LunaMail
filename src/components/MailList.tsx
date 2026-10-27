@@ -117,7 +117,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div className="shrink-0 px-1 pb-2">
-            <label className="flex h-9 items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition focus-within:bg-surface-2">
+            <label className="flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition focus-within:bg-surface-2">
               <Search size={17} />
               <input
                 id="mail-search-input"

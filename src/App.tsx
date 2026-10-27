@@ -14,13 +14,14 @@ const QuickLook = lazy(() => import("./components/QuickLook").then((module) => (
 const SettingsPanel = lazy(() => import("./components/SettingsPanel").then((module) => ({ default: module.SettingsPanel })));
 
 export default function App() {
-  const { accounts, hasSynced, syncing, sync, realtimeSyncInboxes, closeSettings, composer, selectedEmail, loadInitial, startupStatus, settings, settingsOpen, openComposer, replyToSelected, deleteSelected } = useMailStore(useShallow((state) => ({
+  const { accounts, hasSynced, syncing, sync, realtimeSyncInboxes, closeSettings, closeEmail, composer, selectedEmail, loadInitial, startupStatus, settings, settingsOpen, openComposer, replyToSelected, deleteSelected } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     hasSynced: state.hasSynced,
     syncing: state.syncing,
     sync: state.sync,
     realtimeSyncInboxes: state.realtimeSyncInboxes,
     closeSettings: state.closeSettings,
+    closeEmail: state.closeEmail,
     composer: state.composer,
     selectedEmail: state.selectedEmail,
     loadInitial: state.loadInitial,
@@ -143,7 +144,9 @@ export default function App() {
         event.preventDefault();
         setQuickLookOpen(true);
       } else if (key === "escape") {
-        setQuickLookOpen(false);
+        // Esc schließt zuerst die Schnellansicht, sonst die geöffnete Mail.
+        if (quickLookOpen) setQuickLookOpen(false);
+        else if (!composer && !settingsOpen) closeEmail();
       } else if (event.key === "Delete") {
         event.preventDefault();
         void deleteSelected();
@@ -152,7 +155,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [deleteSelected, openComposer, replyToSelected, selectedEmail]);
+  }, [closeEmail, composer, deleteSelected, openComposer, quickLookOpen, replyToSelected, selectedEmail, settingsOpen]);
 
   return (
     <main className="h-full bg-canvas text-ink">
