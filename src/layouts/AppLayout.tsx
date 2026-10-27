@@ -10,9 +10,10 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 
 export function AppLayout() {
-  const { accounts, selectedView, openComposer } = useMailStore(useShallow((state) => ({
+  const { accounts, selectedView, viewKey, openComposer } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     selectedView: state.selectedView,
+    viewKey: [state.selectedView, state.selectedFolderId, state.selectedSpecialAccountId, state.selectedCategoryId].join(":"),
     openComposer: state.openComposer
   })));
   const hasAccounts = accounts.length > 0;
@@ -38,11 +39,13 @@ export function AppLayout() {
         <MailSidebar />
         <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas lg:my-2.5 lg:mr-2.5 lg:rounded-[22px] lg:border lg:border-line lg:shadow-[0_8px_30px_rgb(0_0_0/0.06)]">
           <div className="relative min-w-0 flex-1 overflow-hidden">
-            {selectedView === "dashboard" ? <Dashboard /> : selectedView === "health" ? <SystemStatus /> : <MailList />}
+            <div key={viewKey} className="view-enter h-full">
+              {selectedView === "dashboard" ? <Dashboard /> : selectedView === "health" ? <SystemStatus /> : <MailList />}
+            </div>
           </div>
           <MailReader />
           <button
-            className="accent-primary compose-fab absolute bottom-6 left-6 z-30 inline-flex h-12 items-center gap-2.5 rounded-full px-5 text-[14px] font-bold shadow-float transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+            className="pressable accent-primary compose-fab absolute bottom-6 left-6 z-30 inline-flex h-12 items-center gap-2.5 rounded-full px-5 text-[14px] font-bold shadow-float transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!hasAccounts}
             onClick={() => openComposer()}
           >

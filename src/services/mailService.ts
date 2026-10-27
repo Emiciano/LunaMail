@@ -59,6 +59,7 @@ let browserSettings: Settings = {
   fontSize: 16,
   syncIntervalMinutes: 15,
   externalImages: "never",
+  senderLogos: true,
   allowLocalSecretFallback: false,
   notificationsEnabled: true,
   notificationSound: true,

@@ -18,7 +18,7 @@ await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch();
 
 for (const theme of themes) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, reducedMotion: "reduce" });
   await page.addInitScript(mockBridge);
   await page.goto(`${baseUrl}?theme=${theme}`);
   await page.waitForSelector("#boot-splash", { state: "detached" });

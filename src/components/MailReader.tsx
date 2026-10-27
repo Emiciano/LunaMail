@@ -1,17 +1,19 @@
 import DOMPurify from "dompurify";
 import { Archive, Check, Download, Forward, Paperclip, Reply, ReplyAll, Trash2, UserPlus, X } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { desktopDialog, openExternalLink } from "../services/desktop";
+import { cn } from "../lib/cn";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import { useShallow } from "zustand/react/shallow";
+import { SenderAvatar } from "./SenderAvatar";
 
 const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
+  const { selectedEmail: currentEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
     settings: state.settings,
     contacts: state.contacts,
@@ -22,6 +24,18 @@ export function MailReader() {
     deleteSelected: state.deleteSelected,
     saveContact: state.saveContact
   })));
+  // Beim Schließen bleibt die Mail kurz stehen, damit das Modal sichtbar ausblenden kann.
+  const [shownEmail, setShownEmail] = useState(currentEmail);
+  useEffect(() => {
+    if (currentEmail) {
+      setShownEmail(currentEmail);
+      return;
+    }
+    const timer = window.setTimeout(() => setShownEmail(undefined), 170);
+    return () => window.clearTimeout(timer);
+  }, [currentEmail]);
+  const selectedEmail = currentEmail ?? shownEmail;
+  const closing = !currentEmail;
 
   const htmlView = useMemo(() => {
     if (!selectedEmail?.bodyHtml || selectedEmail.bodyHtml.length > MAX_HTML_LENGTH) return undefined;
@@ -49,7 +63,7 @@ export function MailReader() {
   }
 
   return (
-    <div className="mail-reader-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-scrim/30 p-6 backdrop-blur-[6px] sm:p-8" onClick={closeEmail}>
+    <div className={cn("mail-reader-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-scrim/30 p-6 backdrop-blur-[6px] sm:p-8", closing && "is-closing pointer-events-none")} onClick={closeEmail}>
       <aside
         role="dialog"
         aria-modal="true"
@@ -73,9 +87,7 @@ export function MailReader() {
             <h2 className="max-w-[820px] font-display text-[26px] font-extrabold leading-[31px] sm:text-[28px]">{selectedEmail.subject || "(Kein Betreff)"}</h2>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[15px] font-semibold text-white">
-                  {initials(selectedEmail.sender)}
-                </span>
+                <SenderAvatar address={selectedEmail.sender} name={senderContact.name || selectedEmail.sender} className="h-11 w-11 text-[15px]" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <div className="truncate text-[15px] font-bold">{senderContact.name || selectedEmail.sender || "Unbekannter Absender"}</div>
@@ -279,11 +291,6 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { doc
   doc.head.appendChild(safetyStyle);
 
   return { document: `<!doctype html>${doc.documentElement.outerHTML}`, blockedRemoteImages };
-}
-
-function initials(value: string) {
-  const parts = value.replace(/<[^>]+>/g, "").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  return (parts[0]?.[0] || "L").toUpperCase() + (parts[1]?.[0] || "M").toUpperCase();
 }
 
 function parseSender(value: string): { name: string; email: string } {

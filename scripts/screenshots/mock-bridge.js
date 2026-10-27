@@ -35,7 +35,7 @@
     mail(108, "Jonas Keller <jonas@example.com>", "Kurze Frage zum Schnitt", "Kannst du mir die Projektdatei von letzter Woche schicken? Ich finde sie nicht mehr.", 60 * 120, { isRead: true })
   ];
   const settings = {
-    theme, accentColor: "white", layoutMode: "standard", fontSize: 16, syncIntervalMinutes: 15, externalImages: "never",
+    theme, accentColor: "white", layoutMode: "standard", fontSize: 16, syncIntervalMinutes: 15, externalImages: "never", senderLogos: true,
     allowLocalSecretFallback: false, notificationsEnabled: false, notificationSound: false, notificationPreview: false,
     runInBackground: true, accountNotifications: {}, accountAppearance: {}
   };
@@ -68,7 +68,31 @@
     mark_email_read: () => undefined
   };
   const noop = () => Promise.resolve(undefined);
+  // Platzhalter-Logos für die Demo (die echte App lädt sie im Hauptprozess).
+  const demoLogos = { "hypnotic.one": ["#111111", "#FFFFFF", "H1"], "github.com": ["#24292F", "#FFFFFF", "GH"], "bahn.de": ["#FFFFFF", "#EC0016", "DB"], "adobe.example": ["#FA0F00", "#FFFFFF", "A"] };
+  function demoLogo(address) {
+    const entry = demoLogos[String(address).split("@").pop()];
+    if (!entry) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 128;
+    const context = canvas.getContext("2d");
+    context.fillStyle = entry[0];
+    context.fillRect(0, 0, 128, 128);
+    context.fillStyle = entry[1];
+    context.font = "800 54px Inter, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(entry[2], 64, 68);
+    return canvas.toDataURL("image/png");
+  }
   window.electronAPI = {
+    senderLogo: (address) => Promise.resolve(demoLogo(address)),
+    updates: {
+      status: () => Promise.resolve({ status: "available", version: "0.9.60" }),
+      check: () => Promise.resolve({ status: "available", version: "0.9.60" }),
+      download: noop,
+      install: () => Promise.resolve(false)
+    },
     invoke: (command, args = {}) => Promise.resolve(handlers[command] ? handlers[command](args) : undefined),
     on: () => () => undefined,
     getVersion: () => Promise.resolve("0.9.58"),

@@ -1,11 +1,12 @@
 import { AlertCircle, CalendarClock, Inbox, RefreshCw, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "../lib/cn";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import type { Email, MailCounts } from "../types";
+import { SenderAvatar } from "./SenderAvatar";
 
 const UNREAD_PREVIEW_COUNT = 5;
 
@@ -61,7 +62,7 @@ export function Dashboard() {
 
   return (
     <section className="mail-scroll flex h-full min-h-0 flex-col gap-6 overflow-y-auto px-6 pb-28 pt-10 lg:px-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="rise-in flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] font-semibold text-label-2">{new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}</p>
           <h1 className="mt-1 font-display text-[38px] font-extrabold leading-[42px]">{greeting()}{firstName ? `, ${firstName}` : ""}</h1>
@@ -74,7 +75,7 @@ export function Dashboard() {
           </p>
         </div>
         <button
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-semibold transition hover:bg-surface-2 disabled:opacity-40"
+          className="pressable inline-flex h-10 items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-semibold hover:bg-surface-2 disabled:opacity-40"
           disabled={accounts.length === 0 || syncing}
           onClick={() => void sync(true)}
         >
@@ -84,14 +85,14 @@ export function Dashboard() {
       </header>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatTile label="Ungelesen" value={counts.unread} hint="Anzeigen" icon={<Inbox size={18} />} inverse onClick={() => void openUnifiedInbox()} />
-        <StatTile label="Heute" value={counts.today} hint="Neue Mails" icon={<CalendarClock size={18} />} onClick={() => void openUnifiedInbox()} />
-        <StatTile label="Favoriten" value={counts.favorites} hint="Anzeigen" icon={<Star size={18} />} onClick={() => void selectSpecialView("favorites", firstAccountId)} />
-        <StatTile label="Wichtig" value={counts.important} hint="Anzeigen" icon={<AlertCircle size={18} />} onClick={() => void selectSpecialView("important", firstAccountId)} />
+        <StatTile index={1} label="Ungelesen" value={counts.unread} hint="Anzeigen" icon={<Inbox size={18} />} inverse onClick={() => void openUnifiedInbox()} />
+        <StatTile index={2} label="Heute" value={counts.today} hint="Neue Mails" icon={<CalendarClock size={18} />} onClick={() => void openUnifiedInbox()} />
+        <StatTile index={3} label="Favoriten" value={counts.favorites} hint="Anzeigen" icon={<Star size={18} />} onClick={() => void selectSpecialView("favorites", firstAccountId)} />
+        <StatTile index={4} label="Wichtig" value={counts.important} hint="Anzeigen" icon={<AlertCircle size={18} />} onClick={() => void selectSpecialView("important", firstAccountId)} />
       </div>
 
       <div className="flex flex-col items-start gap-4 xl:flex-row">
-        <section className="w-full min-w-0 rounded-[22px] border border-line p-5 xl:flex-[1.6]">
+        <section className="rise-in w-full min-w-0 rounded-[22px] border border-line p-5 xl:flex-[1.6]" style={{ "--i": 5 } as CSSProperties}>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-[20px] font-extrabold">Neu für dich</h2>
             <button className="text-[13px] font-semibold text-label-2 hover:text-ink" onClick={() => void openUnifiedInbox()}>Alle Posteingänge</button>
@@ -103,7 +104,7 @@ export function Dashboard() {
               className={cn("flex w-full items-center gap-3 rounded-[14px] px-2 py-2.5 text-left transition-colors hover:bg-ink/[0.03]", index < unreadMails.length - 1 && "border-b border-line")}
               onClick={() => void selectEmail(email)}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[14px] font-semibold text-white">{initials(senderName(email.sender))}</span>
+              <SenderAvatar address={email.sender} name={senderName(email.sender)} className="h-10 w-10 text-[14px]" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{senderName(email.sender)}</span>
@@ -116,7 +117,7 @@ export function Dashboard() {
         </section>
 
         <div className="flex w-full min-w-0 flex-col gap-4 xl:flex-1">
-          <section className="rounded-[22px] border border-line p-5">
+          <section className="rise-in rounded-[22px] border border-line p-5" style={{ "--i": 6 } as CSSProperties}>
             <h2 className="mb-2 font-display text-[20px] font-extrabold">Konten</h2>
             {accounts.length === 0 ? <p className="py-2 text-[14px] text-label-2">Noch kein Konto verbunden.</p> : null}
             {accounts.map((account) => {
@@ -138,7 +139,7 @@ export function Dashboard() {
               );
             })}
           </section>
-          <section className="rounded-[22px] bg-surface p-5">
+          <section className="rise-in rounded-[22px] bg-surface p-5" style={{ "--i": 7 } as CSSProperties}>
             <h2 className="font-display text-[20px] font-extrabold">Diese Woche</h2>
             <div className="mt-3.5 grid grid-cols-3 gap-2">
               <WeekValue label="Empfangen" value={counts.thisWeek} />
@@ -155,13 +156,14 @@ export function Dashboard() {
   );
 }
 
-function StatTile({ label, value, hint, icon, inverse = false, onClick }: { label: string; value: number; hint: string; icon: ReactNode; inverse?: boolean; onClick: () => void }) {
+function StatTile({ index, label, value, hint, icon, inverse = false, onClick }: { index: number; label: string; value: number; hint: string; icon: ReactNode; inverse?: boolean; onClick: () => void }) {
   return (
     <button
       className={cn(
-        "flex h-[132px] flex-col justify-between rounded-[22px] px-5 py-[18px] text-left transition hover:-translate-y-0.5",
+        "pressable rise-in flex h-[132px] flex-col justify-between rounded-[22px] px-5 py-[18px] text-left hover:-translate-y-0.5",
         inverse ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-surface-2"
       )}
+      style={{ "--i": index } as CSSProperties}
       onClick={onClick}
     >
       <span className="flex w-full items-center justify-between text-[14px] font-semibold">
@@ -195,11 +197,6 @@ function greeting(date = new Date()) {
 function senderName(sender: string) {
   const name = sender.replace(/<[^>]*>/g, "").replace(/["']/g, "").trim();
   return name || sender.match(/<([^>]+)>/)?.[1] || sender || "Unbekannter Absender";
-}
-
-function initials(name: string) {
-  const parts = name.split(/[\s._-]+/).filter((part) => /\p{L}/u.test(part.charAt(0)));
-  return parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || name.charAt(0).toUpperCase() || "?";
 }
 
 function formatShortTime(value: string) {

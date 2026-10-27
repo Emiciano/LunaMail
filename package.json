@@ -16,6 +16,7 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "dompurify": "^3.4.11",
+    "electron-updater": "^6.8.11",
     "imapflow": "^1.4.6",
     "lucide-react": "^0.468.0",
     "mailparser": "^3.9.14",

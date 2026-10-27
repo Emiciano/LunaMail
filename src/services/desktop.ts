@@ -10,9 +10,24 @@ export type AppRelease = {
   prerelease: boolean;
 };
 
+export type UpdateState = {
+  status: "unsupported" | "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
+  version?: string;
+  progress?: number;
+  error?: string;
+  checkedAt?: string;
+};
+
 type ElectronBridge = {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
   on<T>(event: string, callback: (payload: T) => void): () => void;
+  senderLogo?(address: string): Promise<string | null>;
+  updates?: {
+    status(): Promise<UpdateState>;
+    check(): Promise<UpdateState>;
+    download(): Promise<UpdateState>;
+    install(): Promise<boolean>;
+  };
   getVersion(): Promise<string>;
   getReleaseHistory(): Promise<AppRelease[]>;
   openDialog(options: Record<string, unknown>): Promise<string | string[] | null>;

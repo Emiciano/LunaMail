@@ -4,7 +4,8 @@ const allowedEvents = new Set([
   "sync-account-complete",
   "sync-account-error",
   "email-hydrated",
-  "window-maximized-changed"
+  "window-maximized-changed",
+  "update-status"
 ]);
 
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -15,6 +16,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(event, listener);
     return () => ipcRenderer.removeListener(event, listener);
   },
+  updates: {
+    status: () => ipcRenderer.invoke("lunamail:update", "status"),
+    check: () => ipcRenderer.invoke("lunamail:update", "check"),
+    download: () => ipcRenderer.invoke("lunamail:update", "download"),
+    install: () => ipcRenderer.invoke("lunamail:update", "install")
+  },
+  senderLogo: (address) => ipcRenderer.invoke("lunamail:sender-logo", address),
   getVersion: () => ipcRenderer.invoke("lunamail:app-version"),
   getReleaseHistory: () => ipcRenderer.invoke("lunamail:release-history"),
   openDialog: (options) => ipcRenderer.invoke("lunamail:open-dialog", options),

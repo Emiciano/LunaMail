@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "../lib/cn";
 import { useMailStore } from "../stores/mailStore";
@@ -49,13 +50,13 @@ export function SystemStatus() {
 
   return (
     <section className="mail-scroll flex h-full min-h-0 flex-col gap-6 overflow-y-auto px-6 pb-28 pt-10 lg:px-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="rise-in flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-[38px] font-extrabold leading-[42px]">Systemstatus</h1>
           <p className="mt-1.5 text-[15px] text-label-2">Synchronisierung, Warteschlange und lokale Datenbank.</p>
         </div>
         <button
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-semibold transition hover:bg-surface-2 disabled:opacity-40"
+          className="pressable inline-flex h-10 items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-semibold hover:bg-surface-2 disabled:opacity-40"
           disabled={refreshing}
           onClick={() => void refresh()}
         >
@@ -64,7 +65,7 @@ export function SystemStatus() {
         </button>
       </header>
 
-      <div className="flex items-center gap-4 rounded-[22px] bg-ink px-6 py-5 text-canvas">
+      <div className="rise-in flex items-center gap-4 rounded-[22px] bg-ink px-6 py-5 text-canvas" style={{ "--i": 1 } as CSSProperties}>
         <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white", healthy ? "bg-[#16A34A]" : "bg-[#D97706]")}>
           {healthy ? <Check size={22} strokeWidth={2.5} /> : <AlertTriangle size={20} strokeWidth={2.5} />}
         </span>
@@ -78,14 +79,14 @@ export function SystemStatus() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Tile label="Mails" value={(healthStatus?.totalMails ?? 0).toLocaleString("de-DE")} />
-        <Tile label="Anhänge" value={(healthStatus?.totalAttachments ?? 0).toLocaleString("de-DE")} />
-        <Tile label="Datenbank" value={formatBytes(healthStatus?.databaseSizeBytes ?? databaseSizeBytes)} />
-        <Tile label="Schlüsselbund" value={keyringMissing ? "Nicht verfügbar" : "Geschützt"} warn={keyringMissing} />
+        <Tile index={2} label="Mails" value={(healthStatus?.totalMails ?? 0).toLocaleString("de-DE")} />
+        <Tile index={3} label="Anhänge" value={(healthStatus?.totalAttachments ?? 0).toLocaleString("de-DE")} />
+        <Tile index={4} label="Datenbank" value={formatBytes(healthStatus?.databaseSizeBytes ?? databaseSizeBytes)} />
+        <Tile index={5} label="Schlüsselbund" value={keyringMissing ? "Nicht verfügbar" : "Geschützt"} warn={keyringMissing} />
       </div>
 
       <div className="flex flex-col items-start gap-4 xl:flex-row">
-        <section className="w-full min-w-0 rounded-[22px] border border-line p-5 xl:flex-[1.6]">
+        <section className="rise-in w-full min-w-0 rounded-[22px] border border-line p-5 xl:flex-[1.6]" style={{ "--i": 6 } as CSSProperties}>
           <h2 className="mb-1 font-display text-[20px] font-extrabold">Synchronisierung</h2>
           {accounts.length === 0 ? <p className="py-4 text-[14px] text-label-2">Noch kein Konto verbunden.</p> : null}
           {accounts.map((account, index) => {
@@ -120,7 +121,7 @@ export function SystemStatus() {
         </section>
 
         <div className="flex w-full min-w-0 flex-col gap-4 xl:flex-1">
-          <section className="rounded-[22px] border border-line p-5">
+          <section className="rise-in rounded-[22px] border border-line p-5" style={{ "--i": 7 } as CSSProperties}>
             <h2 className="font-display text-[20px] font-extrabold">Warteschlange</h2>
             <div className="mt-3.5 grid grid-cols-3 gap-2">
               <Value label="Wartend" value={queue.pending} />
@@ -128,7 +129,7 @@ export function SystemStatus() {
               <Value label="Fehlgeschlagen" value={queue.failed} warn={queue.failed > 0} />
             </div>
           </section>
-          <section className="rounded-[22px] bg-surface p-5">
+          <section className="rise-in rounded-[22px] bg-surface p-5" style={{ "--i": 8 } as CSSProperties}>
             <h2 className="mb-1.5 font-display text-[20px] font-extrabold">Datenintegrität</h2>
             <IntegrityRow label="Doppelte Mails" value={integrity.duplicateMessageIds} />
             <IntegrityRow label="Verwaiste Anhänge" value={integrity.orphanAttachments} />
@@ -140,9 +141,9 @@ export function SystemStatus() {
   );
 }
 
-function Tile({ label, value, warn = false }: { label: string; value: string; warn?: boolean }) {
+function Tile({ index, label, value, warn = false }: { index: number; label: string; value: string; warn?: boolean }) {
   return (
-    <div className="flex h-[112px] flex-col justify-between rounded-[22px] bg-surface px-5 py-[18px]">
+    <div className="rise-in flex h-[112px] flex-col justify-between rounded-[22px] bg-surface px-5 py-[18px]" style={{ "--i": index } as CSSProperties}>
       <span className="text-[14px] font-semibold text-label-2">{label}</span>
       <span className={cn("truncate font-display text-[32px] font-extrabold leading-9", warn && "text-danger")}>{value}</span>
     </div>
