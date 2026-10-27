@@ -41,9 +41,12 @@
   };
   const counts = { favorites: 1, important: 1, unread: 5, withAttachments: 2, today: 3, thisWeek: 8, perAccount: [{ accountId: 1, favorites: 1, important: 1 }, { accountId: 2, favorites: 0, important: 0 }] };
   const health = {
-    sync: { queuePendingTotal: 0, queueFailedTotal: 0, queueInFlightTotal: 0, accounts: [] },
+    sync: { queuePendingTotal: 0, queueFailedTotal: 0, queueInFlightTotal: 0, accounts: [
+      { accountId: 1, idleActive: true, pollingActive: false, pollingIntervalSeconds: 900, queuePending: 0, queueFailed: 0, queueInFlight: 0, lastSyncAt: new Date(Date.now() - 60_000).toISOString(), lastSyncDurationMs: 1200, consecutiveFailures: 0 },
+      { accountId: 2, idleActive: false, pollingActive: true, pollingIntervalSeconds: 900, queuePending: 0, queueFailed: 0, queueInFlight: 0, lastSyncAt: new Date(Date.now() - 360_000).toISOString(), lastSyncDurationMs: 2800, consecutiveFailures: 0 }
+    ] },
     queue: { pending: 0, failed: 0, inFlight: 0 }, databaseSizeBytes: 18_400_000, totalMails: 1284, totalAttachments: 212,
-    keyringAvailable: true, integrity: { duplicateMessageIds: 0, orphanAttachments: 0 }
+    keyringAvailable: true, integrity: { duplicateMessageIds: 0, orphanAttachments: 0, accountFolderMismatches: 0 }
   };
   const handlers = {
     get_accounts: () => accounts,

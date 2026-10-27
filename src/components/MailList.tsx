@@ -12,8 +12,8 @@ const PAGE_SIZE = 30;
 export function MailList() {
   const {
     accounts, folders, emails, selectedEmail, selectedFolderId, selectedView, selectedEmailIds,
-    selectedCategoryId, categories, query, databaseSizeBytes,
-    healthStatus, search, selectCategory, selectEmail, toggleEmailSelection, setEmailSelection,
+    selectedCategoryId, categories, query,
+    search, selectCategory, selectEmail, toggleEmailSelection, setEmailSelection,
     deleteSelected, markReadSelected, archiveSelected, toggleFavoriteSelected, toggleImportantSelected,
     quickAction, sync, loading, hasSynced, syncError, settings, tags, searchFilters, setSearchFilters, setSelectedEmailTags
   } = useMailStore(useShallow((state) => ({
@@ -27,8 +27,6 @@ export function MailList() {
     selectedCategoryId: state.selectedCategoryId,
     categories: state.categories,
     query: state.query,
-    databaseSizeBytes: state.databaseSizeBytes,
-    healthStatus: state.healthStatus,
     search: state.search,
     selectCategory: state.selectCategory,
     selectEmail: state.selectEmail,
@@ -65,9 +63,7 @@ export function MailList() {
   const selectedFolder = selectedView === "folder" ? folders.find((folder) => folder.id === selectedFolderId) : undefined;
   const title = selectedFolder ? folderLabel(selectedFolder) : viewTitle(selectedView, selectedCategoryId);
   const unreadCount = useMemo(() => emails.filter((email) => !email.isRead).length, [emails]);
-  const subtitle = selectedView === "health"
-      ? "Lokaler Status und Synchronisation"
-      : selectedCount > 0
+  const subtitle = selectedCount > 0
         ? `${selectedCount} ausgewählt`
         : [
             selectedFolder ? accountById.get(selectedFolder.accountId)?.displayName : undefined,
@@ -179,19 +175,6 @@ export function MailList() {
             onDelete={() => void deleteSelected()}
           />
         </>
-      ) : null}
-
-      {selectedView === "health" ? (
-        <div className="mail-scroll grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto px-1 pb-24 pt-2 xl:grid-cols-3">
-          <DashboardCard label="Wartend" value={healthStatus?.queue.pending ?? 0} />
-          <DashboardCard label="Fehlgeschlagen" value={healthStatus?.queue.failed ?? 0} />
-          <DashboardCard label="In Bearbeitung" value={healthStatus?.queue.inFlight ?? 0} />
-          <DashboardCard label="Mails" value={healthStatus?.totalMails ?? 0} />
-          <DashboardCard label="Anhänge" value={healthStatus?.totalAttachments ?? 0} />
-          <DashboardCard label="Datenbankgröße" value={formatBytes(healthStatus?.databaseSizeBytes ?? databaseSizeBytes)} compact />
-          <DashboardCard label="Duplikate" value={healthStatus?.integrity.duplicateMessageIds ?? 0} />
-          <DashboardCard label="Verwaiste Anhänge" value={healthStatus?.integrity.orphanAttachments ?? 0} />
-        </div>
       ) : null}
 
       {showsMailList ? (
@@ -452,18 +435,6 @@ function QuickButton({ label, children, onClick, active = false, danger = false 
   );
 }
 
-function DashboardCard({ label, value, compact = false, icon }: { label: string; value: string | number; compact?: boolean; icon?: ReactNode }) {
-  return (
-    <article className="tr-card min-h-[118px] rounded-[20px] p-5">
-      <div className="flex items-center justify-between text-[13px] font-semibold text-label-2">
-        <span>{label}</span>
-        <span className="text-ink">{icon}</span>
-      </div>
-      <div className={cn("mt-5 text-ink", compact ? "text-[16px] font-semibold leading-6" : "font-display text-[32px] font-extrabold leading-9")}>{value}</div>
-    </article>
-  );
-}
-
 function MailListSkeleton() {
   return (
     <div className="space-y-1 p-3">
@@ -509,16 +480,4 @@ function formatMailTime(value: string) {
   if (days === 1) return "Gestern";
   if (days < 7) return date.toLocaleDateString("de-DE", { weekday: "long" });
   return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
-
-function formatBytes(value: number): string {
-  if (value <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let current = value;
-  let unit = 0;
-  while (current >= 1024 && unit < units.length - 1) {
-    current /= 1024;
-    unit += 1;
-  }
-  return `${current.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }

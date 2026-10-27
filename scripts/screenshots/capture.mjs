@@ -25,6 +25,10 @@ for (const theme of themes) {
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(outDir, `${theme}-dashboard.png`) });
 
+  await page.getByRole("button", { name: /Systemstatus/ }).first().click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outDir, `${theme}-systemstatus.png`) });
+
   await page.getByRole("button", { name: /Emilio/ }).first().click();
   await page.getByRole("button", { name: /Posteingang/ }).first().click();
   await page.waitForTimeout(300);
