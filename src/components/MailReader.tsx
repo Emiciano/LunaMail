@@ -51,12 +51,12 @@ export function MailReader() {
   }
 
   return (
-    <div className="mail-reader-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-scrim/40 p-6 sm:p-10" onClick={closeEmail}>
+    <div className="mail-reader-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-scrim/30 p-6 backdrop-blur-[6px] sm:p-8" onClick={closeEmail}>
       <aside
         role="dialog"
         aria-modal="true"
         aria-label={selectedEmail.subject || "E-Mail"}
-        className="mail-reader-panel mail-scroll max-h-full w-[min(920px,100%)] overflow-y-auto rounded-3xl border border-line bg-canvas shadow-float"
+        className="mail-reader-panel mail-scroll max-h-full w-[min(1120px,100%)] overflow-y-auto rounded-3xl border border-line bg-canvas shadow-float"
         onClick={(event) => event.stopPropagation()}
       >
         <article className="w-full px-6 pb-10 pt-4 lg:px-10">
@@ -143,7 +143,7 @@ export function MailReader() {
           </section>
 
           {selectedEmail.attachments.length > 0 ? (
-            <section className="mt-8 max-w-[820px] border-t border-line pt-5">
+            <section className="mt-8 border-t border-line pt-5">
               <div className="mb-3 text-[13px] font-bold uppercase tracking-[0.04em] text-label-3">{selectedEmail.attachments.length === 1 ? "1 Anhang" : `${selectedEmail.attachments.length} Anhänge`}</div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {selectedEmail.attachments.map((attachment) => (
