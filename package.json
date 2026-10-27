@@ -1,6 +1,6 @@
 {
   "name": "lunamail",
-  "version": "0.9.59",
+  "version": "0.9.60",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",
