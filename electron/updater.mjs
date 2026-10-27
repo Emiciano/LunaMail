@@ -73,5 +73,10 @@ export class AppUpdater {
 
 function shortError(error) {
   const message = error instanceof Error ? error.message : String(error);
+  // Direkt nach dem Veröffentlichen eines Releases baut GitHub die Installationsdatei noch
+  // (rund drei Minuten); bis dahin fehlt latest.yml und der Abruf endet mit 404.
+  if (/latest\.yml/.test(message) && /404/.test(message)) {
+    return "Die neue Version wird gerade noch gebaut. Bitte in ein paar Minuten erneut suchen.";
+  }
   return message.split("\n")[0].slice(0, 200);
 }
