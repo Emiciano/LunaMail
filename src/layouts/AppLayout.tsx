@@ -20,7 +20,7 @@ export function AppLayout() {
     <div className="relative h-full overflow-hidden bg-canvas text-ink">
       {isDesktop ? <div className="titlebar-drag absolute left-[260px] right-32 top-0 z-40 h-10" /> : null}
       {isDesktop ? (
-        <div className="titlebar-drag absolute right-0 top-0 z-50 flex h-9 items-center gap-0.5 px-2">
+        <div className="titlebar-drag absolute right-[18px] top-[18px] z-[70] flex items-center gap-0.5">
           <button className="titlebar-no-drag inline-flex h-7 w-9 items-center justify-center rounded-lg text-label-2 transition-colors hover:bg-surface hover:text-ink" onClick={() => void window.electronAPI?.window.minimize()} title="Minimieren">
             <Minus size={13} />
           </button>
