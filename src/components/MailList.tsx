@@ -216,7 +216,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div
-            className="mail-scroll min-h-0 flex-1 overflow-y-auto pb-24 pt-1"
+            className="mail-scroll min-h-0 flex-1 space-y-1 overflow-y-auto pb-24 pt-1"
             onScroll={(event) => {
               const element = event.currentTarget;
               if (element.scrollTop + element.clientHeight >= element.scrollHeight - 240 && visibleCount < emails.length) {
@@ -386,7 +386,7 @@ const MailRow = memo(function MailRow({
       className={cn(
         "mail-row mail-row-enter group relative flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors duration-150",
         "after:pointer-events-none after:absolute after:bottom-0 after:left-[68px] after:right-3 after:h-px after:bg-line",
-        active ? "bg-surface after:opacity-0" : selected ? "bg-ink/[0.04]" : "hover:bg-ink/[0.03]"
+        active ? "bg-surface after:opacity-0" : selected ? "bg-ink/[0.05] after:opacity-0" : "hover:bg-ink/[0.03] hover:after:opacity-0"
       )}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
@@ -401,7 +401,7 @@ const MailRow = memo(function MailRow({
           className={cn("mail-checkbox absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 transition-opacity", selected || anySelected ? "opacity-100" : "opacity-0 group-hover/tile:opacity-100 group-focus-visible:opacity-100")}
           aria-label="Mail auswählen"
         />
-        {unread ? <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-[rgb(var(--accent))]" aria-label="Ungelesen" /> : null}
+        {unread && !anySelected ? <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-[rgb(var(--accent))]" aria-label="Ungelesen" /> : null}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
