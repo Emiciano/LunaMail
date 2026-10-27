@@ -753,6 +753,7 @@ export const useMailStore = create<MailState>((set, get) => ({
         });
         await mailService.deleteEmailsPermanently(selectedIds);
       } else {
+        set({ emails: emailsBeforeDelete.filter((email) => !selectedIdSet.has(email.id)) });
         await Promise.all(selectedIds.map((id) => mailService.deleteEmail(id)));
       }
     } catch (error) {
@@ -811,15 +812,23 @@ export const useMailStore = create<MailState>((set, get) => ({
         .map((folder) => [folder.accountId, folder.id])
     );
 
-    await Promise.all(selectedIds.map(async (id) => {
-      const email = emailsById.get(id);
-      if (!email) return;
-      const archiveFolderId = archiveByAccount.get(email.accountId);
-      if (!archiveFolderId) {
-        throw new Error("Kein Archiv-Ordner gefunden.");
-      }
-      await mailService.moveEmail(id, archiveFolderId);
-    }));
+    const emailsBeforeArchive = get().emails;
+    const selectedIdSet = new Set(selectedIds);
+    set({ emails: emailsBeforeArchive.filter((email) => !selectedIdSet.has(email.id)) });
+    try {
+      await Promise.all(selectedIds.map(async (id) => {
+        const email = emailsById.get(id);
+        if (!email) return;
+        const archiveFolderId = archiveByAccount.get(email.accountId);
+        if (!archiveFolderId) {
+          throw new Error("Kein Archiv-Ordner gefunden.");
+        }
+        await mailService.moveEmail(id, archiveFolderId);
+      }));
+    } catch (error) {
+      set({ emails: emailsBeforeArchive, syncError: `Archivieren fehlgeschlagen: ${String(error)}` });
+      return;
+    }
 
     const view = get().selectedView;
     const specialAccountId = get().selectedSpecialAccountId;
@@ -1007,11 +1016,16 @@ export const useMailStore = create<MailState>((set, get) => ({
   async quickAction(emailId, action) {
     const email = get().emails.find((item) => item.id === emailId);
     if (!email) return;
+    // Löschen und Archivieren nehmen die Zeile sofort aus der Liste, damit sie ohne Wartezeit
+    // herausgleitet; schlägt der Auftrag fehl, kommt sie zurück.
+    const emailsBefore = get().emails;
     if (action === "delete") {
+      set({ emails: emailsBefore.filter((item) => item.id !== emailId) });
       try {
         await mailService.deleteEmail(emailId);
       } catch (error) {
         set({
+          emails: emailsBefore,
           syncError: `Löschen fehlgeschlagen: ${String(error)}`,
           syncStatus: "Nachricht wurde nicht gelöscht"
         });
@@ -1031,7 +1045,13 @@ export const useMailStore = create<MailState>((set, get) => ({
         set({ syncError: "Kein Archiv-Ordner gefunden." });
         return;
       }
-      await mailService.moveEmail(emailId, archiveFolder.id);
+      set({ emails: emailsBefore.filter((item) => item.id !== emailId) });
+      try {
+        await mailService.moveEmail(emailId, archiveFolder.id);
+      } catch (error) {
+        set({ emails: emailsBefore, syncError: `Archivieren fehlgeschlagen: ${String(error)}` });
+        return;
+      }
     }
     const view = get().selectedView;
     const specialAccountId = get().selectedSpecialAccountId;
