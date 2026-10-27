@@ -13,7 +13,7 @@ const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail: currentEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact } = useMailStore(useShallow((state) => ({
+  const { selectedEmail: currentEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact, updateSettings } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
     settings: state.settings,
     contacts: state.contacts,
@@ -22,7 +22,8 @@ export function MailReader() {
     forwardSelected: state.forwardSelected,
     archiveSelected: state.archiveSelected,
     deleteSelected: state.deleteSelected,
-    saveContact: state.saveContact
+    saveContact: state.saveContact,
+    updateSettings: state.updateSettings
   })));
   // Beim Schließen bleibt die Mail kurz stehen, damit das Modal sichtbar ausblenden kann.
   const [shownEmail, setShownEmail] = useState(currentEmail);
@@ -37,10 +38,13 @@ export function MailReader() {
   const selectedEmail = currentEmail ?? shownEmail;
   const closing = !currentEmail;
 
+  // Externe Bilder nur nach ausdrücklichem Klick, und dann nur für diese eine Mail.
+  const [imagesAllowedFor, setImagesAllowedFor] = useState<number>();
+  const imagesAllowed = settings.externalImages === "always" || (selectedEmail !== undefined && imagesAllowedFor === selectedEmail.id);
   const htmlView = useMemo(() => {
     if (!selectedEmail?.bodyHtml || selectedEmail.bodyHtml.length > MAX_HTML_LENGTH) return undefined;
-    return sanitizeEmailHtml(selectedEmail.bodyHtml, settings.externalImages === "always");
-  }, [selectedEmail?.bodyHtml, settings.externalImages]);
+    return sanitizeEmailHtml(selectedEmail.bodyHtml, imagesAllowed);
+  }, [selectedEmail?.bodyHtml, imagesAllowed]);
 
 
   if (!selectedEmail) return null;
@@ -68,7 +72,7 @@ export function MailReader() {
         role="dialog"
         aria-modal="true"
         aria-label={selectedEmail.subject || "E-Mail"}
-        className="mail-reader-panel mail-scroll max-h-full w-[min(1120px,100%)] overflow-y-auto rounded-3xl border border-line bg-canvas shadow-float"
+        className="mail-reader-panel mail-scroll max-h-full w-[min(1600px,max(1120px,82vw),100%)] overflow-y-auto rounded-3xl border border-line bg-canvas shadow-float"
         onClick={(event) => event.stopPropagation()}
       >
         <article className="w-full px-6 pb-10 pt-4 lg:px-10">
@@ -126,11 +130,21 @@ export function MailReader() {
               <Notice>Sehr große HTML-Mail wird aus Performance-Gründen als Text angezeigt.</Notice>
             ) : null}
             {htmlView?.blockedRemoteImages ? (
-              <Notice>{htmlView.blockedRemoteImages} externe Bilder wurden blockiert.</Notice>
+              <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-[13px] font-medium text-label-2">
+                <span className="min-w-0 flex-1">
+                  {htmlView.blockedRemoteImages === 1 ? "1 externes Bild wurde" : `${htmlView.blockedRemoteImages} externe Bilder wurden`} zum Schutz vor Tracking blockiert.
+                </span>
+                <button className="pressable rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-bold text-canvas hover:opacity-90" onClick={() => setImagesAllowedFor(selectedEmail.id)}>
+                  Bilder laden
+                </button>
+                <button className="pressable rounded-full px-3 py-1.5 text-[13px] font-semibold text-ink hover:bg-surface-2" onClick={() => void updateSettings({ ...settings, externalImages: "always" })}>
+                  Immer laden
+                </button>
+              </div>
             ) : null}
             {htmlView?.document ? (
               <iframe
-                className="h-[min(68vh,720px)] w-full rounded-2xl border border-line bg-white"
+                className="h-[max(420px,calc(100vh-330px))] w-full rounded-2xl border border-line bg-white"
                 sandbox="allow-popups allow-popups-to-escape-sandbox"
                 srcDoc={htmlView.document}
                 title={`E-Mail: ${selectedEmail.subject || "Ohne Betreff"}`}

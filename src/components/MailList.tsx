@@ -54,7 +54,9 @@ export function MailList() {
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const selectedIdSet = useMemo(() => new Set(selectedEmailIds), [selectedEmailIds]);
-  const visibleEmails = useMemo(() => emails.slice(0, visibleCount), [emails, visibleCount]);
+  const leavingKey = [query, selectedCategoryId, JSON.stringify(searchFilters)].join("|");
+  const { rows: listRows, leavingIds } = useLeavingRows(emails, leavingKey);
+  const visibleEmails = useMemo(() => listRows.slice(0, visibleCount + leavingIds.size), [listRows, visibleCount, leavingIds]);
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
   const selectedCount = selectedEmailIds.length;
   const allSelected = emails.length > 0 && emails.every((email) => selectedIdSet.has(email.id));
@@ -112,7 +114,7 @@ export function MailList() {
       {showsMailList ? (
         <>
           <div className="shrink-0 px-1 pb-2">
-            <label className="flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition focus-within:bg-surface-2">
+            <label className="search-field flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition focus-within:bg-surface-2 focus-within:ring-2 focus-within:ring-ink/15">
               <Search size={17} />
               <input
                 id="mail-search-input"
@@ -223,6 +225,7 @@ export function MailList() {
                 permanentlyDeletes={permanentlyDeletes}
                 showsRecipient={showsRecipient}
                 enterIndex={index < 15 ? index : 0}
+                leaving={leavingIds.has(email.id)}
                 onSelect={selectEmail}
                 onToggleSelection={toggleEmailSelection}
                 onQuickAction={quickAction}
@@ -325,7 +328,7 @@ function ToolbarButton({ label, icon, onClick, disabled = false, danger = false 
 }
 
 const MailRow = memo(function MailRow({
-  email, active, selected, anySelected, accountLabel, accountColor, permanentlyDeletes, showsRecipient, enterIndex,
+  email, active, selected, anySelected, accountLabel, accountColor, permanentlyDeletes, showsRecipient, enterIndex, leaving,
   onSelect, onToggleSelection, onQuickAction
 }: {
   email: Email;
@@ -337,6 +340,7 @@ const MailRow = memo(function MailRow({
   permanentlyDeletes: boolean;
   showsRecipient: boolean;
   enterIndex: number;
+  leaving: boolean;
   onSelect: (email: Email) => Promise<void>;
   onToggleSelection: (id: number, selected: boolean) => void;
   onQuickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive") => Promise<void>;
@@ -357,11 +361,13 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row mail-row-enter group relative flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors duration-150",
+        "mail-row group relative flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors duration-150",
         "after:pointer-events-none after:absolute after:bottom-0 after:left-[68px] after:right-3 after:h-px after:bg-line",
+        leaving ? "mail-row-leave" : "mail-row-enter",
         active ? "bg-surface after:opacity-0" : selected ? "bg-ink/[0.05] after:opacity-0" : "hover:bg-ink/[0.03] hover:after:opacity-0"
       )}
       style={{ "--i": enterIndex } as CSSProperties}
+      aria-hidden={leaving || undefined}
       onClick={() => void onSelect(email)}
       onKeyDown={openFromKeyboard}
     >
@@ -445,6 +451,40 @@ function QuickButton({ label, children, onClick, active = false, danger = false 
       {children}
     </button>
   );
+}
+
+type Ghost = { email: Email; index: number };
+
+/**
+ * Hält gerade entfernte Mails (gelöscht, archiviert, verschoben) kurz in der Liste,
+ * damit sie sichtbar herausgleiten statt zu verschwinden. Wechselt die Suche oder der
+ * Filter, wird nichts animiert.
+ */
+function useLeavingRows(emails: Email[], key: string) {
+  const [tracked, setTracked] = useState<{ emails: Email[]; key: string; ghosts: Ghost[] }>({ emails, key, ghosts: [] });
+  if (tracked.emails !== emails || tracked.key !== key) {
+    let ghosts: Ghost[] = [];
+    if (tracked.key === key) {
+      const nextIds = new Set(emails.map((email) => email.id));
+      const previousIds = new Set(tracked.emails.map((email) => email.id));
+      const removed = tracked.emails.flatMap((email, index) => (nextIds.has(email.id) ? [] : [{ email, index }]));
+      const added = emails.some((email) => !previousIds.has(email.id));
+      if (removed.length > 0 && removed.length <= 50 && !added) ghosts = removed;
+    }
+    setTracked({ emails, key, ghosts });
+  }
+
+  useEffect(() => {
+    if (tracked.ghosts.length === 0) return;
+    const timer = window.setTimeout(() => setTracked((current) => ({ ...current, ghosts: [] })), 280);
+    return () => window.clearTimeout(timer);
+  }, [tracked.ghosts]);
+
+  return useMemo(() => {
+    const rows = [...tracked.emails];
+    for (const ghost of tracked.ghosts) rows.splice(Math.min(ghost.index, rows.length), 0, ghost.email);
+    return { rows, leavingIds: new Set(tracked.ghosts.map((ghost) => ghost.email.id)) };
+  }, [tracked]);
 }
 
 function MailListSkeleton() {
