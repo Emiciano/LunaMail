@@ -1,4 +1,5 @@
-import { ChevronDown, ExternalLink, Info, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Download, ExternalLink, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -9,11 +10,13 @@ import type { AccentColor, Contact, DiagnoseAccountResult, DiagnoseInboxResult, 
 import packageJson from "../../package.json";
 import { useShallow } from "zustand/react/shallow";
 import { useAppUpdate } from "../hooks/useAppUpdate";
+import { cn } from "../lib/cn";
+import { SenderAvatar } from "./SenderAvatar";
 
 type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
-  { value: "white", label: "Standard", className: "border border-ink/20 bg-ink" },
+  { value: "white", label: "Standard", className: "bg-ink" },
   { value: "blue", label: "Blau", className: "bg-blue-600" },
   { value: "green", label: "Grün", className: "bg-green-600" },
   { value: "orange", label: "Orange", className: "bg-orange-600" },
@@ -21,7 +24,7 @@ const accentOptions: { value: AccentColor; label: string; className: string }[] 
   { value: "purple", label: "Lila", className: "bg-purple-600" },
   { value: "teal", label: "Türkis", className: "bg-teal-600" },
   { value: "pink", label: "Pink", className: "bg-pink-600" },
-  { value: "gray", label: "Grau", className: "bg-slate-600" }
+  { value: "gray", label: "Grau", className: "bg-[#475569]" }
 ];
 
 const themeOptions: { value: ThemeMode; label: string; preview: [string, string, string] }[] = [
@@ -42,40 +45,49 @@ const accentVars: Record<AccentColor, CSSProperties> = {
   gray: { "--accent": "71 85 105", "--accent-soft": "248 250 252", "--accent-contrast": "255 255 255" } as CSSProperties
 };
 
+/** Kleiner Passwort-Dialog im Stil der App; der Wert verlässt die Funktion nur über das Promise. */
 function requestSecret(title: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
-    overlay.className = "fixed inset-0 z-[9999] grid place-items-center bg-scrim/40 px-4";
+    overlay.className = "overlay-enter fixed inset-0 grid place-items-center bg-scrim/30 px-4 backdrop-blur-[6px]";
+    overlay.style.zIndex = "2147483647";
     const panel = document.createElement("form");
-    panel.className = "w-full max-w-sm rounded-2xl border border-ink/10 bg-surface p-5 shadow-2xl";
+    panel.className = "dialog-enter w-full max-w-sm rounded-3xl border border-line bg-canvas p-6 text-ink shadow-float";
     const label = document.createElement("label");
-    label.className = "block text-sm font-semibold text-ink";
+    label.className = "block font-display text-[18px] font-extrabold leading-6";
     label.textContent = title;
     const input = document.createElement("input");
     input.type = "password";
     input.autocomplete = "new-password";
-    input.className = "mt-3 w-full rounded-xl border border-ink/10 bg-ink/[0.06] px-3 py-2 text-sm text-ink outline-none focus:border-ink/30";
+    input.maxLength = 256;
+    input.className = "mt-4 h-11 w-full rounded-[12px] border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:ring-2 focus:ring-ink/15";
+    label.append(input);
     const actions = document.createElement("div");
-    actions.className = "mt-4 flex justify-end gap-2";
+    actions.className = "mt-5 flex justify-end gap-2";
     const cancel = document.createElement("button");
     cancel.type = "button";
-    cancel.className = "rounded-lg border border-ink/10 px-3 py-2 text-sm text-ink/70";
+    cancel.className = "pressable h-10 rounded-full bg-surface px-4 text-[14px] font-semibold text-ink hover:bg-surface-2";
     cancel.textContent = "Abbrechen";
     const ok = document.createElement("button");
     ok.type = "submit";
-    ok.className = "accent-primary rounded-lg px-3 py-2 text-sm font-semibold";
+    ok.className = "pressable accent-primary h-10 rounded-full px-5 text-[14px] font-bold";
     ok.textContent = "OK";
     const close = (value?: string) => {
       overlay.remove();
       resolve(value);
     };
     cancel.onclick = () => close();
+    panel.onkeydown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    };
     panel.onsubmit = (event) => {
       event.preventDefault();
       close(input.value);
     };
     actions.append(cancel, ok);
-    panel.append(label, input, actions);
+    panel.append(label, actions);
     overlay.append(panel);
     document.body.append(overlay);
     input.focus();
@@ -474,854 +486,810 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     await loadContacts();
   }
 
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) void saveSettings();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  const activeTab = tabs.find((item) => item.id === tab) ?? tabs[0];
+
+  function startAccountForm(account?: (typeof accounts)[number]) {
+    setEditingAccountId(account?.id);
+    setProvider(account?.provider === "gmail" ? "gmail" : "custom");
+    setShowAccountForm(true);
+    setMessage(account
+      ? account.authType === "oauth2"
+        ? "Google-Konto erneut anmelden, um die Berechtigung zu erneuern."
+        : "Passwort neu eingeben und speichern, um den Keyring-Eintrag zu erneuern."
+      : "");
+  }
+
+  function closeAccountForm() {
+    setEditingAccountId(undefined);
+    setShowAccountForm(false);
+  }
+
   return createPortal(
     <div
-      className="overlay-enter flex items-center justify-center bg-scrim/40 p-6"
+      className="overlay-enter flex items-center justify-center bg-scrim/30 p-6 backdrop-blur-[6px]"
       style={{ position: "fixed", inset: 0, zIndex: 2147483647, ...accentVars[draft.accentColor] }}
     >
-      <section className="dialog-enter tr-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(980px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[10px]">
-        <header className="flex h-16 items-center justify-between border-b border-ink/[0.06] px-6">
-          <div>
-            <h2 className="text-lg font-semibold tracking-[-0.03em]">Einstellungen</h2>
-            <p className="text-xs text-ink/45">Konten, Design und Synchronisierung</p>
-          </div>
-          <button className="rounded-lg p-2 text-ink/55 transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink" onClick={onClose} title="Schließen">
-            <X size={18} />
-          </button>
-        </header>
-        <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr]">
-          <nav className="border-r border-line bg-sidebar p-4">
-            <TabButton active={tab === "accounts"} onClick={() => setTab("accounts")} label="Konten" />
-            <TabButton active={tab === "general"} onClick={() => setTab("general")} label="Allgemein" />
-            <TabButton active={tab === "themes"} onClick={() => setTab("themes")} label="Design" />
-            <TabButton active={tab === "security"} onClick={() => setTab("security")} label="Sicherheit" />
-            <TabButton active={tab === "sync"} onClick={() => setTab("sync")} label="Synchronisierung" />
-            <TabButton active={tab === "rules"} onClick={() => setTab("rules")} label="Regeln" />
-            <TabButton active={tab === "contacts"} onClick={() => setTab("contacts")} label="Kontakte" />
-            <TabButton active={tab === "tags"} onClick={() => setTab("tags")} label="Tags" />
-            <TabButton active={tab === "backup"} onClick={() => setTab("backup")} label="Datensicherung" />
-            <TabButton active={tab === "about"} onClick={() => setTab("about")} label="Über" />
-          </nav>
-          <div className="mail-scroll min-h-0 overflow-y-auto bg-canvas p-6 text-ink">
-            {tab === "accounts" ? (
-              <div className="space-y-6">
-                <section>
-                  <h3 className="mb-3 text-sm font-semibold text-ink/80">Vorhandene Konten</h3>
-                  <div className="grid gap-3">
-                    {accounts.length === 0 ? (
-                      <div className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-500 dark:border-ink/10 dark:text-slate-400">
-                        Noch kein Konto verbunden
-                      </div>
-                    ) : null}
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Einstellungen"
+        className="dialog-enter flex h-[min(860px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-3rem))] overflow-hidden rounded-3xl border border-line bg-canvas text-ink shadow-float"
+      >
+        <nav className="mail-scroll flex w-[248px] shrink-0 flex-col overflow-y-auto bg-sidebar px-3 pb-4 pt-7">
+          <h2 className="px-3 font-display text-[26px] font-extrabold leading-8">Einstellungen</h2>
+          {navGroups.map((group) => (
+            <div key={group.title}>
+              <div className="mb-1.5 mt-6 px-3 text-[12px] font-bold uppercase tracking-[0.04em] text-label-3">{group.title}</div>
+              <div className="space-y-0.5">
+                {group.tabs.map((id) => {
+                  const item = tabs.find((entry) => entry.id === id)!;
+                  const Icon = item.icon;
+                  const active = tab === id;
+                  return (
+                    <button
+                      key={id}
+                      className={cn(
+                        "pressable flex h-10 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px]",
+                        active ? "bg-ink/[0.08] font-semibold text-ink" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
+                      )}
+                      onClick={() => setTab(id)}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <Icon size={17} className={active ? "text-ink" : "text-label-2"} />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex shrink-0 items-start justify-between gap-6 px-10 pb-5 pt-8">
+            <div className="min-w-0">
+              <h3 className="font-display text-[32px] font-extrabold leading-9">{activeTab.label}</h3>
+              <p className="mt-1.5 text-[15px] text-label-2">{activeTab.description}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button className="pressable accent-primary h-10 rounded-full px-5 text-[14px] font-bold" onClick={() => void saveSettings()}>
+                Fertig
+              </button>
+              <button className="pressable flex h-10 w-10 items-center justify-center rounded-full bg-surface text-label-2 hover:bg-surface-2 hover:text-ink" onClick={onClose} title="Schließen" aria-label="Schließen">
+                <X size={18} />
+              </button>
+            </div>
+          </header>
+
+          <div className="mail-scroll min-h-0 flex-1 overflow-y-auto px-10 pb-10">
+            <div key={tab} className="view-enter mx-auto max-w-[820px] space-y-7">
+              {message ? <Notice>{message}</Notice> : null}
+              {syncError ? <Notice tone="danger">{syncError}</Notice> : null}
+
+              {tab === "accounts" ? (
+                <>
+                  <Group title="Verbundene Konten">
+                    {accounts.length === 0 ? <EmptyRow>Noch kein Konto verbunden.</EmptyRow> : null}
                     {accounts.map((account) => (
-                      <div key={account.id} className="rounded-2xl border border-line p-4 bg-sidebar">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold">{account.displayName}</div>
-                            <div className="text-sm text-label-2">{account.email}</div>
-                            <div className="mt-1 text-xs text-label-2">
-                              {account.provider} · {account.imapHost}:{account.imapPort} · {account.smtpHost}:{account.smtpPort}
-                            </div>
-                            <label className="mt-2 inline-flex items-center gap-2 text-xs text-ink/80">
-                              <input
-                                type="checkbox"
-                                checked={draft.accountNotifications?.[String(account.id)] ?? true}
-                                onChange={(event) =>
-                                  applySettings({
-                                    ...draft,
-                                    accountNotifications: {
-                                      ...draft.accountNotifications,
-                                      [String(account.id)]: event.target.checked
-                                    }
-                                  })
-                                }
-                                className="h-4 w-4 accent-[rgb(var(--accent))]"
-                              />
-                              Benachrichtigungen für dieses Konto
-                            </label>
+                      <div key={account.id} className="flex items-center gap-3.5 px-4 py-3.5">
+                        <SenderAvatar address={account.email} name={account.displayName || account.email} className="h-11 w-11 text-[15px]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[15px] font-bold">{account.displayName || account.email}</div>
+                          <div className="truncate text-[13px] text-label-2">{account.email}</div>
+                          <div className="mt-0.5 truncate text-[12px] text-label-3">
+                            {account.provider === "gmail" ? "Gmail" : "IMAP"} · {account.imapHost}:{account.imapPort} · {account.smtpHost}:{account.smtpPort}
                           </div>
-                          <div className="flex gap-2">
-                            <button
-                              className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.055]"
-                              onClick={() => {
-                                setEditingAccountId(account.id);
-                                setProvider(account.provider === "gmail" ? "gmail" : "custom");
-                                setShowAccountForm(true);
-                                setMessage(account.authType === "oauth2"
-                                  ? "Google-Konto erneut anmelden, um die Berechtigung zu erneuern."
-                                  : "Passwort neu eingeben und speichern, um den Keyring-Eintrag zu erneuern.");
-                              }}
-                              title="Bearbeiten"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.055]" onClick={() => void testAccount(account.id)}>
-                              Testen
-                            </button>
-                            <button className="rounded-lg border border-ink/[0.06] px-3 py-2 text-sm text-ink/55 hover:bg-ink/[0.05] hover:text-ink" onClick={() => void deleteAccount(account.id)} title="Löschen">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <SoftButton onClick={() => void testAccount(account.id)}>Testen</SoftButton>
+                          <IconButton title="Bearbeiten" onClick={() => startAccountForm(account)}><Pencil size={16} /></IconButton>
+                          <IconButton title="Löschen" danger onClick={() => void deleteAccount(account.id)}><Trash2 size={16} /></IconButton>
                         </div>
                       </div>
                     ))}
-                  </div>
-                </section>
-                {showAccountForm ? (
-                  <section className="rounded-2xl border border-line p-4 bg-sidebar">
-                    <div className="mb-4 flex items-center gap-2">
-                      <Plus size={17} />
-                      <h3 className="font-semibold">{editingAccount ? "Konto bearbeiten" : "Neues Konto anlegen"}</h3>
-                    </div>
-                    <div className="mb-2 text-sm font-medium text-ink/80">Anbieter</div>
-                    <div className="mb-4 grid grid-cols-2 gap-3">
-                      <button type="button" className={providerButton(provider === "custom")} onClick={() => setProvider("custom")}>IMAP</button>
-                      <button type="button" className={providerButton(provider === "gmail")} onClick={() => setProvider("gmail")}>Gmail hinzufügen</button>
-                    </div>
-                    {provider === "gmail" ? (
-                      <div className="space-y-4">
-                        <div className="rounded-lg border border-ink/[0.06] bg-surface px-4 py-3 text-sm text-ink/70">
-                          LunaMail öffnet die sichere Google-Anmeldung im Standardbrowser. E-Mail-Adresse, Passwort und Bestätigung werden ausschließlich bei Google eingegeben.
-                        </div>
-                        <label className="block">
-                          <span className="mb-1.5 block text-sm font-medium text-ink/80">Google OAuth Desktop-Client-ID</span>
-                          <input
-                            value={draft.googleOAuthClientId ?? ""}
-                            onChange={(event) => setDraft({ ...draft, googleOAuthClientId: event.target.value })}
-                            placeholder="123456789-abc.apps.googleusercontent.com"
-                            className="h-11 w-full rounded-lg border border-ink/[0.06] bg-surface px-3 text-sm text-ink outline-none focus:border-ink/[0.16]"
-                          />
-                          <span className="mt-1.5 block text-xs text-label-2">
-                            Einmalige App-Konfiguration aus der Google Cloud Console. Typ: Desktop-App.
-                          </span>
-                        </label>
-                        <button
-                          type="button"
-                          className="accent-primary flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-[rgb(var(--accent)/0.45)] px-4 font-semibold transition-colors disabled:cursor-wait disabled:opacity-60"
-                          disabled={googleAuthBusy}
-                          onClick={() => void connectGoogle()}
-                        >
-                          <span className="text-xl font-bold text-[rgb(var(--accent-contrast))]">G</span>
-                          {googleAuthBusy ? "Google-Anmeldung läuft..." : editingAccount ? "Erneut mit Google anmelden" : "Mit Google anmelden"}
-                        </button>
-                      </div>
-                    ) : (
-                      <form key={editingAccount?.id ?? provider} onSubmit={submitAccount} className="grid grid-cols-2 gap-4">
-                        <Field name="displayName" label="Name" defaultValue={editingAccount?.displayName} required />
-                        <Field name="email" label="E-Mail" type="email" defaultValue={editingAccount?.email} required />
-                        <Field name="username" label="Benutzername (meist volle E-Mail)" defaultValue={editingAccount?.username ?? editingAccount?.email} />
-                        <Field name="imapHost" label="IMAP-Server" defaultValue={editingAccount?.imapHost ?? ""} required />
-                        <Field name="imapPort" label="IMAP Port" type="number" defaultValue={String(editingAccount?.imapPort ?? 993)} required />
-                        <CheckboxField name="imapSecure" label="IMAP SSL/TLS" defaultChecked={editingAccount?.imapSecure ?? true} />
-                        <Field name="smtpHost" label="SMTP-Server" defaultValue={editingAccount?.smtpHost ?? ""} required />
-                        <Field name="smtpPort" label="SMTP Port" type="number" defaultValue={String(editingAccount?.smtpPort ?? 465)} required />
-                        <CheckboxField name="smtpSecure" label="SMTP SSL/TLS" defaultChecked={editingAccount?.smtpSecure ?? true} />
-                        <Field name="password" label={editingAccount ? "IMAP Passwort (neu eingeben)" : "IMAP Passwort"} type="password" required />
-                        <Field name="smtpPassword" label="SMTP Passwort" type="password" />
-                        <div className="col-span-2 flex justify-end gap-2">
-                          <button
-                            type="button"
-                            className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-ink/8"
-                            onClick={() => {
-                              setEditingAccountId(undefined);
-                              setShowAccountForm(false);
-                            }}
-                          >
-                            Abbrechen
-                          </button>
-                          <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold">Speichern</button>
-                        </div>
-                      </form>
-                    )}
-                    {provider === "gmail" ? (
-                      <div className="mt-4 flex justify-end">
-                        <button
-                          type="button"
-                          className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-ink/8"
-                          onClick={() => {
-                            setEditingAccountId(undefined);
-                            setShowAccountForm(false);
-                          }}
-                        >
-                          Abbrechen
-                        </button>
-                      </div>
+                    {!showAccountForm ? (
+                      <button type="button" className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-surface-2" onClick={() => startAccountForm()}>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-canvas text-ink">
+                          <Plus size={19} />
+                        </span>
+                        <span>
+                          <span className="block text-[15px] font-bold">Konto hinzufügen</span>
+                          <span className="block text-[13px] text-label-2">IMAP/SMTP oder Gmail</span>
+                        </span>
+                      </button>
                     ) : null}
-                  </section>
-                ) : (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 px-4 py-4 text-left transition-colors hover:bg-slate-50 dark:border-ink/[0.08] dark:bg-ink/[0.025] dark:hover:bg-ink/[0.055]"
-                    onClick={() => {
-                      setEditingAccountId(undefined);
-                      setProvider("custom");
-                      setShowAccountForm(true);
-                      setMessage("");
-                    }}
-                  >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink/[0.08] text-ink">
-                      <Plus size={17} />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">Neues Konto anlegen</span>
-                      <span className="block text-xs text-label-2">IMAP-/SMTP-Konto hinzufügen</span>
-                    </span>
-                  </button>
-                )}
-              </div>
-            ) : null}
-            {tab === "general" ? (
-              <div className="space-y-6">
-                <SettingsSection title="Darstellung" description="Passe Lesbarkeit und Dichte der Oberfläche an.">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="rounded-xl border border-ink/[0.07] bg-surface p-4">
-                      <span className="flex items-center justify-between text-sm font-medium">
-                        Schriftgröße
-                        <span className="rounded-md bg-ink/[0.07] px-2 py-1 text-xs text-ink/65">{draft.fontSize}px</span>
-                      </span>
-                      <input
-                        type="range"
-                        min="14"
-                        max="22"
-                        value={draft.fontSize}
-                        onChange={(event) => {
-                          const fontSize = Number(event.target.value);
-                          setDraft({ ...draft, fontSize });
-                          document.documentElement.style.setProperty("--app-font-size", `${fontSize}px`);
-                        }}
-                        onPointerUp={(event) => applySettings({ ...draft, fontSize: Number(event.currentTarget.value) })}
-                        onBlur={(event) => applySettings({ ...draft, fontSize: Number(event.currentTarget.value) })}
-                        className="mt-4 w-full accent-[rgb(var(--accent))]"
-                      />
-                    </label>
-                    <div className="space-y-3">
-                      <ModernSelect label="Darstellung" value={draft.layoutMode} onChange={(value) => applySettings({ ...draft, layoutMode: value as Settings["layoutMode"] })} options={[["compact", "Kompakt"], ["standard", "Standard"], ["comfortable", "Komfortabel"]]} />
-                      <ModernSelect label="Externe Bilder" value={draft.externalImages} onChange={(value) => applySettings({ ...draft, externalImages: value as Settings["externalImages"] })} options={[["never", "Nie laden"], ["ask", "Fragen"], ["always", "Immer laden"]]} />
-                      <ModernToggle
-                        label="Absender-Logos"
-                        description="Lädt das Logo der Absender-Domain von deren Website oder über DuckDuckGo. Privatadressen wie Gmail bleiben bei Initialen."
-                        checked={draft.senderLogos}
-                        onChange={(checked) => applySettings({ ...draft, senderLogos: checked })}
-                      />
-                    </div>
-                  </div>
-                </SettingsSection>
+                  </Group>
 
-                <SettingsSection title="Konto & App" description="Lege das Standardkonto und das Verhalten beim Schließen fest.">
-                  <ModernSelect label="Standardkonto" value={String(draft.defaultAccountId ?? "")} onChange={(value) => setDraft({ ...draft, defaultAccountId: Number(value) })} options={accounts.map((account) => [String(account.id), account.email])} />
-                  <ModernToggle
-                    label="Im Hintergrund weiterlaufen"
-                    description="LunaMail bleibt im Windows-Infobereich aktiv und synchronisiert weiter."
-                    checked={draft.runInBackground ?? true}
-                    onChange={(checked) => applySettings({ ...draft, runInBackground: checked })}
-                  />
-                </SettingsSection>
+                  {showAccountForm ? (
+                    <Group title={editingAccount ? "Konto bearbeiten" : "Neues Konto"} padded>
+                      <div className="mb-5 inline-flex rounded-full bg-canvas p-1">
+                        {(["custom", "gmail"] as const).map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={cn(
+                              "pressable h-8 rounded-full px-4 text-[13px] font-semibold",
+                              provider === value ? "bg-ink text-canvas" : "text-label-2 hover:text-ink"
+                            )}
+                            onClick={() => setProvider(value)}
+                            aria-pressed={provider === value}
+                          >
+                            {value === "custom" ? "IMAP / SMTP" : "Gmail"}
+                          </button>
+                        ))}
+                      </div>
+                      {provider === "gmail" ? (
+                        <div className="space-y-4">
+                          <p className="text-[14px] leading-6 text-label-2">
+                            LunaMail öffnet die sichere Google-Anmeldung im Standardbrowser. E-Mail-Adresse, Passwort und Bestätigung werden ausschließlich bei Google eingegeben.
+                          </p>
+                          <label className="block">
+                            <span className="mb-1.5 block text-[13px] font-semibold text-label-2">Google OAuth Desktop-Client-ID</span>
+                            <input
+                              value={draft.googleOAuthClientId ?? ""}
+                              onChange={(event) => setDraft({ ...draft, googleOAuthClientId: event.target.value })}
+                              placeholder="123456789-abc.apps.googleusercontent.com"
+                              className={inputClass}
+                            />
+                            <span className="mt-1.5 block text-[12px] text-label-2">Einmalige App-Konfiguration aus der Google Cloud Console. Typ: Desktop-App.</span>
+                          </label>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <SoftButton onClick={closeAccountForm}>Abbrechen</SoftButton>
+                            <PrimaryButton disabled={googleAuthBusy} onClick={() => void connectGoogle()}>
+                              {googleAuthBusy ? "Google-Anmeldung läuft …" : editingAccount ? "Erneut mit Google anmelden" : "Mit Google anmelden"}
+                            </PrimaryButton>
+                          </div>
+                        </div>
+                      ) : (
+                        <form key={editingAccount?.id ?? provider} onSubmit={submitAccount} className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+                          <Field name="displayName" label="Name" defaultValue={editingAccount?.displayName} required />
+                          <Field name="email" label="E-Mail" type="email" defaultValue={editingAccount?.email} required />
+                          <div className="col-span-2">
+                            <Field name="username" label="Benutzername (meist die volle E-Mail)" defaultValue={editingAccount?.username ?? editingAccount?.email} />
+                          </div>
+                          <Field name="imapHost" label="IMAP-Server" defaultValue={editingAccount?.imapHost ?? ""} required />
+                          <div className="grid grid-cols-[110px_1fr] items-end gap-3">
+                            <Field name="imapPort" label="Port" type="number" defaultValue={String(editingAccount?.imapPort ?? 993)} required />
+                            <SwitchField name="imapSecure" label="SSL/TLS" defaultChecked={editingAccount?.imapSecure ?? true} />
+                          </div>
+                          <Field name="smtpHost" label="SMTP-Server" defaultValue={editingAccount?.smtpHost ?? ""} required />
+                          <div className="grid grid-cols-[110px_1fr] items-end gap-3">
+                            <Field name="smtpPort" label="Port" type="number" defaultValue={String(editingAccount?.smtpPort ?? 465)} required />
+                            <SwitchField name="smtpSecure" label="SSL/TLS" defaultChecked={editingAccount?.smtpSecure ?? true} />
+                          </div>
+                          <Field name="password" label={editingAccount ? "IMAP-Passwort (neu eingeben)" : "IMAP-Passwort"} type="password" required />
+                          <Field name="smtpPassword" label="SMTP-Passwort (falls abweichend)" type="password" />
+                          <div className="col-span-2 flex justify-end gap-2 pt-2">
+                            <SoftButton onClick={closeAccountForm}>Abbrechen</SoftButton>
+                            <PrimaryButton type="submit">Speichern</PrimaryButton>
+                          </div>
+                        </form>
+                      )}
+                    </Group>
+                  ) : null}
 
-                <SettingsSection title="Benachrichtigungen" description="Bestimme, welche Informationen Windows anzeigen darf.">
-                  <div className="divide-y divide-ink/[0.06] overflow-hidden rounded-xl border border-ink/[0.07] bg-surface">
-                    <ModernToggle label="Desktop-Benachrichtigungen" description="Zeigt neue Nachrichten im Windows-Benachrichtigungscenter." checked={draft.notificationsEnabled} onChange={(checked) => applySettings({ ...draft, notificationsEnabled: checked })} flat />
-                    <ModernToggle label="Benachrichtigungston" description="Spielt bei neuen Nachrichten einen kurzen Ton ab." checked={draft.notificationSound} onChange={(checked) => applySettings({ ...draft, notificationSound: checked })} flat />
-                    <ModernToggle label="Vorschautext anzeigen" description="Zeigt Absender und Betreff in der Benachrichtigung." checked={draft.notificationPreview} onChange={(checked) => applySettings({ ...draft, notificationPreview: checked })} flat />
-                  </div>
-                  <button
-                    type="button"
-                    className="mt-3 w-full rounded-xl border border-ink/[0.08] bg-ink/[0.025] px-3 py-2.5 text-sm font-medium text-ink/75 transition hover:bg-ink/[0.06] hover:text-ink"
-                    onClick={() => {
-                      setTestNotificationStatus("Sende Test...");
-                      void mailService.testDesktopNotification()
-                        .then((message: string) => setTestNotificationStatus(message))
-                        .catch((error: unknown) => setTestNotificationStatus(error instanceof Error ? error.message : String(error)));
-                    }}
-                  >
-                    Testbenachrichtigung senden
-                  </button>
-                  {testNotificationStatus ? <p className="mt-3 rounded-xl border border-ink/[0.07] bg-ink/[0.03] px-3 py-2 text-xs text-ink/60">{testNotificationStatus}</p> : null}
-                </SettingsSection>
-              </div>
-            ) : null}
-            {tab === "themes" ? (
-              <div className="space-y-6">
-                <section>
-                  <h3 className="text-sm font-semibold text-ink/80">Erscheinungsbild</h3>
-                  <p className="mt-1 text-sm text-ink/55">Dieselben drei Designs wie in der Android-App.</p>
-                  <div className="mt-3 grid grid-cols-3 gap-3">
-                    {themeOptions.map((option) => {
-                      const active = draft.theme === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`rounded-2xl p-2 text-left transition ${active ? "bg-surface ring-2 ring-[rgb(var(--accent))]" : "hover:bg-surface"}`}
-                          onClick={() => applySettings({ ...draft, theme: option.value })}
-                          aria-pressed={active}
-                        >
-                          <span className="flex h-20 overflow-hidden rounded-xl border border-ink/[0.08]" style={{ background: option.preview[0] }}>
-                            <span className="w-1/3" style={{ background: option.preview[1] }} />
-                            <span className="flex flex-1 flex-col justify-center gap-1.5 px-3">
-                              <span className="h-1.5 w-3/4 rounded-full" style={{ background: option.preview[2] }} />
-                              <span className="h-1.5 w-1/2 rounded-full opacity-50" style={{ background: option.preview[2] }} />
-                            </span>
-                          </span>
-                          <span className="mt-2 block px-1 text-sm font-semibold">{option.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-                <section>
-                  <h3 className="text-sm font-semibold text-ink/80">Akzentfarbe</h3>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    {accentOptions.map((option) => {
-                      const active = draft.accentColor === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                            active
-                              ? "border-transparent bg-[rgb(var(--accent-soft))] shadow-none ring-1 ring-[rgb(var(--accent)/0.25)] dark:bg-[rgb(var(--accent)/0.16)]"
-                              : "border-line hover:bg-surface"
-                          }`}
-                          onClick={() => applySettings({ ...draft, accentColor: option.value })}
-                        >
-                          <span className={`h-6 w-6 rounded-full ${option.className}`} />
-                          <span className="font-medium">{option.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-                <section className="rounded-2xl border border-line p-4 bg-sidebar">
-                  <div className="text-sm font-medium text-ink/80">Vorschau</div>
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-[rgb(var(--accent-contrast))]">Neue Mail</span>
-                    <span className="rounded-lg bg-ink/[0.08] px-4 py-3 text-sm">
-                      Ausgewählte Mail
-                    </span>
-                  </div>
-                </section>
-              </div>
-            ) : null}
-            {tab === "security" ? (
-              <div className="space-y-4 text-sm text-ink/80">
-                <div className="flex gap-3 rounded-2xl border border-line p-4 bg-sidebar">
-                  <ShieldCheck size={20} />
-                  <div>Passwörter werden in der Windows-Anmeldeinformationsverwaltung gespeichert und niemals in SQLite abgelegt.</div>
-                </div>
-                <label className="flex items-center justify-between gap-4 rounded-2xl border border-line p-4 bg-sidebar">
-                  <div>
-                    <div className="font-medium text-ink/80">Lokalen Passwort-Fallback erlauben</div>
-                    <div className="mt-1 text-xs text-label-2">
-                      Wenn deaktiviert, werden Passwörter nur über den Windows-Benutzerschutz gelesen.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                      draft.allowLocalSecretFallback ? "bg-[rgb(var(--accent))]" : "bg-ink/16"
-                    }`}
-                    onClick={() => applySettings({ ...draft, allowLocalSecretFallback: !draft.allowLocalSecretFallback })}
-                    aria-pressed={draft.allowLocalSecretFallback}
-                  >
-                    <span
-                      className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-[rgb(var(--accent-contrast))] shadow-sm transition-transform duration-150 ${
-                        draft.allowLocalSecretFallback ? "translate-x-6" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </label>
-                <div>IMAP/SMTP erzwingen TLS. Zertifikate werden vom nativen TLS-Stack validiert.</div>
-                <div>Externe Bilder folgen der Einstellung (Nie/Fragen/Immer); HTML wird vor der Anzeige sanitisiert.</div>
-              </div>
-            ) : null}
-            {tab === "sync" ? (
-              <div className="space-y-5">
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-ink/[0.08]">
-                  <span>Automatische Synchronisierung</span>
-                  <span className="font-medium">Alle 30 Sekunden</span>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-ink/[0.08] dark:bg-ink/[0.025]">
-                  <div className="font-medium">Status</div>
-                  <div className="mt-1 whitespace-pre-wrap text-label-2">{syncError || syncStatus || "Bereit"}</div>
-                </div>
-                <button
-                  className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={accounts.length === 0}
-                  onClick={() => void sync(true)}
-                >
-                  Sync starten
-                </button>
-                <section className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-ink/[0.08] dark:bg-ink/[0.025]">
-                  <div className="mb-3 font-medium">Synchronisierungsdiagnose</div>
-                  <label className="mb-3 flex items-center justify-between gap-4">
-                    <span>Konto</span>
-                    <select
-                      className="min-w-56 rounded-xl border border-slate-200/70 bg-transparent px-3 py-2 dark:border-ink/[0.08]"
-                      value={diagnoseAccountId ?? ""}
-                      onChange={(event) => setDiagnoseAccountId(Number(event.target.value))}
-                    >
+                  {accounts.length > 0 ? (
+                    <Group title="Benachrichtigungen je Konto">
                       {accounts.map((account) => (
-                        <option key={account.id} value={account.id}>{account.email}</option>
+                        <Row key={account.id} label={account.email}>
+                          <Switch
+                            label={`Benachrichtigungen für ${account.email}`}
+                            checked={draft.accountNotifications?.[String(account.id)] ?? true}
+                            onChange={(checked) =>
+                              applySettings({
+                                ...draft,
+                                accountNotifications: { ...draft.accountNotifications, [String(account.id)]: checked }
+                              })
+                            }
+                          />
+                        </Row>
                       ))}
-                    </select>
-                  </label>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseAccount()}>
-                      Sync testen
-                    </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseInbox()}>
-                      Posteingangs-UIDs prüfen
-                    </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runLatestServerMessages()}>
-                      Letzte 10 Server-Mails anzeigen
-                    </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceFullInboxSync()}>
-                      Vollständigen Posteingang synchronisieren
-                    </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceIncrementalSync()}>
-                      Neue Nachrichten synchronisieren
-                    </button>
-                  </div>
+                    </Group>
+                  ) : null}
+                </>
+              ) : null}
+
+              {tab === "general" ? (
+                <>
+                  <Group title="Darstellung">
+                    <Row label="Schriftgröße" description="Gilt für Liste, Lesebereich und Seitenleiste.">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="14"
+                          max="22"
+                          value={draft.fontSize}
+                          aria-label="Schriftgröße"
+                          onChange={(event) => {
+                            const fontSize = Number(event.target.value);
+                            setDraft({ ...draft, fontSize });
+                            document.documentElement.style.setProperty("--app-font-size", `${fontSize}px`);
+                          }}
+                          onPointerUp={(event) => applySettings({ ...draft, fontSize: Number(event.currentTarget.value) })}
+                          onBlur={(event) => applySettings({ ...draft, fontSize: Number(event.currentTarget.value) })}
+                          className="w-44 accent-[rgb(var(--accent))]"
+                        />
+                        <span className="w-12 rounded-full bg-canvas py-1 text-center text-[13px] font-semibold">{draft.fontSize}px</span>
+                      </div>
+                    </Row>
+                    <Row label="Dichte">
+                      <SelectControl label="Dichte" value={draft.layoutMode} onChange={(value) => applySettings({ ...draft, layoutMode: value as Settings["layoutMode"] })} options={[["compact", "Kompakt"], ["standard", "Standard"], ["comfortable", "Komfortabel"]]} />
+                    </Row>
+                    <Row label="Externe Bilder" description="Bilder von fremden Servern verraten dem Absender, dass du die Mail geöffnet hast.">
+                      <SelectControl label="Externe Bilder" value={draft.externalImages} onChange={(value) => applySettings({ ...draft, externalImages: value as Settings["externalImages"] })} options={[["never", "Nie laden"], ["ask", "Fragen"], ["always", "Immer laden"]]} />
+                    </Row>
+                    <Row label="Absender-Logos" description="Lädt das Logo der Absender-Domain von deren Website oder über DuckDuckGo. Privatadressen wie Gmail bleiben bei Initialen.">
+                      <Switch label="Absender-Logos" checked={draft.senderLogos} onChange={(checked) => applySettings({ ...draft, senderLogos: checked })} />
+                    </Row>
+                  </Group>
+
+                  <Group title="Konto & App">
+                    <Row label="Standardkonto" description="Absender für neue Nachrichten.">
+                      <SelectControl
+                        label="Standardkonto"
+                        value={String(draft.defaultAccountId ?? "")}
+                        onChange={(value) => applySettings({ ...draft, defaultAccountId: Number(value) })}
+                        options={accounts.map((account) => [String(account.id), account.email])}
+                      />
+                    </Row>
+                    <Row label="Im Hintergrund weiterlaufen" description="LunaMail bleibt im Windows-Infobereich aktiv und synchronisiert weiter.">
+                      <Switch label="Im Hintergrund weiterlaufen" checked={draft.runInBackground ?? true} onChange={(checked) => applySettings({ ...draft, runInBackground: checked })} />
+                    </Row>
+                  </Group>
+
+                  <Group title="Benachrichtigungen" footer={testNotificationStatus ?? undefined}>
+                    <Row label="Desktop-Benachrichtigungen" description="Zeigt neue Nachrichten im Windows-Benachrichtigungscenter.">
+                      <Switch label="Desktop-Benachrichtigungen" checked={draft.notificationsEnabled} onChange={(checked) => applySettings({ ...draft, notificationsEnabled: checked })} />
+                    </Row>
+                    <Row label="Ton" description="Spielt bei neuen Nachrichten einen kurzen Ton ab.">
+                      <Switch label="Benachrichtigungston" checked={draft.notificationSound} onChange={(checked) => applySettings({ ...draft, notificationSound: checked })} />
+                    </Row>
+                    <Row label="Vorschau anzeigen" description="Zeigt Absender und Betreff in der Benachrichtigung.">
+                      <Switch label="Vorschautext anzeigen" checked={draft.notificationPreview} onChange={(checked) => applySettings({ ...draft, notificationPreview: checked })} />
+                    </Row>
+                    <Row label="Testbenachrichtigung">
+                      <SoftButton
+                        onClick={() => {
+                          setTestNotificationStatus("Sende Test …");
+                          void mailService.testDesktopNotification()
+                            .then((result: string) => setTestNotificationStatus(result))
+                            .catch((error: unknown) => setTestNotificationStatus(error instanceof Error ? error.message : String(error)));
+                        }}
+                      >
+                        Senden
+                      </SoftButton>
+                    </Row>
+                  </Group>
+                </>
+              ) : null}
+
+              {tab === "themes" ? (
+                <>
+                  <Group title="Erscheinungsbild" footer="Dieselben drei Designs wie in der Android-App." padded>
+                    <div className="grid grid-cols-3 gap-4">
+                      {themeOptions.map((option) => {
+                        const active = draft.theme === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="pressable group text-left"
+                            onClick={() => applySettings({ ...draft, theme: option.value })}
+                            aria-pressed={active}
+                          >
+                            <span
+                              className={cn(
+                                "flex h-28 overflow-hidden rounded-2xl border transition-shadow",
+                                active ? "border-transparent ring-[2.5px] ring-[rgb(var(--accent))] ring-offset-2 ring-offset-surface" : "border-line group-hover:shadow-md"
+                              )}
+                              style={{ background: option.preview[0] }}
+                            >
+                              <span className="w-[34%]" style={{ background: option.preview[1] }} />
+                              <span className="flex flex-1 flex-col justify-center gap-2 px-3">
+                                <span className="h-2 w-3/4 rounded-full" style={{ background: option.preview[2] }} />
+                                <span className="h-2 w-1/2 rounded-full opacity-40" style={{ background: option.preview[2] }} />
+                                <span className="h-2 w-2/3 rounded-full opacity-25" style={{ background: option.preview[2] }} />
+                              </span>
+                            </span>
+                            <span className="mt-2.5 flex items-center gap-1.5 px-1 text-[14px] font-bold">
+                              {option.label}
+                              {active ? <Check size={15} strokeWidth={3} /> : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Group>
+
+                  <Group title="Akzentfarbe" footer="Färbt Knöpfe, Schalter und Markierungen." padded>
+                    <div className="flex flex-wrap gap-x-5 gap-y-4">
+                      {accentOptions.map((option) => {
+                        const active = draft.accentColor === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="pressable flex w-14 flex-col items-center gap-2"
+                            onClick={() => applySettings({ ...draft, accentColor: option.value })}
+                            aria-pressed={active}
+                            title={option.label}
+                          >
+                            <span className={cn("flex h-10 w-10 items-center justify-center rounded-full", option.className, active && "ring-[2.5px] ring-ink/70 ring-offset-2 ring-offset-surface")}>
+                              {active ? <Check size={17} strokeWidth={3} className={option.value === "white" ? "text-canvas" : "text-white"} /> : null}
+                            </span>
+                            <span className={cn("text-[12px]", active ? "font-bold text-ink" : "font-medium text-label-2")}>{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Group>
+
+                  <Group title="Vorschau" padded>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <span className="accent-primary inline-flex h-12 w-12 items-center justify-center rounded-full shadow-float">
+                        <Pencil size={19} />
+                      </span>
+                      <span className="accent-primary inline-flex h-10 items-center rounded-full px-5 text-[14px] font-bold">Senden</span>
+                      <span className="inline-flex h-10 items-center rounded-[10px] bg-ink/[0.08] px-4 text-[14px] font-semibold">Ausgewählte Mail</span>
+                      <input type="checkbox" className="ios-switch" checked readOnly aria-label="Beispielschalter" />
+                    </div>
+                  </Group>
+                </>
+              ) : null}
+
+              {tab === "security" ? (
+                <>
+                  <Group title="Passwörter">
+                    <Row icon={<ShieldCheck size={18} />} label="Windows-Anmeldeinformationsverwaltung" description="Passwörter liegen im geschützten Speicher von Windows und nie in der Mail-Datenbank." />
+                    <Row label="Lokalen Passwort-Fallback erlauben" description="Wenn aus, werden Passwörter nur über den Windows-Benutzerschutz gelesen.">
+                      <Switch
+                        label="Lokalen Passwort-Fallback erlauben"
+                        checked={draft.allowLocalSecretFallback}
+                        onChange={(checked) => applySettings({ ...draft, allowLocalSecretFallback: checked })}
+                      />
+                    </Row>
+                  </Group>
+                  <Group title="Verbindung & Inhalte">
+                    <Row icon={<Lock size={18} />} label="Verschlüsselte Verbindungen" description="IMAP und SMTP laufen über TLS. Zertifikate prüft der native TLS-Stack." />
+                    <Row icon={<Image size={18} />} label="Externe Bilder" description="Folgen der Einstellung unter Allgemein. HTML wird vor der Anzeige bereinigt." />
+                  </Group>
+                </>
+              ) : null}
+
+              {tab === "sync" ? (
+                <>
+                  <Group title="Status">
+                    <Row label="Automatische Synchronisierung">
+                      <span className="text-[14px] font-semibold text-label-2">Alle 30 Sekunden</span>
+                    </Row>
+                    <Row label="Letzter Stand" description={syncError || syncStatus || "Bereit"}>
+                      <PrimaryButton disabled={accounts.length === 0} onClick={() => void sync(true)}>
+                        <RefreshCw size={15} />
+                        Jetzt synchronisieren
+                      </PrimaryButton>
+                    </Row>
+                  </Group>
+
+                  <Group title="Diagnose">
+                    <Row label="Konto">
+                      <SelectControl
+                        label="Konto für die Diagnose"
+                        value={String(diagnoseAccountId ?? "")}
+                        onChange={(value) => setDiagnoseAccountId(Number(value))}
+                        options={accounts.map((account) => [String(account.id), account.email])}
+                      />
+                    </Row>
+                    <div className="flex flex-wrap gap-2 px-4 py-3.5">
+                      <SoftButton disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseAccount()}>Sync testen</SoftButton>
+                      <SoftButton disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseInbox()}>Posteingangs-UIDs prüfen</SoftButton>
+                      <SoftButton disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runLatestServerMessages()}>Letzte 10 Server-Mails</SoftButton>
+                      <SoftButton disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceIncrementalSync()}>Neue Nachrichten holen</SoftButton>
+                      <SoftButton disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceFullInboxSync()}>Posteingang komplett neu laden</SoftButton>
+                    </div>
+                  </Group>
+
                   {diagnoseAccount ? (
-                    <div className="grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Kontodiagnose</div>
+                    <Group title="Kontodiagnose">
                       <DiagRow label="Konto-ID" value={String(diagnoseAccount.accountId)} />
                       <DiagRow label="E-Mail" value={diagnoseAccount.email} />
                       <DiagRow label="IMAP" value={`${diagnoseAccount.imapHost}:${diagnoseAccount.imapPort} · ${diagnoseAccount.imapSecure ? "TLS" : "Plain"}`} />
                       <DiagRow label="Anmeldung" value={diagnoseAccount.loginStatus} />
                       <DiagRow label="Posteingang" value={diagnoseAccount.inboxRemoteName ?? "—"} />
                       <DiagRow label="Lokale UID" value={String(diagnoseAccount.lastKnownUid ?? "—")} />
-                      <DiagRow label="Server UID" value={String(diagnoseAccount.highestUidOnServer ?? "—")} />
+                      <DiagRow label="Server-UID" value={String(diagnoseAccount.highestUidOnServer ?? "—")} />
                       <DiagRow label="Lokale Posteingangsmails" value={String(diagnoseAccount.localInboxMails)} />
                       <DiagRow label="Letzte Synchronisierung" value={diagnoseAccount.lastSyncAt ?? "—"} />
                       <DiagRow label="Letzter Fehler" value={diagnoseAccount.lastSyncError ?? "—"} />
-                      <div className="mt-1 flex gap-2">
+                      <div className="flex gap-2 px-4 py-3">
                         <DiagBadge label="IDLE" active={diagnoseAccount.idleActive} />
                         <DiagBadge label="Polling" active={diagnoseAccount.pollingActive} />
                       </div>
-                    </div>
+                    </Group>
                   ) : null}
-                  <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Smart-Counts Diagnose</div>
+
+                  <Group title="Zähler">
                     <DiagRow label="Aktives Konto" value={String(selectedAccountId ?? "—")} />
                     <DiagRow label="Konto der Spezialansicht" value={String(selectedSpecialAccountId ?? "—")} />
                     <DiagRow label="Konto der Zähler" value={String(mailCountsAccountId ?? "—")} />
                     <DiagRow label="Ungelesen / Anhang" value={`${mailCounts.unread} / ${mailCounts.withAttachments}`} />
                     <DiagRow label="Heute / Diese Woche" value={`${mailCounts.today} / ${mailCounts.thisWeek}`} />
-                  </div>
+                  </Group>
+
                   {diagnoseInbox ? (
-                    <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Posteingangsdiagnose</div>
+                    <Group title="Posteingangsdiagnose">
                       <DiagRow label="Posteingang" value={diagnoseInbox.inboxRemoteName ?? "—"} />
                       <DiagRow label="Lokale UID" value={String(diagnoseInbox.lastKnownUid ?? "—")} />
-                      <DiagRow label="Server UID" value={String(diagnoseInbox.highestUidOnServer ?? "—")} />
+                      <DiagRow label="Server-UID" value={String(diagnoseInbox.highestUidOnServer ?? "—")} />
                       <DiagRow label="Lokale Posteingangsmails" value={String(diagnoseInbox.localInboxMails)} />
-                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-label-2">Mailboxen</div>
-                      <div className="mail-scroll max-h-32 overflow-auto rounded-lg border border-slate-200/70 bg-ink/70 p-2 dark:border-ink/[0.08] dark:bg-ink/[0.03]">
+                      <div className="mail-scroll max-h-44 overflow-auto">
                         {diagnoseInbox.mailboxes.map((mailbox) => (
-                          <div key={mailbox.name} className="mb-1 last:mb-0">
-                            <div className="font-medium">{mailbox.name}</div>
-                            <div className="text-[11px] text-label-2">{mailbox.inferredRole}</div>
-                          </div>
+                          <DiagRow key={mailbox.name} label={mailbox.name} value={mailbox.inferredRole} />
                         ))}
                       </div>
-                    </div>
+                    </Group>
                   ) : null}
-                  {serverMessages.length > 0 ? (
-                    <div className="mt-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-label-2">Letzte Server-Mails</div>
-                      <div className="mail-scroll max-h-40 overflow-auto rounded-lg border border-slate-200/70 bg-ink/70 p-2 dark:border-ink/[0.08] dark:bg-ink/[0.03]">
-                        {serverMessages.map((mail) => (
-                          <div key={`${mail.uid}-${mail.messageId}`} className="mb-2 rounded-lg border border-slate-200/70 px-2 py-1.5 last:mb-0 dark:border-ink/[0.08]">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">UID {mail.uid}</span>
-                              <DiagBadge label={mail.seen ? "Seen" : "Unseen"} active={!mail.seen} />
-                            </div>
-                            <div className="truncate text-[11px]">{mail.subject || "(Kein Betreff)"}</div>
-                            <div className="truncate text-[11px] text-label-2">{mail.sender}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </section>
-              </div>
-            ) : null}
-            {tab === "rules" ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-ink/80">Regeln & Automatisierung</h3>
-                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => void createRule()}>
-                    Regel hinzufügen
-                  </button>
-                </div>
-                {rules.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-ink/[0.08] dark:text-slate-400">
-                    Noch keine Regeln vorhanden.
-                  </div>
-                ) : null}
-                <div className="grid gap-2">
-                  {rules.map((rule) => (
-                    <div key={rule.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-ink/[0.08]">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium">{rule.name}</div>
-                        <button className="rounded-lg border border-ink/[0.06] px-2 py-1 text-xs text-ink/55 hover:bg-ink/[0.05] hover:text-ink" onClick={() => void deleteRule(rule.id)}>
-                          Löschen
-                        </button>
-                      </div>
-                      <div className="mt-1 text-xs text-label-2">
-                        Wenn {rule.field} {rule.operator} &quot;{rule.value}&quot; → {rule.actionType}
-                        {rule.actionValue ? ` (${rule.actionValue})` : ""}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {tab === "contacts" ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-ink/80">Kontakte</h3>
-                    <p className="mt-1 text-xs text-ink/45">Gespeicherte Kontakte werden beim Verfassen vorgeschlagen.</p>
-                  </div>
-                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => openContactForm()}>
-                    Kontakt hinzufügen
-                  </button>
-                </div>
-                {contactFormOpen ? (
-                  <form className="rounded-2xl border border-ink/[0.08] bg-surface p-4" onSubmit={(event) => void submitContact(event)}>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold">{editingContactId ? "Kontakt bearbeiten" : "Neuen Kontakt erstellen"}</h4>
-                      <button type="button" className="rounded-lg p-1.5 text-ink/45 hover:bg-ink/[0.06] hover:text-ink" onClick={closeContactForm}>
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-ink/55">Name</span>
-                        <input
-                          className="h-10 w-full rounded-lg border border-ink/[0.08] bg-surface px-3 text-sm outline-none focus:border-ink/20"
-                          value={contactName}
-                          onChange={(event) => setContactName(event.target.value)}
-                          placeholder="Max Mustermann"
-                          autoFocus
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-ink/55">E-Mail-Adresse</span>
-                        <input
-                          type="email"
-                          required
-                          className="h-10 w-full rounded-lg border border-ink/[0.08] bg-surface px-3 text-sm outline-none focus:border-ink/20"
-                          value={contactEmail}
-                          onChange={(event) => setContactEmail(event.target.value)}
-                          placeholder="max@example.de"
-                        />
-                      </label>
-                    </div>
-                    <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs text-ink/65">
-                      <input type="checkbox" checked={contactFavorite} onChange={(event) => setContactFavorite(event.target.checked)} className="mail-checkbox h-4 w-4" />
-                      Als Favorit markieren
-                    </label>
-                    {contactError ? <p className="mt-3 text-xs text-red-300">{contactError}</p> : null}
-                    <div className="mt-4 flex justify-end gap-2">
-                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-ink/55 hover:bg-ink/[0.06] hover:text-ink" onClick={closeContactForm}>Abbrechen</button>
-                      <button type="submit" className="accent-primary rounded-lg px-4 py-2 text-xs font-semibold">Kontakt speichern</button>
-                    </div>
-                  </form>
-                ) : null}
-                {contacts.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-ink/[0.08] dark:text-slate-400">
-                    Noch keine Kontakte gespeichert.
-                  </div>
-                ) : null}
-                <div className="grid gap-2">
-                  {contacts.map((contact) => (
-                    <div key={contact.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-ink/[0.08]">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/[0.06] text-xs font-semibold">
-                            {(contact.name || contact.email).charAt(0).toUpperCase()}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 font-medium">
-                              <span className="truncate">{contact.name || contact.email}</span>
-                              {contact.isFavorite ? <Star size={13} className="shrink-0 fill-[rgb(var(--accent))] text-[rgb(var(--accent))]" /> : null}
-                            </div>
-                          <div className="text-xs text-label-2">{contact.email}</div>
-                          <div className="text-[11px] text-label-2">
-                            Letzter Kontakt: {contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleString() : "—"} · Nutzungen: {contact.usageCount}
-                          </div>
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 gap-2">
-                          <button className="rounded-lg border border-ink/[0.06] p-2 text-ink/55 hover:bg-ink/[0.05] hover:text-ink" title="Bearbeiten" onClick={() => openContactForm(contact)}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="rounded-lg border border-red-500/20 p-2 text-red-300 hover:bg-red-500/10" title="Löschen" onClick={() => void deleteContact(contact.id)}>
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {tab === "tags" ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-ink/80">Tags</h3>
-                    <p className="mt-1 text-xs text-ink/45">Erstelle frei benennbare Tags und ordne sie ausgewählten Mails zu.</p>
-                  </div>
-                  <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => openTagForm()}>
-                    Tag hinzufügen
-                  </button>
-                </div>
-                {tagFormOpen ? (
-                  <form className="rounded-2xl border border-ink/[0.08] bg-surface p-4" onSubmit={(event) => void submitTag(event)}>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold">{editingTagId ? "Tag bearbeiten" : "Neuen Tag erstellen"}</h4>
-                      <button type="button" className="rounded-lg p-1.5 text-ink/45 hover:bg-ink/[0.06] hover:text-ink" onClick={closeTagForm}>
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="grid items-end gap-3 sm:grid-cols-[1fr_120px]">
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-ink/55">Name</span>
-                        <input
-                          required
-                          maxLength={40}
-                          className="h-10 w-full rounded-lg border border-ink/[0.08] bg-surface px-3 text-sm outline-none focus:border-ink/20"
-                          value={tagName}
-                          onChange={(event) => setTagName(event.target.value)}
-                          placeholder="z. B. Rechnung"
-                          autoFocus
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-ink/55">Farbe</span>
-                        <input
-                          type="color"
-                          className="h-10 w-full cursor-pointer rounded-lg border border-ink/[0.08] bg-surface p-1"
-                          value={tagColor}
-                          onChange={(event) => setTagColor(event.target.value)}
-                        />
-                      </label>
-                    </div>
-                    {tagError ? <p className="mt-3 text-xs text-red-300">{tagError}</p> : null}
-                    <div className="mt-4 flex justify-end gap-2">
-                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-ink/55 hover:bg-ink/[0.06] hover:text-ink" onClick={closeTagForm}>Abbrechen</button>
-                      <button type="submit" className="accent-primary rounded-lg px-4 py-2 text-xs font-semibold">Tag speichern</button>
-                    </div>
-                  </form>
-                ) : null}
-                {tags.length === 0 ? (
-                  <div className="rounded-2xl border border-ink/[0.08] p-4 text-sm text-ink/45">Noch keine Tags vorhanden.</div>
-                ) : null}
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {tags.map((tag) => (
-                    <div key={tag.id} className="flex items-center justify-between gap-3 rounded-xl border border-ink/[0.08] p-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-                        <span className="truncate text-sm font-medium">{tag.name}</span>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <button className="rounded-lg border border-ink/[0.06] p-2 text-ink/55 hover:bg-ink/[0.05] hover:text-ink" title="Bearbeiten" onClick={() => openTagForm(tag)}>
-                          <Pencil size={14} />
-                        </button>
-                        <button className="rounded-lg border border-red-500/20 p-2 text-red-300 hover:bg-red-500/10" title="Löschen" onClick={() => void deleteTag(tag.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {tab === "backup" ? (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-ink/80">Datensicherung und Wiederherstellung</h3>
-                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-600 dark:border-ink/[0.08] dark:text-slate-300">
-                  Exportiert Konten ohne Passwoerter, Einstellungen, Regeln, Kontakte und Schlagwoerter. Neue Backups werden passwortgeschuetzt verschluesselt.
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void exportBackupToFile()}>
-                    Datensicherung exportieren
-                  </button>
-                  <button className="rounded-xl border border-slate-200/70 px-4 py-2 text-sm hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" onClick={() => void importBackupFromFile()}>
-                    Datensicherung importieren
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            {tab === "about" ? (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-ink/[0.08] dark:bg-ink/[0.025]">
-                  <div className="flex items-start gap-4">
-                    <img src="./icon.png" alt="" className="h-14 w-14 rounded-2xl shadow-sm" />
-                    <div>
-                      <div className="flex items-center gap-2 text-lg font-semibold">
-                        <Info size={18} />
-                        LunaMail
-                      </div>
-                      <p className="mt-1 text-sm text-label-2">Moderner E-Mail-Client für Windows</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-ink/[0.08] dark:text-slate-300">
-                    Installierte Version: <span className="font-semibold text-ink/80">{appVersion}</span>
-                  </div>
-                  <UpdateStatusRow />
-                </section>
 
-                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-ink/[0.08] dark:bg-ink/[0.025]">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold">Versionsverlauf</h3>
-                      <p className="mt-1 text-xs text-ink/45">Letzte veröffentlichte Versionen</p>
+                  {serverMessages.length > 0 ? (
+                    <Group title="Letzte Server-Mails">
+                      {serverMessages.map((mail) => (
+                        <div key={`${mail.uid}-${mail.messageId}`} className="flex items-center gap-3 px-4 py-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[14px] font-semibold">{mail.subject || "(Kein Betreff)"}</div>
+                            <div className="truncate text-[12px] text-label-2">UID {mail.uid} · {mail.sender}</div>
+                          </div>
+                          <DiagBadge label={mail.seen ? "Gelesen" : "Ungelesen"} active={!mail.seen} />
+                        </div>
+                      ))}
+                    </Group>
+                  ) : null}
+                </>
+              ) : null}
+
+              {tab === "rules" ? (
+                <Group
+                  title="Regeln"
+                  action={<PrimaryButton small onClick={() => void createRule()}><Plus size={15} />Regel hinzufügen</PrimaryButton>}
+                  footer="Regeln laufen beim Abruf neuer Mails, die oberste zuerst."
+                >
+                  {rules.length === 0 ? <EmptyRow>Noch keine Regeln vorhanden.</EmptyRow> : null}
+                  {rules.map((rule) => (
+                    <div key={rule.id} className="flex items-center gap-3 px-4 py-3.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas text-label-2">
+                        <ListFilter size={16} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[15px] font-bold">{rule.name}</div>
+                        <div className="truncate text-[13px] text-label-2">
+                          Wenn {ruleFieldLabels[rule.field] ?? rule.field} „{rule.value}“ enthält → {ruleActionLabels[rule.actionType] ?? rule.actionType}
+                          {rule.actionValue ? ` (${rule.actionValue})` : ""}
+                        </div>
+                      </div>
+                      <IconButton title="Löschen" danger onClick={() => void deleteRule(rule.id)}><Trash2 size={16} /></IconButton>
                     </div>
-                    <span className="rounded-full bg-ink/[0.06] px-2.5 py-1 text-[11px] text-ink/55">{releases.length}</span>
+                  ))}
+                </Group>
+              ) : null}
+
+              {tab === "contacts" ? (
+                <>
+                  {contactFormOpen ? (
+                    <Group title={editingContactId ? "Kontakt bearbeiten" : "Neuer Kontakt"} padded>
+                      <form onSubmit={(event) => void submitContact(event)}>
+                        <div className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-1.5 block text-[13px] font-semibold text-label-2">Name</span>
+                            <input className={inputClass} value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="Max Mustermann" maxLength={120} autoFocus />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1.5 block text-[13px] font-semibold text-label-2">E-Mail-Adresse</span>
+                            <input type="email" required maxLength={254} className={inputClass} value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} placeholder="max@example.de" />
+                          </label>
+                        </div>
+                        <label className="mt-4 flex items-center justify-between gap-3 rounded-[12px] bg-canvas px-4 py-3 text-[14px] font-semibold">
+                          Als Favorit markieren
+                          <input type="checkbox" role="switch" className="ios-switch" checked={contactFavorite} onChange={(event) => setContactFavorite(event.target.checked)} />
+                        </label>
+                        {contactError ? <p className="mt-3 text-[13px] font-semibold text-danger">{contactError}</p> : null}
+                        <div className="mt-5 flex justify-end gap-2">
+                          <SoftButton onClick={closeContactForm}>Abbrechen</SoftButton>
+                          <PrimaryButton type="submit">Speichern</PrimaryButton>
+                        </div>
+                      </form>
+                    </Group>
+                  ) : null}
+                  <Group
+                    title="Kontakte"
+                    action={contactFormOpen ? undefined : <PrimaryButton small onClick={() => openContactForm()}><Plus size={15} />Kontakt hinzufügen</PrimaryButton>}
+                    footer="Gespeicherte Kontakte werden beim Verfassen vorgeschlagen."
+                  >
+                    {contacts.length === 0 ? <EmptyRow>Noch keine Kontakte gespeichert.</EmptyRow> : null}
+                    {contacts.map((contact) => (
+                      <div key={contact.id} className="flex items-center gap-3.5 px-4 py-3">
+                        <SenderAvatar address={contact.email} name={contact.name || contact.email} className="h-10 w-10 text-[14px]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-[15px] font-bold">{contact.name || contact.email}</span>
+                            {contact.isFavorite ? <Star size={13} className="shrink-0 fill-flag text-flag" /> : null}
+                          </div>
+                          <div className="truncate text-[13px] text-label-2">
+                            {contact.email} · {contact.usageCount}× genutzt
+                            {contact.lastContactAt ? ` · zuletzt ${new Date(contact.lastContactAt).toLocaleDateString("de-DE")}` : ""}
+                          </div>
+                        </div>
+                        <IconButton title="Bearbeiten" onClick={() => openContactForm(contact)}><Pencil size={16} /></IconButton>
+                        <IconButton title="Löschen" danger onClick={() => void deleteContact(contact.id)}><Trash2 size={16} /></IconButton>
+                      </div>
+                    ))}
+                  </Group>
+                </>
+              ) : null}
+
+              {tab === "tags" ? (
+                <>
+                  {tagFormOpen ? (
+                    <Group title={editingTagId ? "Tag bearbeiten" : "Neuer Tag"} padded>
+                      <form onSubmit={(event) => void submitTag(event)}>
+                        <div className="grid items-end gap-4 sm:grid-cols-[1fr_120px]">
+                          <label className="block">
+                            <span className="mb-1.5 block text-[13px] font-semibold text-label-2">Name</span>
+                            <input required maxLength={40} className={inputClass} value={tagName} onChange={(event) => setTagName(event.target.value)} placeholder="z. B. Rechnung" autoFocus />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1.5 block text-[13px] font-semibold text-label-2">Farbe</span>
+                            <input type="color" className="h-11 w-full cursor-pointer rounded-[12px] border border-line bg-canvas p-1.5" value={tagColor} onChange={(event) => setTagColor(event.target.value)} />
+                          </label>
+                        </div>
+                        {tagError ? <p className="mt-3 text-[13px] font-semibold text-danger">{tagError}</p> : null}
+                        <div className="mt-5 flex justify-end gap-2">
+                          <SoftButton onClick={closeTagForm}>Abbrechen</SoftButton>
+                          <PrimaryButton type="submit">Speichern</PrimaryButton>
+                        </div>
+                      </form>
+                    </Group>
+                  ) : null}
+                  <Group
+                    title="Tags"
+                    action={tagFormOpen ? undefined : <PrimaryButton small onClick={() => openTagForm()}><Plus size={15} />Tag hinzufügen</PrimaryButton>}
+                    footer="Tags lassen sich ausgewählten Mails über die Leiste oben zuordnen."
+                  >
+                    {tags.length === 0 ? <EmptyRow>Noch keine Tags vorhanden.</EmptyRow> : null}
+                    {tags.map((tag) => (
+                      <div key={tag.id} className="flex items-center gap-3.5 px-4 py-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas">
+                          <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{tag.name}</span>
+                        <IconButton title="Bearbeiten" onClick={() => openTagForm(tag)}><Pencil size={16} /></IconButton>
+                        <IconButton title="Löschen" danger onClick={() => void deleteTag(tag.id)}><Trash2 size={16} /></IconButton>
+                      </div>
+                    ))}
+                  </Group>
+                </>
+              ) : null}
+
+              {tab === "backup" ? (
+                <Group title="Datensicherung" footer="Enthält Konten ohne Passwörter, Einstellungen, Regeln, Kontakte und Tags.">
+                  <Row icon={<Download size={18} />} label="Sicherung exportieren" description="Wird mit einem eigenen Passwort (mindestens 12 Zeichen) verschlüsselt.">
+                    <PrimaryButton onClick={() => void exportBackupToFile()}>Exportieren</PrimaryButton>
+                  </Row>
+                  <Row icon={<Upload size={18} />} label="Sicherung importieren" description="Liest eine .lmbak-Datei ein. Vorhandene Konten ohne Passwort bleiben unverändert.">
+                    <SoftButton onClick={() => void importBackupFromFile()}>Importieren</SoftButton>
+                  </Row>
+                </Group>
+              ) : null}
+
+              {tab === "about" ? (
+                <>
+                  <div className="flex items-center gap-5 rounded-[22px] bg-surface px-6 py-6">
+                    <img src="./icon.png" alt="" className="h-[72px] w-[72px] rounded-[18px] shadow-sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display text-[28px] font-extrabold leading-8">LunaMail</div>
+                      <div className="mt-1 text-[14px] text-label-2">Version {appVersion} · E-Mail für Windows</div>
+                    </div>
                   </div>
-                  <div className="mt-4 space-y-2">
-                    {releasesBusy ? (
-                      <div className="rounded-xl border border-ink/[0.06] px-3 py-3 text-xs text-ink/45">Versionen werden geladen...</div>
-                    ) : null}
-                    {releasesError ? (
-                      <div className="rounded-xl border border-ink/[0.08] px-3 py-3 text-xs text-ink/60">{releasesError}</div>
-                    ) : null}
-                    {!releasesBusy && !releasesError && releases.length === 0 ? (
-                      <div className="rounded-xl border border-ink/[0.06] px-3 py-3 text-xs text-ink/45">Keine Versionen gefunden.</div>
-                    ) : null}
+                  <Group title="Updates">
+                    <UpdateStatusRow />
+                  </Group>
+                  <Group title="Versionsverlauf" action={<span className="rounded-full bg-surface px-2.5 py-0.5 text-[12px] font-bold text-label-2">{releases.length}</span>}>
+                    {releasesBusy ? <EmptyRow>Versionen werden geladen …</EmptyRow> : null}
+                    {releasesError ? <EmptyRow>{releasesError}</EmptyRow> : null}
+                    {!releasesBusy && !releasesError && releases.length === 0 ? <EmptyRow>Keine Versionen gefunden.</EmptyRow> : null}
                     {releases.map((release) => (
                       <button
                         key={`${release.version}-${release.publishedAt}`}
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-ink/[0.06] px-3 py-3 text-left transition-colors hover:bg-ink/[0.04]"
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2"
                         onClick={() => void openExternalLink(release.url)}
                       >
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold">
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2 text-[15px] font-bold">
                             Version {release.version}
-                            {release.version === appVersion ? (
-                              <span className="ml-2 text-[10px] font-medium text-[rgb(var(--accent))]">Installiert</span>
-                            ) : null}
+                            {release.version === appVersion ? <span className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-bold text-canvas">Installiert</span> : null}
                           </span>
-                          <span className="mt-0.5 block text-[11px] text-ink/45">
+                          <span className="block text-[13px] text-label-2">
                             {release.publishedAt
                               ? new Date(release.publishedAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
                               : "Datum unbekannt"}
                           </span>
                         </span>
-                        <ExternalLink size={14} className="shrink-0 text-ink/35" />
+                        <ExternalLink size={15} className="shrink-0 text-label-3" />
                       </button>
                     ))}
-                  </div>
-                </section>
-              </div>
-            ) : null}
-            {message ? <div className="mt-5 rounded-lg border border-ink/[0.06] bg-surface px-4 py-3 text-sm text-ink/75">{message}</div> : null}
-            {syncError ? <div className="mt-5 rounded-lg border border-ink/[0.12] bg-surface px-4 py-3 text-sm text-ink">{syncError}</div> : null}
+                  </Group>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
-        <footer className="flex justify-end gap-2 border-t border-ink/[0.06] bg-canvas px-6 py-4">
-          <button className="rounded-lg px-4 py-2 text-sm text-ink/65 transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink" onClick={onClose}>Abbrechen</button>
-          <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void saveSettings()}>Speichern</button>
-        </footer>
       </section>
     </div>,
     document.body
   );
 }
 
-function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      className={`mb-1 h-9 w-full rounded-md px-3 text-left text-[13px] ${
-        active
-          ? "bg-ink/[0.08] text-ink"
-          : "text-ink/55 transition-colors duration-150 hover:bg-ink/[0.05] hover:text-ink"
-      }`}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
-}
+const tabs: { id: Tab; label: string; description: string; icon: LucideIcon }[] = [
+  { id: "accounts", label: "Konten", description: "Mail-Konten verbinden, prüfen und verwalten.", icon: UserRound },
+  { id: "rules", label: "Regeln", description: "Eingehende Mails automatisch sortieren und markieren.", icon: ListFilter },
+  { id: "contacts", label: "Kontakte", description: "Adressen, die beim Schreiben vorgeschlagen werden.", icon: Users },
+  { id: "tags", label: "Tags", description: "Eigene Schlagwörter für deine Mails.", icon: TagIcon },
+  { id: "general", label: "Allgemein", description: "Darstellung, Standardkonto und Benachrichtigungen.", icon: SlidersHorizontal },
+  { id: "themes", label: "Design", description: "Erscheinungsbild und Akzentfarbe.", icon: Palette },
+  { id: "sync", label: "Synchronisierung", description: "Status und Diagnose der Verbindung zum Mailserver.", icon: RefreshCw },
+  { id: "security", label: "Sicherheit", description: "Wie LunaMail Passwörter und Inhalte schützt.", icon: ShieldCheck },
+  { id: "backup", label: "Datensicherung", description: "Einstellungen und Konten sichern und wiederherstellen.", icon: HardDrive },
+  { id: "about", label: "Über LunaMail", description: "Version, Updates und Versionsverlauf.", icon: Info }
+];
 
-function SettingsSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+const navGroups: { title: string; tabs: Tab[] }[] = [
+  { title: "Mail", tabs: ["accounts", "rules", "contacts", "tags"] },
+  { title: "App", tabs: ["general", "themes", "sync"] },
+  { title: "System", tabs: ["security", "backup", "about"] }
+];
+
+const ruleFieldLabels: Record<string, string> = { sender: "Absender", subject: "Betreff", to: "Empfänger" };
+const ruleActionLabels: Record<string, string> = { tag: "Tag", favorite: "Favorit", important: "Wichtig", read: "Gelesen", move: "Verschieben" };
+
+const inputClass = "h-11 w-full rounded-[12px] border border-line bg-canvas px-3.5 text-[15px] text-ink outline-none transition-shadow placeholder:text-label-3 focus:ring-2 focus:ring-ink/15";
+
+/** Gruppierte Karte wie in den iOS-Einstellungen: Titel darüber, Zeilen mit Trennlinien, Hinweis darunter. */
+function Group({ title, action, footer, padded = false, children }: { title: string; action?: ReactNode; footer?: string; padded?: boolean; children: ReactNode }) {
   return (
     <section>
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        <p className="mt-1 text-xs leading-5 text-ink/40">{description}</p>
+      <div className="mb-2 flex min-h-8 items-end justify-between gap-3 px-1">
+        <h4 className="font-display text-[18px] font-extrabold">{title}</h4>
+        {action}
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className={cn("overflow-hidden rounded-[18px] bg-surface", padded ? "p-5" : "divide-y divide-line")}>{children}</div>
+      {footer ? <p className="mt-2 px-1 text-[13px] leading-5 text-label-2">{footer}</p> : null}
     </section>
   );
 }
 
-function ModernSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
+function Row({ icon, label, description, children }: { icon?: ReactNode; label: string; description?: string; children?: ReactNode }) {
   return (
-    <label className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-ink/[0.07] bg-surface px-4 py-2.5">
-      <span className="text-sm font-medium text-ink/80">{label}</span>
-      <span className="relative min-w-52">
-        <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-ink/[0.07] bg-surface px-3 py-2 pr-10 text-sm text-ink outline-none focus:border-[rgb(var(--accent)/0.45)]">
-          {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
-        </select>
-        <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink/60" />
-      </span>
+    <div className="flex min-h-[58px] items-center gap-3.5 px-4 py-3">
+      {icon ? <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas text-ink">{icon}</span> : null}
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-semibold">{label}</div>
+        {description ? <div className="mt-0.5 whitespace-pre-wrap text-[13px] leading-5 text-label-2">{description}</div> : null}
+      </div>
+      {children ? <div className="shrink-0">{children}</div> : null}
+    </div>
+  );
+}
+
+function EmptyRow({ children }: { children: ReactNode }) {
+  return <div className="px-4 py-5 text-[14px] text-label-2">{children}</div>;
+}
+
+function Notice({ tone = "neutral", children }: { tone?: "neutral" | "danger"; children: ReactNode }) {
+  return (
+    <div className={cn("rounded-[14px] px-4 py-3 text-[14px] font-medium", tone === "danger" ? "bg-danger/10 text-danger" : "bg-surface text-ink")}>
+      {children}
+    </div>
+  );
+}
+
+function Switch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <input type="checkbox" role="switch" aria-label={label} className="ios-switch" checked={checked} onChange={(event) => onChange(event.target.checked)} />;
+}
+
+function SwitchField({ name, label, defaultChecked }: { name: string; label: string; defaultChecked?: boolean }) {
+  return (
+    <label className="flex h-11 items-center justify-between gap-3 rounded-[12px] border border-line bg-canvas px-3.5 text-[14px] font-semibold">
+      {label}
+      <input name={name} type="checkbox" role="switch" defaultChecked={defaultChecked} className="ios-switch" />
     </label>
   );
 }
 
-function ModernToggle({ label, description, checked, onChange, flat = false }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void; flat?: boolean }) {
+function SelectControl({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
   return (
-    <label className={`flex cursor-pointer items-center justify-between gap-5 px-4 py-3 ${flat ? "" : "rounded-xl border border-ink/[0.07] bg-surface"}`}>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-ink/85">{label}</span>
-        <span className="mt-1 block text-xs leading-5 text-ink/40">{description}</span>
-      </span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mail-checkbox h-4 w-4 shrink-0" />
-    </label>
+    <span className="relative inline-block">
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 min-w-[150px] max-w-[280px] appearance-none truncate rounded-full bg-canvas pl-4 pr-9 text-[14px] font-semibold text-ink outline-none transition-shadow focus:ring-2 focus:ring-ink/15"
+      >
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+      <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-label-2" />
+    </span>
+  );
+}
+
+function PrimaryButton({ children, onClick, disabled, type = "button", small = false }: { children: ReactNode; onClick?: () => void; disabled?: boolean; type?: "button" | "submit"; small?: boolean }) {
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn("pressable accent-primary inline-flex items-center gap-1.5 rounded-full font-bold disabled:cursor-not-allowed disabled:opacity-40", small ? "h-8 px-3.5 text-[13px]" : "h-10 px-5 text-[14px]")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SoftButton({ children, onClick, disabled }: { children: ReactNode; onClick?: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="pressable inline-flex h-9 items-center rounded-full bg-canvas px-4 text-[14px] font-semibold text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconButton({ title, onClick, danger = false, children }: { title: string; onClick: () => void; danger?: boolean; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className={cn("pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-full", danger ? "text-danger hover:bg-danger/10" : "text-label-2 hover:bg-canvas hover:text-ink")}
+    >
+      {children}
+    </button>
   );
 }
 
 function Field(props: { name: string; label: string; type?: string; defaultValue?: string; required?: boolean }) {
+  const { label, ...inputProps } = props;
   return (
     <label className="block min-w-0">
-      <span className="mb-1.5 block text-sm font-medium text-ink/55">{props.label}</span>
-      <input {...props} className="h-11 w-full rounded-lg border border-ink/[0.06] bg-surface px-3 text-sm text-ink outline-none focus:border-ink/[0.16]" />
+      <span className="mb-1.5 block text-[13px] font-semibold text-label-2">{label}</span>
+      <input {...inputProps} maxLength={props.type === "number" ? undefined : 320} className={inputClass} />
     </label>
   );
-}
-
-function CheckboxField(props: { name: string; label: string; defaultChecked?: boolean }) {
-  return (
-    <label className="flex h-11 items-center gap-3 rounded-lg border border-ink/[0.06] bg-surface px-3 text-sm text-ink/75">
-      <input name={props.name} type="checkbox" defaultChecked={props.defaultChecked} className="h-4 w-4 accent-white" />
-      <span>{props.label}</span>
-    </label>
-  );
-}
-
-function providerButton(active: boolean) {
-  return `rounded-lg border px-4 py-3 text-left text-sm ${active ? "border-ink/[0.14] bg-ink/[0.08] text-ink" : "border-ink/[0.06] text-ink/55 hover:bg-ink/[0.04] hover:text-ink"}`;
 }
 
 function DiagRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[150px_1fr] gap-2">
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-[14px]">
       <span className="text-label-2">{label}</span>
-      <span className="truncate">{value}</span>
+      <span className="min-w-0 truncate text-right font-semibold">{value}</span>
     </div>
   );
 }
 
 function DiagBadge({ label, active }: { label: string; active: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "bg-ink/[0.08] text-ink/65"}`}>
+    <span className={cn("rounded-full px-2.5 py-0.5 text-[12px] font-bold", active ? "accent-primary" : "bg-canvas text-label-2")}>
       {label}
     </span>
   );
@@ -1330,7 +1298,7 @@ function DiagBadge({ label, active }: { label: string; active: boolean }) {
 function UpdateStatusRow() {
   const { state, check, download, install } = useAppUpdate();
   if (state.status === "unsupported") {
-    return <div className="mt-4 rounded-xl border border-line px-3 py-2 text-xs text-label-2">Updates gibt es nur in der installierten App.</div>;
+    return <Row icon={<Download size={18} />} label="Updates" description="Updates gibt es nur in der installierten App." />;
   }
   const text = {
     idle: "Noch nicht nach Updates gesucht.",
@@ -1349,13 +1317,8 @@ function UpdateStatusRow() {
         ? undefined
         : { label: "Nach Updates suchen", run: check };
   return (
-    <div className="mt-4 flex items-center gap-3 rounded-xl border border-line px-3 py-2">
-      <span className="min-w-0 flex-1 text-xs text-label-2">{text}</span>
-      {action ? (
-        <button className="pressable shrink-0 rounded-full bg-ink px-3 py-1.5 text-xs font-bold text-canvas hover:opacity-90" onClick={action.run}>
-          {action.label}
-        </button>
-      ) : null}
-    </div>
+    <Row icon={<Download size={18} />} label="Softwareupdate" description={text}>
+      {action ? <PrimaryButton onClick={action.run}>{action.label}</PrimaryButton> : null}
+    </Row>
   );
 }
