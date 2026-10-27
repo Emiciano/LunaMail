@@ -3,7 +3,7 @@ import { isDesktop } from "../services/desktop";
 import type { AccentColor, ThemeMode } from "../types";
 
 const accentValues: Record<AccentColor, string> = {
-  white: "255 255 255",
+  white: "0 0 0",
   blue: "37 99 235",
   orange: "234 88 12",
   purple: "147 51 234",
@@ -15,7 +15,7 @@ const accentValues: Record<AccentColor, string> = {
 };
 
 const accentSoftValues: Record<AccentColor, string> = {
-  white: "21 21 21",
+  white: "243 243 243",
   blue: "239 246 255",
   orange: "255 247 237",
   purple: "245 243 255",
@@ -28,11 +28,19 @@ const accentSoftValues: Record<AccentColor, string> = {
 
 export function useTheme(theme: ThemeMode, accentColor: AccentColor, fontSize = 16) {
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    document.documentElement.style.setProperty("--accent", accentValues[accentColor]);
-    document.documentElement.style.setProperty("--accent-soft", accentSoftValues[accentColor]);
-    document.documentElement.style.setProperty("--accent-contrast", accentColor === "white" ? "11 11 11" : "255 255 255");
-    document.documentElement.style.setProperty("--app-font-size", `${Math.min(22, Math.max(12, fontSize))}px`);
+    const root = document.documentElement;
+    root.classList.remove("theme-light", "theme-dark", "theme-silver");
+    root.classList.add(`theme-${theme}`);
+    root.classList.toggle("dark", theme !== "light");
+    // „Standard“ (white) folgt dem Design: Schwarz im hellen, Weiß im dunklen Design.
+    if (accentColor === "white") {
+      for (const name of ["--accent", "--accent-soft", "--accent-contrast"]) root.style.removeProperty(name);
+    } else {
+      root.style.setProperty("--accent", accentValues[accentColor]);
+      root.style.setProperty("--accent-soft", accentSoftValues[accentColor]);
+      root.style.setProperty("--accent-contrast", "255 255 255");
+    }
+    root.style.setProperty("--app-font-size", `${Math.min(22, Math.max(12, fontSize))}px`);
     if (isDesktop) {
       void window.electronAPI?.window.setTheme(theme);
     }

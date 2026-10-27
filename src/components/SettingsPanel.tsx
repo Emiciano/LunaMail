@@ -5,14 +5,14 @@ import { createPortal } from "react-dom";
 import { desktopDialog, isDesktop, openExternalLink, type AppRelease } from "../services/desktop";
 import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
-import type { AccentColor, Contact, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings, Tag } from "../types";
+import type { AccentColor, Contact, DiagnoseAccountResult, DiagnoseInboxResult, MailRule, ServerMessageSummary, Settings, Tag, ThemeMode } from "../types";
 import packageJson from "../../package.json";
 import { useShallow } from "zustand/react/shallow";
 
 type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
-  { value: "white", label: "Weiß", className: "border border-white/20 bg-white" },
+  { value: "white", label: "Standard", className: "border border-ink/20 bg-ink" },
   { value: "blue", label: "Blau", className: "bg-blue-600" },
   { value: "green", label: "Grün", className: "bg-green-600" },
   { value: "orange", label: "Orange", className: "bg-orange-600" },
@@ -23,8 +23,14 @@ const accentOptions: { value: AccentColor; label: string; className: string }[] 
   { value: "gray", label: "Grau", className: "bg-slate-600" }
 ];
 
+const themeOptions: { value: ThemeMode; label: string; preview: [string, string, string] }[] = [
+  { value: "light", label: "Hell", preview: ["#FFFFFF", "#F3F3F3", "#000000"] },
+  { value: "dark", label: "Dunkel", preview: ["#000000", "#161616", "#FFFFFF"] },
+  { value: "silver", label: "Silber", preview: ["#2D2E32", "#3A3B40", "#F3F3F5"] }
+];
+
 const accentVars: Record<AccentColor, CSSProperties> = {
-  white: { "--accent": "255 255 255", "--accent-soft": "21 21 21", "--accent-contrast": "11 11 11" } as CSSProperties,
+  white: {} as CSSProperties,
   blue: { "--accent": "37 99 235", "--accent-soft": "239 246 255", "--accent-contrast": "255 255 255" } as CSSProperties,
   green: { "--accent": "22 163 74", "--accent-soft": "240 253 244", "--accent-contrast": "255 255 255" } as CSSProperties,
   orange: { "--accent": "234 88 12", "--accent-soft": "255 247 237", "--accent-contrast": "255 255 255" } as CSSProperties,
@@ -38,21 +44,21 @@ const accentVars: Record<AccentColor, CSSProperties> = {
 function requestSecret(title: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
-    overlay.className = "fixed inset-0 z-[9999] grid place-items-center bg-black/60 px-4";
+    overlay.className = "fixed inset-0 z-[9999] grid place-items-center bg-scrim/40 px-4";
     const panel = document.createElement("form");
-    panel.className = "w-full max-w-sm rounded-2xl border border-white/10 bg-[#111] p-5 shadow-2xl";
+    panel.className = "w-full max-w-sm rounded-2xl border border-ink/10 bg-surface p-5 shadow-2xl";
     const label = document.createElement("label");
-    label.className = "block text-sm font-semibold text-white";
+    label.className = "block text-sm font-semibold text-ink";
     label.textContent = title;
     const input = document.createElement("input");
     input.type = "password";
     input.autocomplete = "new-password";
-    input.className = "mt-3 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-white/30";
+    input.className = "mt-3 w-full rounded-xl border border-ink/10 bg-ink/[0.06] px-3 py-2 text-sm text-ink outline-none focus:border-ink/30";
     const actions = document.createElement("div");
     actions.className = "mt-4 flex justify-end gap-2";
     const cancel = document.createElement("button");
     cancel.type = "button";
-    cancel.className = "rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70";
+    cancel.className = "rounded-lg border border-ink/10 px-3 py-2 text-sm text-ink/70";
     cancel.textContent = "Abbrechen";
     const ok = document.createElement("button");
     ok.type = "submit";
@@ -469,21 +475,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div
-      className="flex items-center justify-center bg-black/72 p-6"
+      className="flex items-center justify-center bg-scrim/40 p-6"
       style={{ position: "fixed", inset: 0, zIndex: 2147483647, ...accentVars[draft.accentColor] }}
     >
       <section className="tr-panel flex h-[min(760px,calc(100vh-2rem))] w-[min(980px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[10px]">
-        <header className="flex h-16 items-center justify-between border-b border-white/[0.06] px-6">
+        <header className="flex h-16 items-center justify-between border-b border-ink/[0.06] px-6">
           <div>
             <h2 className="text-lg font-semibold tracking-[-0.03em]">Einstellungen</h2>
-            <p className="text-xs text-white/45">LunaMail im minimalistischen Desktop-Stil</p>
+            <p className="text-xs text-ink/45">Konten, Design und Synchronisierung</p>
           </div>
-          <button className="rounded-lg p-2 text-white/55 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white" onClick={onClose} title="Schließen">
+          <button className="rounded-lg p-2 text-ink/55 transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink" onClick={onClose} title="Schließen">
             <X size={18} />
           </button>
         </header>
         <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr]">
-          <nav className="border-r border-white/[0.06] bg-[#0B0B0B] p-4">
+          <nav className="border-r border-line bg-sidebar p-4">
             <TabButton active={tab === "accounts"} onClick={() => setTab("accounts")} label="Konten" />
             <TabButton active={tab === "general"} onClick={() => setTab("general")} label="Allgemein" />
             <TabButton active={tab === "themes"} onClick={() => setTab("themes")} label="Design" />
@@ -495,27 +501,27 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <TabButton active={tab === "backup"} onClick={() => setTab("backup")} label="Datensicherung" />
             <TabButton active={tab === "about"} onClick={() => setTab("about")} label="Über" />
           </nav>
-          <div className="mail-scroll min-h-0 overflow-y-auto bg-[#111] p-6 text-white">
+          <div className="mail-scroll min-h-0 overflow-y-auto bg-canvas p-6 text-ink">
             {tab === "accounts" ? (
               <div className="space-y-6">
                 <section>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-300">Vorhandene Konten</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-ink/80">Vorhandene Konten</h3>
                   <div className="grid gap-3">
                     {accounts.length === 0 ? (
-                      <div className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                      <div className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-500 dark:border-ink/10 dark:text-slate-400">
                         Noch kein Konto verbunden
                       </div>
                     ) : null}
                     {accounts.map((account) => (
-                      <div key={account.id} className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                      <div key={account.id} className="rounded-2xl border border-line p-4 bg-sidebar">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <div className="font-semibold">{account.displayName}</div>
-                            <div className="text-sm text-slate-500 dark:text-slate-400">{account.email}</div>
-                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="text-sm text-label-2">{account.email}</div>
+                            <div className="mt-1 text-xs text-label-2">
                               {account.provider} · {account.imapHost}:{account.imapPort} · {account.smtpHost}:{account.smtpPort}
                             </div>
-                            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <label className="mt-2 inline-flex items-center gap-2 text-xs text-ink/80">
                               <input
                                 type="checkbox"
                                 checked={draft.accountNotifications?.[String(account.id)] ?? true}
@@ -535,7 +541,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                           </div>
                           <div className="flex gap-2">
                             <button
-                              className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]"
+                              className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.055]"
                               onClick={() => {
                                 setEditingAccountId(account.id);
                                 setProvider(account.provider === "gmail" ? "gmail" : "custom");
@@ -548,10 +554,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                             >
                               <Pencil size={16} />
                             </button>
-                            <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]" onClick={() => void testAccount(account.id)}>
+                            <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-sm hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.055]" onClick={() => void testAccount(account.id)}>
                               Testen
                             </button>
-                            <button className="rounded-lg border border-white/[0.06] px-3 py-2 text-sm text-white/55 hover:bg-white/[0.05] hover:text-white" onClick={() => void deleteAccount(account.id)} title="Löschen">
+                            <button className="rounded-lg border border-ink/[0.06] px-3 py-2 text-sm text-ink/55 hover:bg-ink/[0.05] hover:text-ink" onClick={() => void deleteAccount(account.id)} title="Löschen">
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -561,30 +567,30 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 </section>
                 {showAccountForm ? (
-                  <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                  <section className="rounded-2xl border border-line p-4 bg-sidebar">
                     <div className="mb-4 flex items-center gap-2">
                       <Plus size={17} />
                       <h3 className="font-semibold">{editingAccount ? "Konto bearbeiten" : "Neues Konto anlegen"}</h3>
                     </div>
-                    <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">Anbieter</div>
+                    <div className="mb-2 text-sm font-medium text-ink/80">Anbieter</div>
                     <div className="mb-4 grid grid-cols-2 gap-3">
                       <button type="button" className={providerButton(provider === "custom")} onClick={() => setProvider("custom")}>IMAP</button>
                       <button type="button" className={providerButton(provider === "gmail")} onClick={() => setProvider("gmail")}>Gmail hinzufügen</button>
                     </div>
                     {provider === "gmail" ? (
                       <div className="space-y-4">
-                        <div className="rounded-lg border border-white/[0.06] bg-[#151515] px-4 py-3 text-sm text-white/70">
+                        <div className="rounded-lg border border-ink/[0.06] bg-surface px-4 py-3 text-sm text-ink/70">
                           LunaMail öffnet die sichere Google-Anmeldung im Standardbrowser. E-Mail-Adresse, Passwort und Bestätigung werden ausschließlich bei Google eingegeben.
                         </div>
                         <label className="block">
-                          <span className="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-300">Google OAuth Desktop-Client-ID</span>
+                          <span className="mb-1.5 block text-sm font-medium text-ink/80">Google OAuth Desktop-Client-ID</span>
                           <input
                             value={draft.googleOAuthClientId ?? ""}
                             onChange={(event) => setDraft({ ...draft, googleOAuthClientId: event.target.value })}
                             placeholder="123456789-abc.apps.googleusercontent.com"
-                            className="h-11 w-full rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white outline-none focus:border-white/[0.16]"
+                            className="h-11 w-full rounded-lg border border-ink/[0.06] bg-surface px-3 text-sm text-ink outline-none focus:border-ink/[0.16]"
                           />
-                          <span className="mt-1.5 block text-xs text-slate-500 dark:text-slate-400">
+                          <span className="mt-1.5 block text-xs text-label-2">
                             Einmalige App-Konfiguration aus der Google Cloud Console. Typ: Desktop-App.
                           </span>
                         </label>
@@ -614,7 +620,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         <div className="col-span-2 flex justify-end gap-2">
                           <button
                             type="button"
-                            className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/8"
+                            className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-ink/8"
                             onClick={() => {
                               setEditingAccountId(undefined);
                               setShowAccountForm(false);
@@ -630,7 +636,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       <div className="mt-4 flex justify-end">
                         <button
                           type="button"
-                          className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/8"
+                          className="rounded-xl px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-ink/8"
                           onClick={() => {
                             setEditingAccountId(undefined);
                             setShowAccountForm(false);
@@ -644,7 +650,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 ) : (
                   <button
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 px-4 py-4 text-left transition-colors hover:bg-slate-50 dark:border-white/[0.08] dark:bg-white/[0.025] dark:hover:bg-white/[0.055]"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 px-4 py-4 text-left transition-colors hover:bg-slate-50 dark:border-ink/[0.08] dark:bg-ink/[0.025] dark:hover:bg-ink/[0.055]"
                     onClick={() => {
                       setEditingAccountId(undefined);
                       setProvider("custom");
@@ -652,12 +658,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       setMessage("");
                     }}
                   >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.08] text-white">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink/[0.08] text-ink">
                       <Plus size={17} />
                     </span>
                     <span>
                       <span className="block text-sm font-semibold">Neues Konto anlegen</span>
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">IMAP-/SMTP-Konto hinzufügen</span>
+                      <span className="block text-xs text-label-2">IMAP-/SMTP-Konto hinzufügen</span>
                     </span>
                   </button>
                 )}
@@ -667,10 +673,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-6">
                 <SettingsSection title="Darstellung" description="Passe Lesbarkeit und Dichte der Oberfläche an.">
                   <div className="grid gap-4 md:grid-cols-2">
-                    <label className="rounded-xl border border-white/[0.07] bg-[#151515] p-4">
+                    <label className="rounded-xl border border-ink/[0.07] bg-surface p-4">
                       <span className="flex items-center justify-between text-sm font-medium">
                         Schriftgröße
-                        <span className="rounded-md bg-white/[0.07] px-2 py-1 text-xs text-white/65">{draft.fontSize}px</span>
+                        <span className="rounded-md bg-ink/[0.07] px-2 py-1 text-xs text-ink/65">{draft.fontSize}px</span>
                       </span>
                       <input
                         type="range"
@@ -705,14 +711,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 </SettingsSection>
 
                 <SettingsSection title="Benachrichtigungen" description="Bestimme, welche Informationen Windows anzeigen darf.">
-                  <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-[#151515]">
+                  <div className="divide-y divide-ink/[0.06] overflow-hidden rounded-xl border border-ink/[0.07] bg-surface">
                     <ModernToggle label="Desktop-Benachrichtigungen" description="Zeigt neue Nachrichten im Windows-Benachrichtigungscenter." checked={draft.notificationsEnabled} onChange={(checked) => applySettings({ ...draft, notificationsEnabled: checked })} flat />
                     <ModernToggle label="Benachrichtigungston" description="Spielt bei neuen Nachrichten einen kurzen Ton ab." checked={draft.notificationSound} onChange={(checked) => applySettings({ ...draft, notificationSound: checked })} flat />
                     <ModernToggle label="Vorschautext anzeigen" description="Zeigt Absender und Betreff in der Benachrichtigung." checked={draft.notificationPreview} onChange={(checked) => applySettings({ ...draft, notificationPreview: checked })} flat />
                   </div>
                   <button
                     type="button"
-                    className="mt-3 w-full rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+                    className="mt-3 w-full rounded-xl border border-ink/[0.08] bg-ink/[0.025] px-3 py-2.5 text-sm font-medium text-ink/75 transition hover:bg-ink/[0.06] hover:text-ink"
                     onClick={() => {
                       setTestNotificationStatus("Sende Test...");
                       void mailService.testDesktopNotification()
@@ -722,36 +728,41 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   >
                     Testbenachrichtigung senden
                   </button>
-                  {testNotificationStatus ? <p className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs text-white/60">{testNotificationStatus}</p> : null}
+                  {testNotificationStatus ? <p className="mt-3 rounded-xl border border-ink/[0.07] bg-ink/[0.03] px-3 py-2 text-xs text-ink/60">{testNotificationStatus}</p> : null}
                 </SettingsSection>
               </div>
             ) : null}
             {tab === "themes" ? (
               <div className="space-y-6">
-                <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Dunkelmodus</h3>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Wechselt die Oberfläche sofort und speichert die Einstellung.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                        draft.theme === "dark" ? "bg-[rgb(var(--accent))]" : "bg-white/16"
-                      }`}
-                      onClick={() => applySettings({ ...draft, theme: draft.theme === "dark" ? "light" : "dark" })}
-                      aria-pressed={draft.theme === "dark"}
-                    >
-                      <span
-                        className={`absolute left-1 top-1 h-6 w-6 rounded-full bg-[rgb(var(--accent-contrast))] shadow-sm transition-transform duration-150 ${
-                          draft.theme === "dark" ? "translate-x-6" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
+                <section>
+                  <h3 className="text-sm font-semibold text-ink/80">Erscheinungsbild</h3>
+                  <p className="mt-1 text-sm text-ink/55">Dieselben drei Designs wie in der Android-App.</p>
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    {themeOptions.map((option) => {
+                      const active = draft.theme === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`rounded-2xl p-2 text-left transition ${active ? "bg-surface ring-2 ring-[rgb(var(--accent))]" : "hover:bg-surface"}`}
+                          onClick={() => applySettings({ ...draft, theme: option.value })}
+                          aria-pressed={active}
+                        >
+                          <span className="flex h-20 overflow-hidden rounded-xl border border-ink/[0.08]" style={{ background: option.preview[0] }}>
+                            <span className="w-1/3" style={{ background: option.preview[1] }} />
+                            <span className="flex flex-1 flex-col justify-center gap-1.5 px-3">
+                              <span className="h-1.5 w-3/4 rounded-full" style={{ background: option.preview[2] }} />
+                              <span className="h-1.5 w-1/2 rounded-full opacity-50" style={{ background: option.preview[2] }} />
+                            </span>
+                          </span>
+                          <span className="mt-2 block px-1 text-sm font-semibold">{option.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
                 <section>
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Akzentfarbe</h3>
+                  <h3 className="text-sm font-semibold text-ink/80">Akzentfarbe</h3>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     {accentOptions.map((option) => {
                       const active = draft.accentColor === option.value;
@@ -762,7 +773,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                           className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
                             active
                               ? "border-transparent bg-[rgb(var(--accent-soft))] shadow-none ring-1 ring-[rgb(var(--accent)/0.25)] dark:bg-[rgb(var(--accent)/0.16)]"
-                              : "border-slate-200/70 hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.055]"
+                              : "border-line hover:bg-surface"
                           }`}
                           onClick={() => applySettings({ ...draft, accentColor: option.value })}
                         >
@@ -773,11 +784,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     })}
                   </div>
                 </section>
-                <section className="rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
-                  <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Vorschau</div>
+                <section className="rounded-2xl border border-line p-4 bg-sidebar">
+                  <div className="text-sm font-medium text-ink/80">Vorschau</div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <span className="rounded-full bg-[rgb(var(--accent))] px-4 py-2 text-sm font-semibold text-[rgb(var(--accent-contrast))]">Neue Mail</span>
-                    <span className="rounded-lg bg-white/[0.08] px-4 py-3 text-sm">
+                    <span className="rounded-lg bg-ink/[0.08] px-4 py-3 text-sm">
                       Ausgewählte Mail
                     </span>
                   </div>
@@ -785,22 +796,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               </div>
             ) : null}
             {tab === "security" ? (
-              <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
-                <div className="flex gap-3 rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+              <div className="space-y-4 text-sm text-ink/80">
+                <div className="flex gap-3 rounded-2xl border border-line p-4 bg-sidebar">
                   <ShieldCheck size={20} />
                   <div>Passwörter werden in der Windows-Anmeldeinformationsverwaltung gespeichert und niemals in SQLite abgelegt.</div>
                 </div>
-                <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                <label className="flex items-center justify-between gap-4 rounded-2xl border border-line p-4 bg-sidebar">
                   <div>
-                    <div className="font-medium text-slate-700 dark:text-slate-200">Lokalen Passwort-Fallback erlauben</div>
-                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="font-medium text-ink/80">Lokalen Passwort-Fallback erlauben</div>
+                    <div className="mt-1 text-xs text-label-2">
                       Wenn deaktiviert, werden Passwörter nur über den Windows-Benutzerschutz gelesen.
                     </div>
                   </div>
                   <button
                     type="button"
                     className={`relative h-8 w-14 rounded-full transition-colors duration-150 ${
-                      draft.allowLocalSecretFallback ? "bg-[rgb(var(--accent))]" : "bg-white/16"
+                      draft.allowLocalSecretFallback ? "bg-[rgb(var(--accent))]" : "bg-ink/16"
                     }`}
                     onClick={() => applySettings({ ...draft, allowLocalSecretFallback: !draft.allowLocalSecretFallback })}
                     aria-pressed={draft.allowLocalSecretFallback}
@@ -818,13 +829,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             ) : null}
             {tab === "sync" ? (
               <div className="space-y-5">
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-white/[0.08]">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/70 px-3 py-2 dark:border-ink/[0.08]">
                   <span>Automatische Synchronisierung</span>
                   <span className="font-medium">Alle 30 Sekunden</span>
                 </div>
-                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-white/[0.08] dark:bg-white/[0.025]">
+                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-ink/[0.08] dark:bg-ink/[0.025]">
                   <div className="font-medium">Status</div>
-                  <div className="mt-1 whitespace-pre-wrap text-slate-500 dark:text-slate-400">{syncError || syncStatus || "Bereit"}</div>
+                  <div className="mt-1 whitespace-pre-wrap text-label-2">{syncError || syncStatus || "Bereit"}</div>
                 </div>
                 <button
                   className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
@@ -833,12 +844,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 >
                   Sync starten
                 </button>
-                <section className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-white/[0.08] dark:bg-white/[0.025]">
+                <section className="rounded-2xl border border-slate-200/70 p-4 text-sm dark:border-ink/[0.08] dark:bg-ink/[0.025]">
                   <div className="mb-3 font-medium">Synchronisierungsdiagnose</div>
                   <label className="mb-3 flex items-center justify-between gap-4">
                     <span>Konto</span>
                     <select
-                      className="min-w-56 rounded-xl border border-slate-200/70 bg-transparent px-3 py-2 dark:border-white/[0.08]"
+                      className="min-w-56 rounded-xl border border-slate-200/70 bg-transparent px-3 py-2 dark:border-ink/[0.08]"
                       value={diagnoseAccountId ?? ""}
                       onChange={(event) => setDiagnoseAccountId(Number(event.target.value))}
                     >
@@ -848,25 +859,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     </select>
                   </label>
                   <div className="mb-3 flex flex-wrap gap-2">
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseAccount()}>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseAccount()}>
                       Sync testen
                     </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseInbox()}>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runDiagnoseInbox()}>
                       Posteingangs-UIDs prüfen
                     </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runLatestServerMessages()}>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runLatestServerMessages()}>
                       Letzte 10 Server-Mails anzeigen
                     </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceFullInboxSync()}>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceFullInboxSync()}>
                       Vollständigen Posteingang synchronisieren
                     </button>
-                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceIncrementalSync()}>
+                    <button className="rounded-xl border border-slate-200/70 px-3 py-2 text-xs hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" disabled={diagnoseBusy || !diagnoseAccountId} onClick={() => void runForceIncrementalSync()}>
                       Neue Nachrichten synchronisieren
                     </button>
                   </div>
                   {diagnoseAccount ? (
-                    <div className="grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Kontodiagnose</div>
+                    <div className="grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Kontodiagnose</div>
                       <DiagRow label="Konto-ID" value={String(diagnoseAccount.accountId)} />
                       <DiagRow label="E-Mail" value={diagnoseAccount.email} />
                       <DiagRow label="IMAP" value={`${diagnoseAccount.imapHost}:${diagnoseAccount.imapPort} · ${diagnoseAccount.imapSecure ? "TLS" : "Plain"}`} />
@@ -883,8 +894,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       </div>
                     </div>
                   ) : null}
-                  <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Smart-Counts Diagnose</div>
+                  <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Smart-Counts Diagnose</div>
                     <DiagRow label="Aktives Konto" value={String(selectedAccountId ?? "—")} />
                     <DiagRow label="Konto der Spezialansicht" value={String(selectedSpecialAccountId ?? "—")} />
                     <DiagRow label="Konto der Zähler" value={String(mailCountsAccountId ?? "—")} />
@@ -892,35 +903,35 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     <DiagRow label="Heute / Diese Woche" value={`${mailCounts.today} / ${mailCounts.thisWeek}`} />
                   </div>
                   {diagnoseInbox ? (
-                    <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Posteingangsdiagnose</div>
+                    <div className="mt-2 grid gap-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Posteingangsdiagnose</div>
                       <DiagRow label="Posteingang" value={diagnoseInbox.inboxRemoteName ?? "—"} />
                       <DiagRow label="Lokale UID" value={String(diagnoseInbox.lastKnownUid ?? "—")} />
                       <DiagRow label="Server UID" value={String(diagnoseInbox.highestUidOnServer ?? "—")} />
                       <DiagRow label="Lokale Posteingangsmails" value={String(diagnoseInbox.localInboxMails)} />
-                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mailboxen</div>
-                      <div className="mail-scroll max-h-32 overflow-auto rounded-lg border border-slate-200/70 bg-white/70 p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-label-2">Mailboxen</div>
+                      <div className="mail-scroll max-h-32 overflow-auto rounded-lg border border-slate-200/70 bg-ink/70 p-2 dark:border-ink/[0.08] dark:bg-ink/[0.03]">
                         {diagnoseInbox.mailboxes.map((mailbox) => (
                           <div key={mailbox.name} className="mb-1 last:mb-0">
                             <div className="font-medium">{mailbox.name}</div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{mailbox.inferredRole}</div>
+                            <div className="text-[11px] text-label-2">{mailbox.inferredRole}</div>
                           </div>
                         ))}
                       </div>
                     </div>
                   ) : null}
                   {serverMessages.length > 0 ? (
-                    <div className="mt-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-white/[0.04] dark:text-slate-200">
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Letzte Server-Mails</div>
-                      <div className="mail-scroll max-h-40 overflow-auto rounded-lg border border-slate-200/70 bg-white/70 p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                    <div className="mt-2 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:bg-ink/[0.04] dark:text-slate-200">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-label-2">Letzte Server-Mails</div>
+                      <div className="mail-scroll max-h-40 overflow-auto rounded-lg border border-slate-200/70 bg-ink/70 p-2 dark:border-ink/[0.08] dark:bg-ink/[0.03]">
                         {serverMessages.map((mail) => (
-                          <div key={`${mail.uid}-${mail.messageId}`} className="mb-2 rounded-lg border border-slate-200/70 px-2 py-1.5 last:mb-0 dark:border-white/[0.08]">
+                          <div key={`${mail.uid}-${mail.messageId}`} className="mb-2 rounded-lg border border-slate-200/70 px-2 py-1.5 last:mb-0 dark:border-ink/[0.08]">
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-medium">UID {mail.uid}</span>
                               <DiagBadge label={mail.seen ? "Seen" : "Unseen"} active={!mail.seen} />
                             </div>
                             <div className="truncate text-[11px]">{mail.subject || "(Kein Betreff)"}</div>
-                            <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{mail.sender}</div>
+                            <div className="truncate text-[11px] text-label-2">{mail.sender}</div>
                           </div>
                         ))}
                       </div>
@@ -932,26 +943,26 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             {tab === "rules" ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Regeln & Automatisierung</h3>
+                  <h3 className="text-sm font-semibold text-ink/80">Regeln & Automatisierung</h3>
                   <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => void createRule()}>
                     Regel hinzufügen
                   </button>
                 </div>
                 {rules.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
+                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-ink/[0.08] dark:text-slate-400">
                     Noch keine Regeln vorhanden.
                   </div>
                 ) : null}
                 <div className="grid gap-2">
                   {rules.map((rule) => (
-                    <div key={rule.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-white/[0.08]">
+                    <div key={rule.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-ink/[0.08]">
                       <div className="flex items-center justify-between gap-2">
                         <div className="font-medium">{rule.name}</div>
-                        <button className="rounded-lg border border-white/[0.06] px-2 py-1 text-xs text-white/55 hover:bg-white/[0.05] hover:text-white" onClick={() => void deleteRule(rule.id)}>
+                        <button className="rounded-lg border border-ink/[0.06] px-2 py-1 text-xs text-ink/55 hover:bg-ink/[0.05] hover:text-ink" onClick={() => void deleteRule(rule.id)}>
                           Löschen
                         </button>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="mt-1 text-xs text-label-2">
                         Wenn {rule.field} {rule.operator} &quot;{rule.value}&quot; → {rule.actionType}
                         {rule.actionValue ? ` (${rule.actionValue})` : ""}
                       </div>
@@ -964,26 +975,26 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Kontakte</h3>
-                    <p className="mt-1 text-xs text-white/45">Gespeicherte Kontakte werden beim Verfassen vorgeschlagen.</p>
+                    <h3 className="text-sm font-semibold text-ink/80">Kontakte</h3>
+                    <p className="mt-1 text-xs text-ink/45">Gespeicherte Kontakte werden beim Verfassen vorgeschlagen.</p>
                   </div>
                   <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => openContactForm()}>
                     Kontakt hinzufügen
                   </button>
                 </div>
                 {contactFormOpen ? (
-                  <form className="rounded-2xl border border-white/[0.08] bg-[#151515] p-4" onSubmit={(event) => void submitContact(event)}>
+                  <form className="rounded-2xl border border-ink/[0.08] bg-surface p-4" onSubmit={(event) => void submitContact(event)}>
                     <div className="mb-4 flex items-center justify-between">
                       <h4 className="text-sm font-semibold">{editingContactId ? "Kontakt bearbeiten" : "Neuen Kontakt erstellen"}</h4>
-                      <button type="button" className="rounded-lg p-1.5 text-white/45 hover:bg-white/[0.06] hover:text-white" onClick={closeContactForm}>
+                      <button type="button" className="rounded-lg p-1.5 text-ink/45 hover:bg-ink/[0.06] hover:text-ink" onClick={closeContactForm}>
                         <X size={16} />
                       </button>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-white/55">Name</span>
+                        <span className="mb-1.5 block text-xs font-medium text-ink/55">Name</span>
                         <input
-                          className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#111] px-3 text-sm outline-none focus:border-white/20"
+                          className="h-10 w-full rounded-lg border border-ink/[0.08] bg-surface px-3 text-sm outline-none focus:border-ink/20"
                           value={contactName}
                           onChange={(event) => setContactName(event.target.value)}
                           placeholder="Max Mustermann"
@@ -991,39 +1002,39 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         />
                       </label>
                       <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-white/55">E-Mail-Adresse</span>
+                        <span className="mb-1.5 block text-xs font-medium text-ink/55">E-Mail-Adresse</span>
                         <input
                           type="email"
                           required
-                          className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#111] px-3 text-sm outline-none focus:border-white/20"
+                          className="h-10 w-full rounded-lg border border-ink/[0.08] bg-surface px-3 text-sm outline-none focus:border-ink/20"
                           value={contactEmail}
                           onChange={(event) => setContactEmail(event.target.value)}
                           placeholder="max@example.de"
                         />
                       </label>
                     </div>
-                    <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs text-white/65">
+                    <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs text-ink/65">
                       <input type="checkbox" checked={contactFavorite} onChange={(event) => setContactFavorite(event.target.checked)} className="mail-checkbox h-4 w-4" />
                       Als Favorit markieren
                     </label>
                     {contactError ? <p className="mt-3 text-xs text-red-300">{contactError}</p> : null}
                     <div className="mt-4 flex justify-end gap-2">
-                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={closeContactForm}>Abbrechen</button>
+                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-ink/55 hover:bg-ink/[0.06] hover:text-ink" onClick={closeContactForm}>Abbrechen</button>
                       <button type="submit" className="accent-primary rounded-lg px-4 py-2 text-xs font-semibold">Kontakt speichern</button>
                     </div>
                   </form>
                 ) : null}
                 {contacts.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
+                  <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-ink/[0.08] dark:text-slate-400">
                     Noch keine Kontakte gespeichert.
                   </div>
                 ) : null}
                 <div className="grid gap-2">
                   {contacts.map((contact) => (
-                    <div key={contact.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-white/[0.08]">
+                    <div key={contact.id} className="rounded-xl border border-slate-200/70 p-3 text-sm dark:border-ink/[0.08]">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-semibold">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/[0.06] text-xs font-semibold">
                             {(contact.name || contact.email).charAt(0).toUpperCase()}
                           </span>
                           <div className="min-w-0">
@@ -1031,14 +1042,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                               <span className="truncate">{contact.name || contact.email}</span>
                               {contact.isFavorite ? <Star size={13} className="shrink-0 fill-[rgb(var(--accent))] text-[rgb(var(--accent))]" /> : null}
                             </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">{contact.email}</div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <div className="text-xs text-label-2">{contact.email}</div>
+                          <div className="text-[11px] text-label-2">
                             Letzter Kontakt: {contact.lastContactAt ? new Date(contact.lastContactAt).toLocaleString() : "—"} · Nutzungen: {contact.usageCount}
                           </div>
                           </div>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          <button className="rounded-lg border border-white/[0.06] p-2 text-white/55 hover:bg-white/[0.05] hover:text-white" title="Bearbeiten" onClick={() => openContactForm(contact)}>
+                          <button className="rounded-lg border border-ink/[0.06] p-2 text-ink/55 hover:bg-ink/[0.05] hover:text-ink" title="Bearbeiten" onClick={() => openContactForm(contact)}>
                             <Pencil size={14} />
                           </button>
                           <button className="rounded-lg border border-red-500/20 p-2 text-red-300 hover:bg-red-500/10" title="Löschen" onClick={() => void deleteContact(contact.id)}>
@@ -1055,28 +1066,28 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Tags</h3>
-                    <p className="mt-1 text-xs text-white/45">Erstelle frei benennbare Tags und ordne sie ausgewählten Mails zu.</p>
+                    <h3 className="text-sm font-semibold text-ink/80">Tags</h3>
+                    <p className="mt-1 text-xs text-ink/45">Erstelle frei benennbare Tags und ordne sie ausgewählten Mails zu.</p>
                   </div>
                   <button className="accent-primary rounded-lg px-3 py-2 text-xs font-semibold" onClick={() => openTagForm()}>
                     Tag hinzufügen
                   </button>
                 </div>
                 {tagFormOpen ? (
-                  <form className="rounded-2xl border border-white/[0.08] bg-[#151515] p-4" onSubmit={(event) => void submitTag(event)}>
+                  <form className="rounded-2xl border border-ink/[0.08] bg-surface p-4" onSubmit={(event) => void submitTag(event)}>
                     <div className="mb-4 flex items-center justify-between">
                       <h4 className="text-sm font-semibold">{editingTagId ? "Tag bearbeiten" : "Neuen Tag erstellen"}</h4>
-                      <button type="button" className="rounded-lg p-1.5 text-white/45 hover:bg-white/[0.06] hover:text-white" onClick={closeTagForm}>
+                      <button type="button" className="rounded-lg p-1.5 text-ink/45 hover:bg-ink/[0.06] hover:text-ink" onClick={closeTagForm}>
                         <X size={16} />
                       </button>
                     </div>
                     <div className="grid items-end gap-3 sm:grid-cols-[1fr_120px]">
                       <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-white/55">Name</span>
+                        <span className="mb-1.5 block text-xs font-medium text-ink/55">Name</span>
                         <input
                           required
                           maxLength={40}
-                          className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#111] px-3 text-sm outline-none focus:border-white/20"
+                          className="h-10 w-full rounded-lg border border-ink/[0.08] bg-surface px-3 text-sm outline-none focus:border-ink/20"
                           value={tagName}
                           onChange={(event) => setTagName(event.target.value)}
                           placeholder="z. B. Rechnung"
@@ -1084,10 +1095,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         />
                       </label>
                       <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-white/55">Farbe</span>
+                        <span className="mb-1.5 block text-xs font-medium text-ink/55">Farbe</span>
                         <input
                           type="color"
-                          className="h-10 w-full cursor-pointer rounded-lg border border-white/[0.08] bg-[#111] p-1"
+                          className="h-10 w-full cursor-pointer rounded-lg border border-ink/[0.08] bg-surface p-1"
                           value={tagColor}
                           onChange={(event) => setTagColor(event.target.value)}
                         />
@@ -1095,23 +1106,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     </div>
                     {tagError ? <p className="mt-3 text-xs text-red-300">{tagError}</p> : null}
                     <div className="mt-4 flex justify-end gap-2">
-                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-white/55 hover:bg-white/[0.06] hover:text-white" onClick={closeTagForm}>Abbrechen</button>
+                      <button type="button" className="rounded-lg px-3 py-2 text-xs text-ink/55 hover:bg-ink/[0.06] hover:text-ink" onClick={closeTagForm}>Abbrechen</button>
                       <button type="submit" className="accent-primary rounded-lg px-4 py-2 text-xs font-semibold">Tag speichern</button>
                     </div>
                   </form>
                 ) : null}
                 {tags.length === 0 ? (
-                  <div className="rounded-2xl border border-white/[0.08] p-4 text-sm text-white/45">Noch keine Tags vorhanden.</div>
+                  <div className="rounded-2xl border border-ink/[0.08] p-4 text-sm text-ink/45">Noch keine Tags vorhanden.</div>
                 ) : null}
                 <div className="grid gap-2 sm:grid-cols-2">
                   {tags.map((tag) => (
-                    <div key={tag.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] p-3">
+                    <div key={tag.id} className="flex items-center justify-between gap-3 rounded-xl border border-ink/[0.08] p-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
                         <span className="truncate text-sm font-medium">{tag.name}</span>
                       </div>
                       <div className="flex shrink-0 gap-2">
-                        <button className="rounded-lg border border-white/[0.06] p-2 text-white/55 hover:bg-white/[0.05] hover:text-white" title="Bearbeiten" onClick={() => openTagForm(tag)}>
+                        <button className="rounded-lg border border-ink/[0.06] p-2 text-ink/55 hover:bg-ink/[0.05] hover:text-ink" title="Bearbeiten" onClick={() => openTagForm(tag)}>
                           <Pencil size={14} />
                         </button>
                         <button className="rounded-lg border border-red-500/20 p-2 text-red-300 hover:bg-red-500/10" title="Löschen" onClick={() => void deleteTag(tag.id)}>
@@ -1125,15 +1136,15 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             ) : null}
             {tab === "backup" ? (
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Datensicherung und Wiederherstellung</h3>
-                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
+                <h3 className="text-sm font-semibold text-ink/80">Datensicherung und Wiederherstellung</h3>
+                <div className="rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-600 dark:border-ink/[0.08] dark:text-slate-300">
                   Exportiert Konten ohne Passwoerter, Einstellungen, Regeln, Kontakte und Schlagwoerter. Neue Backups werden passwortgeschuetzt verschluesselt.
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void exportBackupToFile()}>
                     Datensicherung exportieren
                   </button>
-                  <button className="rounded-xl border border-slate-200/70 px-4 py-2 text-sm hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08]" onClick={() => void importBackupFromFile()}>
+                  <button className="rounded-xl border border-slate-200/70 px-4 py-2 text-sm hover:bg-slate-50 dark:border-ink/[0.08] dark:hover:bg-ink/[0.08]" onClick={() => void importBackupFromFile()}>
                     Datensicherung importieren
                   </button>
                 </div>
@@ -1141,7 +1152,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             ) : null}
             {tab === "about" ? (
               <div className="grid gap-4 lg:grid-cols-2">
-                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-ink/[0.08] dark:bg-ink/[0.025]">
                   <div className="flex items-start gap-4">
                     <img src="./icon.png" alt="" className="h-14 w-14 rounded-2xl shadow-sm" />
                     <div>
@@ -1149,40 +1160,40 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                         <Info size={18} />
                         LunaMail
                       </div>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Moderner E-Mail-Client für Windows</p>
+                      <p className="mt-1 text-sm text-label-2">Moderner E-Mail-Client für Windows</p>
                     </div>
                   </div>
-                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-white/[0.08] dark:text-slate-300">
-                    Installierte Version: <span className="font-semibold text-slate-800 dark:text-white">{appVersion}</span>
+                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-sm text-slate-600 dark:border-ink/[0.08] dark:text-slate-300">
+                    Installierte Version: <span className="font-semibold text-ink/80">{appVersion}</span>
                   </div>
-                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-xs text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300">
+                  <div className="mt-4 rounded-xl border border-slate-200/70 px-3 py-2 text-xs text-slate-600 dark:border-ink/[0.08] dark:bg-ink/[0.03] dark:text-slate-300">
                     Updates werden zentral über den LunaSuite Launcher verwaltet.
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-white/[0.08] dark:bg-white/[0.025]">
+                <section className="rounded-2xl border border-slate-200/70 p-5 dark:border-ink/[0.08] dark:bg-ink/[0.025]">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold">Versionsverlauf</h3>
-                      <p className="mt-1 text-xs text-white/45">Letzte veröffentlichte Versionen</p>
+                      <p className="mt-1 text-xs text-ink/45">Letzte veröffentlichte Versionen</p>
                     </div>
-                    <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/55">{releases.length}</span>
+                    <span className="rounded-full bg-ink/[0.06] px-2.5 py-1 text-[11px] text-ink/55">{releases.length}</span>
                   </div>
                   <div className="mt-4 space-y-2">
                     {releasesBusy ? (
-                      <div className="rounded-xl border border-white/[0.06] px-3 py-3 text-xs text-white/45">Versionen werden geladen...</div>
+                      <div className="rounded-xl border border-ink/[0.06] px-3 py-3 text-xs text-ink/45">Versionen werden geladen...</div>
                     ) : null}
                     {releasesError ? (
-                      <div className="rounded-xl border border-white/[0.08] px-3 py-3 text-xs text-white/60">{releasesError}</div>
+                      <div className="rounded-xl border border-ink/[0.08] px-3 py-3 text-xs text-ink/60">{releasesError}</div>
                     ) : null}
                     {!releasesBusy && !releasesError && releases.length === 0 ? (
-                      <div className="rounded-xl border border-white/[0.06] px-3 py-3 text-xs text-white/45">Keine Versionen gefunden.</div>
+                      <div className="rounded-xl border border-ink/[0.06] px-3 py-3 text-xs text-ink/45">Keine Versionen gefunden.</div>
                     ) : null}
                     {releases.map((release) => (
                       <button
                         key={`${release.version}-${release.publishedAt}`}
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-3 py-3 text-left transition-colors hover:bg-white/[0.04]"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-ink/[0.06] px-3 py-3 text-left transition-colors hover:bg-ink/[0.04]"
                         onClick={() => void openExternalLink(release.url)}
                       >
                         <span className="min-w-0">
@@ -1192,25 +1203,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                               <span className="ml-2 text-[10px] font-medium text-[rgb(var(--accent))]">Installiert</span>
                             ) : null}
                           </span>
-                          <span className="mt-0.5 block text-[11px] text-white/45">
+                          <span className="mt-0.5 block text-[11px] text-ink/45">
                             {release.publishedAt
                               ? new Date(release.publishedAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
                               : "Datum unbekannt"}
                           </span>
                         </span>
-                        <ExternalLink size={14} className="shrink-0 text-white/35" />
+                        <ExternalLink size={14} className="shrink-0 text-ink/35" />
                       </button>
                     ))}
                   </div>
                 </section>
               </div>
             ) : null}
-            {message ? <div className="mt-5 rounded-lg border border-white/[0.06] bg-[#151515] px-4 py-3 text-sm text-white/75">{message}</div> : null}
-            {syncError ? <div className="mt-5 rounded-lg border border-white/[0.12] bg-[#151515] px-4 py-3 text-sm text-white">{syncError}</div> : null}
+            {message ? <div className="mt-5 rounded-lg border border-ink/[0.06] bg-surface px-4 py-3 text-sm text-ink/75">{message}</div> : null}
+            {syncError ? <div className="mt-5 rounded-lg border border-ink/[0.12] bg-surface px-4 py-3 text-sm text-ink">{syncError}</div> : null}
           </div>
         </div>
-        <footer className="flex justify-end gap-2 border-t border-white/[0.06] bg-[#0B0B0B] px-6 py-4">
-          <button className="rounded-lg px-4 py-2 text-sm text-white/65 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white" onClick={onClose}>Abbrechen</button>
+        <footer className="flex justify-end gap-2 border-t border-ink/[0.06] bg-canvas px-6 py-4">
+          <button className="rounded-lg px-4 py-2 text-sm text-ink/65 transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink" onClick={onClose}>Abbrechen</button>
           <button className="accent-primary rounded-lg px-4 py-2 text-sm font-semibold" onClick={() => void saveSettings()}>Speichern</button>
         </footer>
       </section>
@@ -1224,8 +1235,8 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
     <button
       className={`mb-1 h-9 w-full rounded-md px-3 text-left text-[13px] ${
         active
-          ? "bg-white/[0.08] text-white"
-          : "text-white/55 transition-colors duration-150 hover:bg-white/[0.05] hover:text-white"
+          ? "bg-ink/[0.08] text-ink"
+          : "text-ink/55 transition-colors duration-150 hover:bg-ink/[0.05] hover:text-ink"
       }`}
       onClick={onClick}
     >
@@ -1238,8 +1249,8 @@ function SettingsSection({ title, description, children }: { title: string; desc
   return (
     <section>
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-        <p className="mt-1 text-xs leading-5 text-white/40">{description}</p>
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-ink/40">{description}</p>
       </div>
       <div className="space-y-3">{children}</div>
     </section>
@@ -1248,13 +1259,13 @@ function SettingsSection({ title, description, children }: { title: string; desc
 
 function ModernSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) {
   return (
-    <label className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-white/[0.07] bg-[#151515] px-4 py-2.5">
-      <span className="text-sm font-medium text-white/80">{label}</span>
+    <label className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-ink/[0.07] bg-surface px-4 py-2.5">
+      <span className="text-sm font-medium text-ink/80">{label}</span>
       <span className="relative min-w-52">
-        <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/[0.07] bg-[#101010] px-3 py-2 pr-10 text-sm text-white outline-none focus:border-[rgb(var(--accent)/0.45)]">
+        <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-ink/[0.07] bg-surface px-3 py-2 pr-10 text-sm text-ink outline-none focus:border-[rgb(var(--accent)/0.45)]">
           {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
         </select>
-        <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/60" />
+        <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink/60" />
       </span>
     </label>
   );
@@ -1262,10 +1273,10 @@ function ModernSelect({ label, value, onChange, options }: { label: string; valu
 
 function ModernToggle({ label, description, checked, onChange, flat = false }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void; flat?: boolean }) {
   return (
-    <label className={`flex cursor-pointer items-center justify-between gap-5 px-4 py-3 ${flat ? "" : "rounded-xl border border-white/[0.07] bg-[#151515]"}`}>
+    <label className={`flex cursor-pointer items-center justify-between gap-5 px-4 py-3 ${flat ? "" : "rounded-xl border border-ink/[0.07] bg-surface"}`}>
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-white/85">{label}</span>
-        <span className="mt-1 block text-xs leading-5 text-white/40">{description}</span>
+        <span className="block text-sm font-medium text-ink/85">{label}</span>
+        <span className="mt-1 block text-xs leading-5 text-ink/40">{description}</span>
       </span>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mail-checkbox h-4 w-4 shrink-0" />
     </label>
@@ -1275,15 +1286,15 @@ function ModernToggle({ label, description, checked, onChange, flat = false }: {
 function Field(props: { name: string; label: string; type?: string; defaultValue?: string; required?: boolean }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1.5 block text-sm font-medium text-white/55">{props.label}</span>
-      <input {...props} className="h-11 w-full rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white outline-none focus:border-white/[0.16]" />
+      <span className="mb-1.5 block text-sm font-medium text-ink/55">{props.label}</span>
+      <input {...props} className="h-11 w-full rounded-lg border border-ink/[0.06] bg-surface px-3 text-sm text-ink outline-none focus:border-ink/[0.16]" />
     </label>
   );
 }
 
 function CheckboxField(props: { name: string; label: string; defaultChecked?: boolean }) {
   return (
-    <label className="flex h-11 items-center gap-3 rounded-lg border border-white/[0.06] bg-[#151515] px-3 text-sm text-white/75">
+    <label className="flex h-11 items-center gap-3 rounded-lg border border-ink/[0.06] bg-surface px-3 text-sm text-ink/75">
       <input name={props.name} type="checkbox" defaultChecked={props.defaultChecked} className="h-4 w-4 accent-white" />
       <span>{props.label}</span>
     </label>
@@ -1291,13 +1302,13 @@ function CheckboxField(props: { name: string; label: string; defaultChecked?: bo
 }
 
 function providerButton(active: boolean) {
-  return `rounded-lg border px-4 py-3 text-left text-sm ${active ? "border-white/[0.14] bg-white/[0.08] text-white" : "border-white/[0.06] text-white/55 hover:bg-white/[0.04] hover:text-white"}`;
+  return `rounded-lg border px-4 py-3 text-left text-sm ${active ? "border-ink/[0.14] bg-ink/[0.08] text-ink" : "border-ink/[0.06] text-ink/55 hover:bg-ink/[0.04] hover:text-ink"}`;
 }
 
 function DiagRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[150px_1fr] gap-2">
-      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="text-label-2">{label}</span>
       <span className="truncate">{value}</span>
     </div>
   );
@@ -1305,7 +1316,7 @@ function DiagRow({ label, value }: { label: string; value: string }) {
 
 function DiagBadge({ label, active }: { label: string; active: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "bg-white/[0.08] text-white/65"}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[rgb(var(--accent))] text-[rgb(var(--accent-contrast))]" : "bg-ink/[0.08] text-ink/65"}`}>
       {label}
     </span>
   );

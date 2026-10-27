@@ -102,7 +102,7 @@ type MailState = {
 };
 
 const defaultSettings: Settings = {
-  theme: "dark",
+  theme: "light",
   accentColor: "white",
   layoutMode: "standard",
   fontSize: 16,
@@ -117,8 +117,11 @@ const defaultSettings: Settings = {
   accountAppearance: {}
 };
 
+const THEMES: Settings["theme"][] = ["light", "dark", "silver"];
+
 function normalizeSettings(settings: Settings): Settings {
-  return { ...defaultSettings, ...settings };
+  const merged = { ...defaultSettings, ...settings };
+  return THEMES.includes(merged.theme) ? merged : { ...merged, theme: defaultSettings.theme };
 }
 
 function resolveCountScopeAccountId(state: Pick<MailState, "selectedAccountId" | "selectedSpecialAccountId" | "accounts">): number | undefined {

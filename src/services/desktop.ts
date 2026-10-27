@@ -1,3 +1,5 @@
+import type { ThemeMode } from "../types";
+
 export type DesktopEvent<T> = { payload: T };
 
 export type AppRelease = {
@@ -21,7 +23,7 @@ type ElectronBridge = {
     toggleMaximize(): Promise<void>;
     isMaximized(): Promise<boolean>;
     startDragging(): Promise<void>;
-    setTheme(theme: "light" | "dark"): Promise<void>;
+    setTheme(theme: ThemeMode): Promise<void>;
     show(): Promise<void>;
     focus(): Promise<void>;
     onMaximizedChange(callback: (maximized: boolean) => void): () => void;

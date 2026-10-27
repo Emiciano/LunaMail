@@ -1,4 +1,4 @@
-export type ThemeMode = "light" | "dark";
+export type ThemeMode = "light" | "dark" | "silver";
 export type AccentColor = "white" | "blue" | "green" | "orange" | "red" | "purple" | "teal" | "pink" | "gray";
 
 export type LayoutMode = "compact" | "standard" | "comfortable";

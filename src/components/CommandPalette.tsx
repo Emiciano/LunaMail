@@ -43,13 +43,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[2147483647] flex items-start justify-center bg-black/72 px-4 pt-[12vh]" onClick={onClose}>
+    <div className="fixed inset-0 z-[2147483647] flex items-start justify-center bg-scrim/40 px-4 pt-[12vh]" onClick={onClose}>
       <div className="tr-panel w-[min(760px,calc(100vw-2rem))] overflow-hidden rounded-[10px]" onClick={(event) => event.stopPropagation()}>
         <input
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          className="h-14 w-full border-b border-slate-200/70 bg-transparent px-4 text-sm outline-none dark:border-white/[0.07]"
+          className="h-14 w-full border-b border-slate-200/70 bg-transparent px-4 text-sm outline-none dark:border-ink/[0.07]"
           placeholder="Befehl suchen..."
         />
         <div className="mail-scroll max-h-[420px] overflow-y-auto p-2">

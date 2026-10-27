@@ -176,7 +176,13 @@ function registerIpc() {
     if (!mainWindow) return false;
     if (action === "minimize") mainWindow.minimize();
     if (action === "toggle-maximize") mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
-    if (action === "set-theme") nativeTheme.themeSource = value;
+    if (action === "set-theme") {
+      // Nur bekannte Designs annehmen; „silver“ ist ein dunkles Design.
+      const light = value === "light";
+      if (!light && value !== "dark" && value !== "silver") return false;
+      nativeTheme.themeSource = light ? "light" : "dark";
+      mainWindow.setBackgroundColor(light ? "#FFFFFF" : value === "silver" ? "#2D2E32" : "#000000");
+    }
     if (action === "show") mainWindow.show();
     if (action === "focus") mainWindow.focus();
     return action === "is-maximized" ? mainWindow.isMaximized() : true;
