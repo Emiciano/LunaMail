@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Download, ExternalLink, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
+import { Ban, Check, ChevronDown, Download, ExternalLink, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
@@ -13,7 +13,7 @@ import { useAppUpdate } from "../hooks/useAppUpdate";
 import { cn } from "../lib/cn";
 import { SenderAvatar } from "./SenderAvatar";
 
-type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
+type Tab = "accounts" | "blocked" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
   { value: "white", label: "Standard", className: "bg-ink" },
@@ -110,6 +110,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     saveRule,
     deleteRule,
     loadContacts,
+    blockedSenders,
+    loadBlockedSenders,
+    unblockSender,
     saveContact,
     deleteContact,
     loadTags,
@@ -137,6 +140,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     saveRule: state.saveRule,
     deleteRule: state.deleteRule,
     loadContacts: state.loadContacts,
+    blockedSenders: state.blockedSenders,
+    loadBlockedSenders: state.loadBlockedSenders,
+    unblockSender: state.unblockSender,
     saveContact: state.saveContact,
     deleteContact: state.deleteContact,
     loadTags: state.loadTags,
@@ -183,8 +189,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void loadRules(selectedAccountId);
     void loadContacts();
+    void loadBlockedSenders();
     void loadTags();
-  }, [loadContacts, loadRules, loadTags, selectedAccountId]);
+  }, [loadBlockedSenders, loadContacts, loadRules, loadTags, selectedAccountId]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -1059,6 +1066,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 </>
               ) : null}
 
+              {tab === "blocked" ? (
+                <Group title="Blockierte Absender" footer="Mails dieser Absender landen direkt im Papierkorb und lösen keine Benachrichtigung aus. Blockieren kannst du im Lesefenster über das Verbotsschild.">
+                  {blockedSenders.length === 0 ? <EmptyRow>Niemand blockiert.</EmptyRow> : null}
+                  {blockedSenders.map((entry) => (
+                    <div key={entry.address} className="flex items-center gap-3.5 px-4 py-3">
+                      <SenderAvatar address={entry.address} name={entry.name || entry.address} className="h-10 w-10 text-[14px]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[15px] font-bold">{entry.name || entry.address}</div>
+                        <div className="truncate text-[13px] text-label-2">{entry.name ? `${entry.address} · ` : ""}seit {new Date(entry.createdAt).toLocaleDateString("de-DE")}</div>
+                      </div>
+                      <SoftButton onClick={() => void unblockSender(entry.address)}>Freigeben</SoftButton>
+                    </div>
+                  ))}
+                </Group>
+              ) : null}
+
               {tab === "tags" ? (
                 <>
                   {tagFormOpen ? (
@@ -1167,6 +1190,7 @@ const tabs: { id: Tab; label: string; description: string; icon: LucideIcon }[] 
   { id: "rules", label: "Regeln", description: "Eingehende Mails automatisch sortieren und markieren.", icon: ListFilter },
   { id: "contacts", label: "Kontakte", description: "Adressen, die beim Schreiben vorgeschlagen werden.", icon: Users },
   { id: "tags", label: "Tags", description: "Eigene Schlagwörter für deine Mails.", icon: TagIcon },
+  { id: "blocked", label: "Blockiert", description: "Absender, deren Mails direkt im Papierkorb landen.", icon: Ban },
   { id: "general", label: "Allgemein", description: "Darstellung, Schreiben, Standardkonto und Benachrichtigungen.", icon: SlidersHorizontal },
   { id: "themes", label: "Design", description: "Erscheinungsbild und Akzentfarbe.", icon: Palette },
   { id: "sync", label: "Synchronisierung", description: "Status und Diagnose der Verbindung zum Mailserver.", icon: RefreshCw },
@@ -1176,7 +1200,7 @@ const tabs: { id: Tab; label: string; description: string; icon: LucideIcon }[] 
 ];
 
 const navGroups: { title: string; tabs: Tab[] }[] = [
-  { title: "Mail", tabs: ["accounts", "rules", "contacts", "tags"] },
+  { title: "Mail", tabs: ["accounts", "rules", "contacts", "tags", "blocked"] },
   { title: "App", tabs: ["general", "themes", "sync"] },
   { title: "System", tabs: ["security", "backup", "about"] }
 ];

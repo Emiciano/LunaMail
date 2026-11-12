@@ -72,6 +72,8 @@ export type Email = {
   deletedAt?: string;
   updatedAt?: string;
   snoozedUntil?: string;
+  unsubscribe?: { checked?: boolean; https?: string; mailto?: { address: string }; oneClick?: boolean };
+  unsubscribedAt?: string;
   hasAttachments: boolean;
   attachments: Attachment[];
   tags: Tag[];
@@ -307,4 +309,16 @@ export type AttachmentPreview = {
   fileName: string;
   contentType: string;
   dataBase64: string;
+};
+
+export type BlockedSender = {
+  address: string;
+  name?: string;
+  createdAt: string;
+};
+
+export type UnsubscribeInfo = {
+  method: "one-click" | "mailto" | "website" | "none";
+  unsubscribedAt?: string;
+  host?: string;
 };

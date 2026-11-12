@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { isDesktop, listenDesktop } from "../services/desktop";
-import type { Account, Contact, Draft, Email, Folder, HealthStatus, MailCounts, MailRule, RuleInput, Settings, SmartCategory, SyncReport, Tag } from "../types";
+import type { Account, BlockedSender, Contact, Draft, Email, Folder, HealthStatus, MailCounts, MailRule, RuleInput, Settings, SmartCategory, SyncReport, Tag } from "../types";
 import { mailService, type BackendView, type MailQueryFilters } from "../services/mailService";
 import { ensureNotificationPermission, showDesktopNotification } from "../services/notifications";
 import { parseSearchQuery } from "../lib/searchParser";
@@ -67,6 +67,11 @@ type MailState = {
   openAdjacentEmail: (direction: 1 | -1) => Promise<void>;
   replyAllToSelected: () => void;
   quickReply: (body: string) => Promise<void>;
+  blockedSenders: BlockedSender[];
+  loadBlockedSenders: () => Promise<void>;
+  blockSender: (sender: string) => Promise<void>;
+  unblockSender: (address: string) => Promise<void>;
+  unsubscribeEmail: (email: Email) => Promise<boolean>;
   loadInitial: () => Promise<void>;
   saveAccount: (account: Parameters<typeof mailService.saveAccount>[0]) => Promise<void>;
   connectGoogleAccount: (clientId: string) => Promise<void>;
@@ -439,6 +444,7 @@ export const useMailStore = create<MailState>((set, get) => ({
   searchFilters: {},
   drafts: [],
   settingsOpen: false,
+  blockedSenders: [],
   async loadInitial() {
     set({ loading: true, startupStatus: "Konten laden..." });
     try {
@@ -1041,6 +1047,53 @@ export const useMailStore = create<MailState>((set, get) => ({
     const index = selectedEmail ? emails.findIndex((email) => email.id === selectedEmail.id) : -1;
     const next = index < 0 ? emails[0] : emails[index + direction];
     if (next) await get().selectEmail(next);
+  },
+  async loadBlockedSenders() {
+    set({ blockedSenders: await mailService.getBlockedSenders() });
+  },
+  async blockSender(sender) {
+    try {
+      const result = await mailService.blockSender(sender, true);
+      const opened = get().selectedEmail;
+      if (opened && bareAddress(opened.sender) === result.address) set({ selectedEmail: undefined });
+      await get().loadBlockedSenders();
+      get().showIsland({
+        kind: "success",
+        message: result.moved > 0
+          ? `Absender blockiert · ${result.moved} ${result.moved === 1 ? "Mail" : "Mails"} im Papierkorb`
+          : "Absender blockiert",
+        actionLabel: "Rückgängig",
+        action: () => void get().unblockSender(result.address)
+      }, 7000);
+    } catch (error) {
+      get().showIsland({ kind: "error", message: `Blockieren fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
+    }
+    await refreshVisibleEmails(get, set);
+  },
+  async unblockSender(address) {
+    await mailService.unblockSender(address);
+    await get().loadBlockedSenders();
+    get().showIsland({ kind: "success", message: `${address} nicht mehr blockiert` });
+  },
+  async unsubscribeEmail(email) {
+    try {
+      const result = await mailService.unsubscribe(email.id);
+      if (!result.completed) {
+        get().showIsland({ kind: "info", message: "Die Abmeldeseite des Absenders wurde im Browser geöffnet" });
+        return false;
+      }
+      const now = new Date().toISOString();
+      const sender = bareAddress(email.sender);
+      set((state) => ({
+        emails: state.emails.map((item) => (bareAddress(item.sender) === sender ? { ...item, unsubscribedAt: now } : item)),
+        selectedEmail: state.selectedEmail && bareAddress(state.selectedEmail.sender) === sender ? { ...state.selectedEmail, unsubscribedAt: now } : state.selectedEmail
+      }));
+      get().showIsland({ kind: "success", message: "Abgemeldet · kann beim Absender ein paar Tage dauern" }, 7000);
+      return true;
+    } catch (error) {
+      get().showIsland({ kind: "error", message: `Abmelden fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` }, 8000);
+      return false;
+    }
   },
   showIsland(island, durationMs = 5000) {
     if (islandTimer) window.clearTimeout(islandTimer);

@@ -33,9 +33,11 @@
     mail(106, "Sophie Wagner <sophie@example.com>", "Fotos vom Wochenende", "Hier sind die Bilder vom Samstag, die schönsten habe ich markiert.", 60 * 50, { isRead: true }),
     mail(107, "Adobe <mail@adobe.example>", "Ihre Rechnung für Oktober", "Ihre monatliche Rechnung für Creative Cloud ist jetzt verfügbar.", 60 * 80, { isRead: true }),
     mail(108, "Jonas Keller <jonas@example.com>", "Kurze Frage zum Schnitt", "Kannst du mir die Projektdatei von letzter Woche schicken? Ich finde sie nicht mehr.", 60 * 120, { isRead: true }),
+    mail(111, "Filmtools Newsletter <news@filmtools.example>", "Black Week: 30 % auf Gimbals und Objektive", "Nur bis Sonntag: unsere besten Angebote für Kamera, Licht und Ton. Jetzt entdecken.", 60 * 6, { unsubscribe: { checked: true, https: "https://filmtools.example/u", oneClick: true } }),
     mail(109, "Studio Nord <buchung@studio.example>", "Mietvertrag Studio B", "Anbei der Vertrag für die Studiomiete im Dezember. Bitte unterschrieben zurücksenden.", 60 * 30, { isRead: true, snoozedUntil: new Date(now + 14 * 3600_000).toISOString() }),
     mail(110, "Steuerbüro Lang <info@lang.example>", "Unterlagen für das 4. Quartal", "Bitte schicken Sie uns bis Monatsende die Belege für Oktober bis Dezember.", 60 * 40, { isRead: true, snoozedUntil: new Date(now + 3 * 86400_000).toISOString() })
   ];
+  let blocked = [{ address: "angebote@gewinnspiel.example", name: "Gewinnspiel-Team", createdAt: new Date(now - 9 * 86400_000).toISOString() }];
   const snoozed = (email) => email.snoozedUntil && new Date(email.snoozedUntil).getTime() > Date.now();
   const settings = {
     theme, accentColor: "white", layoutMode: "standard", fontSize: 16, syncIntervalMinutes: 15, externalImages: "never", senderLogos: true,
@@ -69,6 +71,14 @@
     snooze_email: ({ id, until }) => { const email = emails.find((item) => item.id === id); if (email) email.snoozedUntil = until; return until; },
     unsnooze_email: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) email.snoozedUntil = undefined; },
     save_draft: () => 1,
+    get_unsubscribe_info: ({ id }) => {
+      const email = emails.find((item) => item.id === id);
+      return email?.unsubscribe?.https ? { method: "one-click", host: new URL(email.unsubscribe.https).hostname, unsubscribedAt: email.unsubscribedAt } : { method: "none" };
+    },
+    unsubscribe: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) email.unsubscribedAt = new Date().toISOString(); return { method: "one-click", completed: true }; },
+    get_blocked_senders: () => blocked.slice(),
+    block_sender: ({ sender }) => { const address = (sender.match(/<(.+)>/) || [, sender])[1].toLowerCase(); blocked.push({ address, name: sender.replace(/<.*>/, "").trim(), createdAt: new Date().toISOString() }); const before = emails.length; emails = emails.filter((email) => !email.sender.toLowerCase().includes(address)); return { address, moved: before - emails.length }; },
+    unblock_sender: ({ address }) => { blocked = blocked.filter((entry) => entry.address !== address); },
     toggle_favorite: () => true,
     move_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },
     delete_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },

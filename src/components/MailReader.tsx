@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { AlarmClock, Archive, Check, ChevronDown, ChevronUp, Download, Forward, Mail, Maximize2, Paperclip, Reply, ReplyAll, Send, Star, Trash2, UserPlus, X } from "lucide-react";
+import { AlarmClock, Archive, Ban, MailX, Check, ChevronDown, ChevronUp, Download, Forward, Mail, Maximize2, Paperclip, Reply, ReplyAll, Send, Star, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { desktopDialog, openExternalLink } from "../services/desktop";
@@ -9,6 +9,8 @@ import { useMailStore } from "../stores/mailStore";
 import { useShallow } from "zustand/react/shallow";
 import { SenderAvatar } from "./SenderAvatar";
 import { SnoozeMenu } from "./SnoozeMenu";
+import { ConfirmDialog } from "./ConfirmDialog";
+import type { Email, UnsubscribeInfo } from "../types";
 
 const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
@@ -16,7 +18,7 @@ const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 export function MailReader() {
   const {
     selectedEmail: currentEmail, emails, settings, contacts, closeEmail, replyToSelected, replyAllToSelected, forwardSelected, archiveSelected, deleteSelected,
-    saveContact, updateSettings, toggleFavoriteSelected, markUnreadSelected, snoozeSelected, unsnoozeEmail, openAdjacentEmail, quickReply, openComposer
+    saveContact, updateSettings, toggleFavoriteSelected, markUnreadSelected, snoozeSelected, unsnoozeEmail, openAdjacentEmail, quickReply, openComposer, blockSender, unsubscribeEmail
   } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
     emails: state.emails,
@@ -27,6 +29,8 @@ export function MailReader() {
     unsnoozeEmail: state.unsnoozeEmail,
     openAdjacentEmail: state.openAdjacentEmail,
     quickReply: state.quickReply,
+    blockSender: state.blockSender,
+    unsubscribeEmail: state.unsubscribeEmail,
     openComposer: state.openComposer,
     settings: state.settings,
     contacts: state.contacts,
@@ -60,6 +64,7 @@ export function MailReader() {
   }, [selectedEmail?.bodyHtml, imagesAllowed]);
 
 
+  const [confirmBlock, setConfirmBlock] = useState(false);
   const position = selectedEmail ? emails.findIndex((email) => email.id === selectedEmail.id) : -1;
 
   if (!selectedEmail) return null;
@@ -107,6 +112,7 @@ export function MailReader() {
             </button>
             <button className="reader-icon-button" title="Als ungelesen markieren (U)" onClick={() => void markUnreadSelected()}><Mail size={18} /></button>
             <button className="reader-icon-button" title="Archivieren (E)" onClick={() => void archiveSelected()}><Archive size={18} /></button>
+            <button className="reader-icon-button reader-icon-danger" title="Absender blockieren" onClick={() => setConfirmBlock(true)}><Ban size={18} /></button>
             <button className="reader-icon-button reader-icon-danger" title="Löschen (Entf)" onClick={() => void deleteSelected()}><Trash2 size={18} /></button>
             <span className="mx-1.5 h-5 w-px bg-line" />
             <button className="reader-icon-button" title="Schließen (Esc)" onClick={closeEmail}><X size={19} /></button>
@@ -158,6 +164,7 @@ export function MailReader() {
             ) : null}
           </header>
 
+          <UnsubscribeBar key={`unsubscribe-${selectedEmail.id}`} email={selectedEmail} senderName={senderContact.name || senderContact.email} onUnsubscribe={unsubscribeEmail} onBlock={blockSender} />
           <section className="max-w-full text-[15px] leading-7 text-ink">
             {selectedEmail.bodyHtml && selectedEmail.bodyHtml.length > MAX_HTML_LENGTH ? (
               <Notice>Sehr große HTML-Mail wird aus Performance-Gründen als Text angezeigt.</Notice>
@@ -224,7 +231,7 @@ export function MailReader() {
           ) : null}
 
           <QuickReply
-            key={selectedEmail.id}
+            key={`reply-${selectedEmail.id}`}
             recipient={senderContact.name || senderContact.email || selectedEmail.sender}
             onSend={(text) => quickReply(text)}
             onExpand={(text) => {
@@ -239,12 +246,88 @@ export function MailReader() {
           </footer>
         </article>
       </aside>
+      {confirmBlock ? (
+        <ConfirmDialog
+          danger
+          icon={<Ban size={20} />}
+          title={`${senderContact.name || senderContact.email || "Absender"} blockieren?`}
+          message={<>Neue Mails von <strong className="text-ink">{senderContact.email || selectedEmail.sender}</strong> landen direkt im Papierkorb, ohne Benachrichtigung. Vorhandene Mails aus dem Posteingang werden ebenfalls verschoben. Aufheben kannst du das unter Einstellungen → Blockiert.</>}
+          confirmLabel="Blockieren"
+          onCancel={() => setConfirmBlock(false)}
+          onConfirm={() => {
+            setConfirmBlock(false);
+            void blockSender(selectedEmail.sender);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 function Notice({ children }: { children: ReactNode }) {
   return <div className="mb-5 rounded-[10px] bg-surface px-4 py-3 text-[13px] font-medium text-label-2">{children}</div>;
+}
+
+/** Hinweis wie bei Gmail/Apple Mail: „Newsletter abbestellen“, wenn der Absender eine Abmeldung anbietet. */
+function UnsubscribeBar({ email, senderName, onUnsubscribe, onBlock }: {
+  email: Email;
+  senderName: string;
+  onUnsubscribe: (email: Email) => Promise<boolean>;
+  onBlock: (sender: string) => Promise<void>;
+}) {
+  const [info, setInfo] = useState<UnsubscribeInfo>();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void mailService.getUnsubscribeInfo(email.id).then((next) => {
+      if (active) setInfo(next);
+    }).catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [email.id]);
+
+  if (!info || info.method === "none") return null;
+  const done = Boolean(email.unsubscribedAt || info.unsubscribedAt);
+
+  return (
+    <>
+      <div className="mb-6 flex items-center gap-3 rounded-[10px] bg-surface px-4 py-2.5 text-[13px] font-medium text-label-2">
+        <MailX size={15} className="shrink-0" />
+        <span className="min-w-0 flex-1">
+          {done
+            ? `Von diesem Newsletter abgemeldet am ${new Date(email.unsubscribedAt || info.unsubscribedAt || "").toLocaleDateString("de-DE", { day: "numeric", month: "long" })}.`
+            : `Diese Mail ist Teil eines Newsletters${info.host ? ` von ${info.host}` : ""}.`}
+        </span>
+        {done ? null : (
+          <button disabled={busy} className="pressable shrink-0 rounded-[8px] bg-ink px-3 py-1.5 text-[13px] font-bold text-canvas hover:opacity-90 disabled:opacity-50" onClick={() => setConfirming(true)}>
+            {busy ? "Melde ab …" : "Abmelden"}
+          </button>
+        )}
+      </div>
+      {confirming ? (
+        <ConfirmDialog
+          icon={<MailX size={20} />}
+          title="Newsletter abbestellen?"
+          message={info.method === "website"
+            ? <>{senderName || "Der Absender"} bietet die Abmeldung nur auf der eigenen Website an. LunaMail öffnet die Seite{info.host ? <> von <strong className="text-ink">{info.host}</strong></> : null} im Browser.</>
+            : <>LunaMail meldet dich direkt bei {senderName || "dem Absender"} ab{info.method === "mailto" ? " (per Abmelde-Mail)" : ""}. Du musst dafür keine Website öffnen.</>}
+          confirmLabel={info.method === "website" ? "Seite öffnen" : "Abmelden"}
+          option={{ label: "Absender zusätzlich blockieren" }}
+          onCancel={() => setConfirming(false)}
+          onConfirm={(alsoBlock) => {
+            setConfirming(false);
+            setBusy(true);
+            void onUnsubscribe(email)
+              .then(() => (alsoBlock ? onBlock(email.sender) : undefined))
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 /** Schnellantwort direkt unter der Mail; Strg+Enter sendet, mit „Senden rückgängig“. */

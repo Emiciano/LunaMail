@@ -23,7 +23,7 @@ export function SnoozeMenu({ onSnooze, align = "right", trigger, className }: {
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         setOpen(false);
       }
     }
