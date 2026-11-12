@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
-import { Archive, Check, Download, Forward, Paperclip, Reply, ReplyAll, Trash2, UserPlus, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlarmClock, Archive, Check, ChevronDown, ChevronUp, Download, Forward, Mail, Maximize2, Paperclip, Reply, ReplyAll, Send, Star, Trash2, UserPlus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { desktopDialog, openExternalLink } from "../services/desktop";
 import { cn } from "../lib/cn";
@@ -8,13 +8,26 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import { useShallow } from "zustand/react/shallow";
 import { SenderAvatar } from "./SenderAvatar";
+import { SnoozeMenu } from "./SnoozeMenu";
 
 const MAX_HTML_LENGTH = 150_000;
 const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 
 export function MailReader() {
-  const { selectedEmail: currentEmail, settings, contacts, closeEmail, replyToSelected, forwardSelected, archiveSelected, deleteSelected, saveContact, updateSettings } = useMailStore(useShallow((state) => ({
+  const {
+    selectedEmail: currentEmail, emails, settings, contacts, closeEmail, replyToSelected, replyAllToSelected, forwardSelected, archiveSelected, deleteSelected,
+    saveContact, updateSettings, toggleFavoriteSelected, markUnreadSelected, snoozeSelected, unsnoozeEmail, openAdjacentEmail, quickReply, openComposer
+  } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
+    emails: state.emails,
+    replyAllToSelected: state.replyAllToSelected,
+    toggleFavoriteSelected: state.toggleFavoriteSelected,
+    markUnreadSelected: state.markUnreadSelected,
+    snoozeSelected: state.snoozeSelected,
+    unsnoozeEmail: state.unsnoozeEmail,
+    openAdjacentEmail: state.openAdjacentEmail,
+    quickReply: state.quickReply,
+    openComposer: state.openComposer,
     settings: state.settings,
     contacts: state.contacts,
     closeEmail: state.closeEmail,
@@ -47,6 +60,8 @@ export function MailReader() {
   }, [selectedEmail?.bodyHtml, imagesAllowed]);
 
 
+  const position = selectedEmail ? emails.findIndex((email) => email.id === selectedEmail.id) : -1;
+
   if (!selectedEmail) return null;
 
   const bodyFallback = selectedEmail.bodyText || selectedEmail.preview || "";
@@ -72,22 +87,40 @@ export function MailReader() {
         role="dialog"
         aria-modal="true"
         aria-label={selectedEmail.subject || "E-Mail"}
-        className="mail-reader-panel mail-scroll max-h-full w-[min(1600px,max(1120px,82vw),100%)] overflow-y-auto rounded-3xl border border-line bg-canvas shadow-float"
+        className="mail-reader-panel mail-scroll max-h-full w-[min(1600px,max(1120px,82vw),100%)] overflow-y-auto rounded-[14px] border border-line bg-canvas shadow-float"
         onClick={(event) => event.stopPropagation()}
       >
-        <article className="w-full px-6 pb-10 pt-4 lg:px-10">
+        <div className="reader-toolbar sticky top-0 z-10 flex h-14 items-center gap-1 border-b border-line px-4 lg:px-6">
+          <div className="flex items-center gap-0.5">
+            <button className="reader-icon-button" title="Vorherige Mail (K)" disabled={position <= 0} onClick={() => void openAdjacentEmail(-1)}><ChevronUp size={18} /></button>
+            <button className="reader-icon-button" title="Nächste Mail (J)" disabled={position < 0 || position >= emails.length - 1} onClick={() => void openAdjacentEmail(1)}><ChevronDown size={18} /></button>
+            {position >= 0 ? <span className="ml-1.5 text-[12px] font-medium tabular-nums text-label-3">{position + 1} von {emails.length}</span> : null}
+          </div>
+          <div className="ml-auto flex items-center gap-0.5">
+            <button className="reader-icon-button" title="Antworten (R)" onClick={replyToSelected}><Reply size={18} /></button>
+            <button className="reader-icon-button" title="Allen antworten (A)" onClick={replyAllToSelected}><ReplyAll size={18} /></button>
+            <button className="reader-icon-button" title="Weiterleiten (F)" onClick={forwardSelected}><Forward size={18} /></button>
+            <span className="mx-1.5 h-5 w-px bg-line" />
+            <SnoozeMenu onSnooze={(until) => void snoozeSelected(until)} />
+            <button className={cn("reader-icon-button", selectedEmail.isFavorite && "text-flag hover:text-flag")} title={selectedEmail.isFavorite ? "Favorit entfernen (S)" : "Favorit (S)"} onClick={() => void toggleFavoriteSelected()}>
+              <Star size={18} className={selectedEmail.isFavorite ? "fill-current" : undefined} />
+            </button>
+            <button className="reader-icon-button" title="Als ungelesen markieren (U)" onClick={() => void markUnreadSelected()}><Mail size={18} /></button>
+            <button className="reader-icon-button" title="Archivieren (E)" onClick={() => void archiveSelected()}><Archive size={18} /></button>
+            <button className="reader-icon-button reader-icon-danger" title="Löschen (Entf)" onClick={() => void deleteSelected()}><Trash2 size={18} /></button>
+            <span className="mx-1.5 h-5 w-px bg-line" />
+            <button className="reader-icon-button" title="Schließen (Esc)" onClick={closeEmail}><X size={19} /></button>
+          </div>
+        </div>
+        <article className="w-full px-6 pb-8 pt-7 lg:px-10">
           <header className="mb-6 border-b border-line pb-5">
-            <div className="mb-5 flex h-10 items-center justify-end">
-              <div className="flex items-center gap-1">
-                <button className="reader-icon-button" title="Antworten" onClick={replyToSelected}><Reply size={18} /></button>
-                <button className="reader-icon-button" title="Allen antworten" onClick={replyToSelected}><ReplyAll size={18} /></button>
-                <button className="reader-icon-button" title="Weiterleiten" onClick={forwardSelected}><Forward size={18} /></button>
-                <span className="mx-1 h-5 w-px bg-line" />
-                <button className="reader-icon-button" title="Archivieren" onClick={() => void archiveSelected()}><Archive size={18} /></button>
-                <button className="reader-icon-button reader-icon-danger" title="Löschen" onClick={() => void deleteSelected()}><Trash2 size={18} /></button>
-                <button className="reader-icon-button" title="Schließen" onClick={closeEmail}><X size={19} /></button>
+            {selectedEmail.snoozedUntil && new Date(selectedEmail.snoozedUntil).getTime() > Date.now() ? (
+              <div className="mb-5 flex items-center gap-3 rounded-[10px] bg-surface px-4 py-2.5 text-[13px] font-medium text-label-2">
+                <AlarmClock size={15} className="shrink-0" />
+                <span className="min-w-0 flex-1">Erinnerung am {new Date(selectedEmail.snoozedUntil).toLocaleString("de-DE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</span>
+                <button className="pressable rounded-[8px] px-2.5 py-1 font-semibold text-ink hover:bg-surface-2" onClick={() => { void unsnoozeEmail(selectedEmail.id); closeEmail(); }}>Jetzt zurückholen</button>
               </div>
-            </div>
+            ) : null}
             <h2 className="max-w-[820px] font-display text-[26px] font-extrabold leading-[31px] sm:text-[28px]">{selectedEmail.subject || "(Kein Betreff)"}</h2>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
               <div className="flex min-w-0 items-center gap-3">
@@ -109,7 +142,7 @@ export function MailReader() {
                   <div className="truncate text-[13px] text-label-2">{senderContact.email ? `${senderContact.email} · ` : ""}an {selectedEmail.recipients || "mich"}</div>
                 </div>
               </div>
-              <time className="shrink-0 pt-1 text-[13px] font-medium text-label-2">
+              <time className="shrink-0 pt-1 text-[13px] font-medium tabular-nums text-label-2">
                 {new Date(selectedEmail.receivedAt).toLocaleString("de-DE", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
               </time>
             </div>
@@ -130,21 +163,21 @@ export function MailReader() {
               <Notice>Sehr große HTML-Mail wird aus Performance-Gründen als Text angezeigt.</Notice>
             ) : null}
             {htmlView?.blockedRemoteImages ? (
-              <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-[13px] font-medium text-label-2">
+              <div className="mb-5 flex flex-wrap items-center gap-3 rounded-[10px] bg-surface px-4 py-3 text-[13px] font-medium text-label-2">
                 <span className="min-w-0 flex-1">
                   {htmlView.blockedRemoteImages === 1 ? "1 externes Bild wurde" : `${htmlView.blockedRemoteImages} externe Bilder wurden`} zum Schutz vor Tracking blockiert.
                 </span>
-                <button className="pressable rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-bold text-canvas hover:opacity-90" onClick={() => setImagesAllowedFor(selectedEmail.id)}>
+                <button className="pressable rounded-[8px] bg-ink px-3.5 py-1.5 text-[13px] font-bold text-canvas hover:opacity-90" onClick={() => setImagesAllowedFor(selectedEmail.id)}>
                   Bilder laden
                 </button>
-                <button className="pressable rounded-full px-3 py-1.5 text-[13px] font-semibold text-ink hover:bg-surface-2" onClick={() => void updateSettings({ ...settings, externalImages: "always" })}>
+                <button className="pressable rounded-[8px] px-3 py-1.5 text-[13px] font-semibold text-ink hover:bg-surface-2" onClick={() => void updateSettings({ ...settings, externalImages: "always" })}>
                   Immer laden
                 </button>
               </div>
             ) : null}
             {htmlView?.document ? (
               <iframe
-                className="h-[max(420px,calc(100vh-330px))] w-full rounded-2xl border border-line bg-white"
+                className="h-[max(420px,calc(100vh-330px))] w-full rounded-[10px] border border-line bg-white"
                 sandbox="allow-popups allow-popups-to-escape-sandbox"
                 srcDoc={htmlView.document}
                 title={`E-Mail: ${selectedEmail.subject || "Ohne Betreff"}`}
@@ -168,16 +201,16 @@ export function MailReader() {
 
           {selectedEmail.attachments.length > 0 ? (
             <section className="mt-8 border-t border-line pt-5">
-              <div className="mb-3 text-[13px] font-bold uppercase tracking-[0.04em] text-label-3">{selectedEmail.attachments.length === 1 ? "1 Anhang" : `${selectedEmail.attachments.length} Anhänge`}</div>
+              <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.06em] text-label-3">{selectedEmail.attachments.length === 1 ? "1 Anhang" : `${selectedEmail.attachments.length} Anhänge`}</div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {selectedEmail.attachments.map((attachment) => (
                   <button
                     key={attachment.id}
-                    className="tr-card tr-card-hover flex h-[62px] items-center gap-3 rounded-2xl px-3 text-left"
+                    className="tr-card tr-card-hover flex h-[60px] items-center gap-3 rounded-[10px] px-3 text-left"
                     onClick={() => void downloadAttachment(attachment.id, attachment.fileName)}
                   >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-canvas text-label-2">
-                      <Paperclip size={15} />
+                    <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-[8px] bg-canvas text-label-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wide text-ink/70">{fileExtension(attachment.fileName) || <Paperclip size={15} />}</span>
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-semibold">{attachment.fileName}</span>
@@ -190,9 +223,18 @@ export function MailReader() {
             </section>
           ) : null}
 
-          <footer className="mt-8 flex flex-wrap gap-2">
-            <ActionButton icon={<Reply size={15} />} label="Antworten" onClick={replyToSelected} />
-            <ActionButton icon={<ReplyAll size={15} />} label="Allen antworten" onClick={replyToSelected} />
+          <QuickReply
+            key={selectedEmail.id}
+            recipient={senderContact.name || senderContact.email || selectedEmail.sender}
+            onSend={(text) => quickReply(text)}
+            onExpand={(text) => {
+              replyToSelected();
+              const composer = useMailStore.getState().composer;
+              if (composer && text.trim()) openComposer({ ...composer, body: `${text.trim()}${composer.body ?? ""}` });
+            }}
+          />
+          <footer className="mt-3 flex flex-wrap gap-2">
+            <ActionButton icon={<ReplyAll size={15} />} label="Allen antworten" onClick={replyAllToSelected} />
             <ActionButton icon={<Forward size={15} />} label="Weiterleiten" onClick={forwardSelected} />
           </footer>
         </article>
@@ -202,12 +244,74 @@ export function MailReader() {
 }
 
 function Notice({ children }: { children: ReactNode }) {
-  return <div className="mb-5 rounded-2xl bg-surface px-4 py-3 text-[13px] font-medium text-label-2">{children}</div>;
+  return <div className="mb-5 rounded-[10px] bg-surface px-4 py-3 text-[13px] font-medium text-label-2">{children}</div>;
+}
+
+/** Schnellantwort direkt unter der Mail; Strg+Enter sendet, mit „Senden rückgängig“. */
+function QuickReply({ recipient, onSend, onExpand }: { recipient: string; onSend: (text: string) => Promise<void>; onExpand: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [sending, setSending] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const expanded = focused || text.length > 0;
+
+  async function send() {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    try {
+      await onSend(text);
+      setText("");
+      ref.current?.blur();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className={cn("mt-8 rounded-[12px] border bg-canvas transition-[border-color,box-shadow]", expanded ? "border-ink/20 shadow-soft" : "border-line")}>
+      <textarea
+        ref={ref}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void send();
+          } else if (event.key === "Escape") {
+            event.currentTarget.blur();
+          }
+        }}
+        rows={expanded ? 4 : 1}
+        placeholder={`Antwort an ${recipient} …`}
+        className="block w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-6 text-ink outline-none focus-visible:outline-none placeholder:text-label-3"
+      />
+      {expanded ? (
+        <div className="flex items-center justify-between gap-3 px-3 pb-3">
+          <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2.5 text-[13px] font-semibold text-label-2 hover:bg-surface hover:text-ink" onMouseDown={(event) => event.preventDefault()} onClick={() => onExpand(text)}>
+            <Maximize2 size={14} /> Im Editor öffnen
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden text-[12px] text-label-3 sm:inline">Strg + Enter</span>
+            <button type="button" disabled={!text.trim() || sending} className="accent-primary pressable inline-flex h-9 items-center gap-2 rounded-[10px] px-4 text-[14px] font-bold disabled:opacity-30" onMouseDown={(event) => event.preventDefault()} onClick={() => void send()}>
+              <Send size={15} /> Senden
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function fileExtension(name: string) {
+  const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
+  return ext.length > 0 && ext.length <= 4 ? ext : "";
 }
 
 function ActionButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
-    <button className="inline-flex h-10 items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-semibold transition hover:bg-surface-2" onClick={onClick}>
+    <button className="pressable inline-flex h-9 items-center gap-2 rounded-[10px] bg-surface px-3.5 text-[13px] font-semibold transition hover:bg-surface-2" onClick={onClick}>
       {icon}
       {label}
     </button>

@@ -36,6 +36,8 @@ export type AccountInput = Omit<Account, "id" | "isDefault"> & {
   useTls?: boolean;
 };
 
+export type BackendView = "favorites" | "important" | "unified_inbox" | "snoozed";
+
 export type MailQueryFilters = {
   unreadOnly?: boolean;
   favoriteOnly?: boolean;
@@ -66,7 +68,10 @@ let browserSettings: Settings = {
   notificationPreview: false,
   runInBackground: true,
   accountNotifications: {},
-  accountAppearance: {}
+  accountAppearance: {},
+  signature: "",
+  signatureAuto: false,
+  undoSendSeconds: 5
 };
 
 const browserService = {
@@ -78,7 +83,7 @@ const browserService = {
     throw new Error("Google-Konten koennen nur in der Electron-Desktop-App verbunden werden.");
   },
   getFolders: async (_accountId?: number): Promise<Folder[]> => [],
-  getEmails: async (_folderId?: number, _query?: string, _view?: "favorites" | "important" | "unified_inbox", _accountId?: number, _filters?: MailQueryFilters): Promise<Email[]> => [],
+  getEmails: async (_folderId?: number, _query?: string, _view?: BackendView, _accountId?: number, _filters?: MailQueryFilters): Promise<Email[]> => [],
   getEmail: async (_id: number): Promise<Email> => {
     throw new Error("Keine E-Mail geladen.");
   },
@@ -96,6 +101,8 @@ const browserService = {
   deleteEmailsPermanently: async (_ids: number[]) => 0,
   toggleFavorite: async (_id: number) => false,
   toggleImportant: async (_id: number) => false,
+  snoozeEmail: async (_id: number, until: string) => until,
+  unsnoozeEmail: async (_id: number) => undefined,
   getMailCounts: async (_accountId?: number): Promise<MailCounts> => ({ favorites: 0, important: 0, unread: 0, withAttachments: 0, today: 0, thisWeek: 0, perAccount: [] }),
   downloadAttachment: async (_attachmentId: number, _destinationPath: string) => undefined,
   getFileSize: async (_path: string) => 0,
@@ -184,7 +191,7 @@ const electronService = {
   saveAccount: (account: AccountInput) => invokeDesktop<Account>("save_account", { account }),
   connectGoogleAccount: (clientId: string) => invokeDesktop<Account>("connect_google_account", { clientId }),
   getFolders: (accountId?: number) => invokeDesktop<Folder[]>("get_folders", { accountId }),
-  getEmails: (folderId?: number, query?: string, view?: "favorites" | "important" | "unified_inbox", accountId?: number, filters?: MailQueryFilters) => invokeDesktop<Email[]>("get_emails", { accountId, folderId, query, view, filters }),
+  getEmails: (folderId?: number, query?: string, view?: BackendView, accountId?: number, filters?: MailQueryFilters) => invokeDesktop<Email[]>("get_emails", { accountId, folderId, query, view, filters }),
   getEmail: (id: number) => invokeDesktop<Email>("get_email", { id }),
   hydrateEmail: (id: number) => invokeDesktop<Email>("hydrate_email", { id }),
   syncInbox: (accountId: number) => invokeDesktop<SyncReport>("sync_inbox", { accountId }),
@@ -198,6 +205,8 @@ const electronService = {
   moveEmail: (id: number, targetFolderId: number) => invokeDesktop<void>("move_email", { id, targetFolderId }),
   toggleFavorite: (id: number) => invokeDesktop<boolean>("toggle_favorite", { id }),
   toggleImportant: (id: number) => invokeDesktop<boolean>("toggle_important", { id }),
+  snoozeEmail: (id: number, until: string) => invokeDesktop<string>("snooze_email", { id, until }),
+  unsnoozeEmail: (id: number) => invokeDesktop<void>("unsnooze_email", { id }),
   getMailCounts: (accountId?: number) => invokeDesktop<MailCounts>("get_mail_counts", { accountId }),
   downloadAttachment: (attachmentId: number, destinationPath: string) => invokeDesktop<void>("download_attachment", { attachmentId, destinationPath }),
   getFileSize: (path: string) => invokeDesktop<number>("get_file_size", { path }),

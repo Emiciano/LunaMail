@@ -1,20 +1,21 @@
-import { Paperclip, Send, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FileText, Paperclip, PenLine, Send, Trash2, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { desktopDialog } from "../services/desktop";
 import { useShallow } from "zustand/react/shallow";
+import { cn } from "../lib/cn";
 import { mailService } from "../services/mailService";
-import { useMailStore } from "../stores/mailStore";
+import { signatureBlock, useMailStore } from "../stores/mailStore";
 import type { Attachment, Draft } from "../types";
 
 const WARN_ATTACHMENT_BYTES = 20 * 1024 * 1024;
-const DEFAULT_SIGNATURE = "\n\n--\nGesendet mit LunaMail";
 
 export function Composer() {
-  const { accounts, contacts, composer, drafts, editDraft, closeComposer, sendComposer, saveComposerDraft, deleteComposerDraft, loadDrafts, loadContacts } = useMailStore(useShallow((state) => ({
+  const { accounts, contacts, composer, drafts, settings, editDraft, closeComposer, sendComposer, saveComposerDraft, deleteComposerDraft, loadDrafts, loadContacts } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     contacts: state.contacts,
     composer: state.composer,
     drafts: state.drafts,
+    settings: state.settings,
     editDraft: state.editDraft,
     closeComposer: state.closeComposer,
     sendComposer: state.sendComposer,
@@ -23,18 +24,23 @@ export function Composer() {
     loadDrafts: state.loadDrafts,
     loadContacts: state.loadContacts
   })));
+  const signature = signatureBlock(settings);
+  const initialBody = (draft?: Partial<Draft>) => draft?.body ?? (settings.signatureAuto ? signature : "");
   const [draftId, setDraftId] = useState<number | undefined>(composer?.id);
   const [accountId, setAccountId] = useState<number>(composer?.accountId ?? accounts[0]?.id ?? 0);
   const [to, setTo] = useState(composer?.to ?? "");
   const [cc, setCc] = useState(composer?.cc ?? "");
   const [bcc, setBcc] = useState(composer?.bcc ?? "");
+  const [showCopies, setShowCopies] = useState(Boolean(composer?.cc || composer?.bcc));
   const [subject, setSubject] = useState(composer?.subject ?? "");
-  const [body, setBody] = useState(composer?.body ?? "");
+  const [body, setBody] = useState(initialBody(composer));
   const [attachments, setAttachments] = useState<Attachment[]>(composer?.attachments ?? []);
-  const [signatureEnabled, setSignatureEnabled] = useState(false);
   const [autosaveInfo, setAutosaveInfo] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const toRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setDraftId(composer?.id);
@@ -42,11 +48,22 @@ export function Composer() {
     setTo(composer?.to ?? "");
     setCc(composer?.cc ?? "");
     setBcc(composer?.bcc ?? "");
+    setShowCopies(Boolean(composer?.cc || composer?.bcc));
     setSubject(composer?.subject ?? "");
-    setBody(composer?.body ?? "");
+    setBody(initialBody(composer));
     setAttachments(composer?.attachments ?? []);
     setAutosaveInfo("");
-  }, [accounts, composer]);
+    // Antworten starten im Text, neue Mails im Empfängerfeld.
+    window.setTimeout(() => {
+      if (composer?.to) {
+        bodyRef.current?.focus();
+        bodyRef.current?.setSelectionRange(0, 0);
+      } else {
+        toRef.current?.focus();
+      }
+    }, 30);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composer]);
 
   const totalAttachmentBytes = useMemo(
     () => attachments.reduce((sum, attachment) => sum + (attachment.size || 0), 0),
@@ -60,29 +77,23 @@ export function Composer() {
     void loadContacts();
   }, [accountId, loadContacts, loadDrafts]);
 
+  const threading = { inReplyTo: composer?.inReplyTo, references: composer?.references };
+
   useEffect(() => {
     if (!accountId) return;
-    const hasContent = [to, cc, bcc, subject, body].some((value) => value.trim().length > 0) || attachments.length > 0;
+    const hasContent = [to, cc, bcc, subject].some((value) => value.trim().length > 0) || (body.trim().length > 0 && body !== signature) || attachments.length > 0;
     if (!hasContent) return;
     const timer = window.setTimeout(() => {
-      const payload: Draft = {
-        id: draftId,
-        accountId,
-        to,
-        cc,
-        bcc,
-        subject,
-        body,
-        attachments
-      };
+      const payload: Draft = { id: draftId, accountId, to, cc, bcc, subject, body, attachments, ...threading };
       void saveComposerDraft(payload)
         .then((id) => {
           setDraftId(id);
-          setAutosaveInfo("Entwurf gespeichert");
+          setAutosaveInfo(`Entwurf gespeichert · ${new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`);
         })
         .catch((saveError) => setError(String(saveError)));
     }, 1200);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, attachments, bcc, body, cc, draftId, saveComposerDraft, subject, to]);
 
   async function attachFile() {
@@ -108,136 +119,188 @@ export function Composer() {
     setAttachments((current) => [...current, ...nextFiles]);
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const hasLargeAttachment = totalAttachmentBytes >= WARN_ATTACHMENT_BYTES;
-    if (hasLargeAttachment) {
+  function insertSignature() {
+    if (!signature || body.includes(signature.trim())) return;
+    const quoteStart = body.search(/\n\nAm .+ schrieb .+:\n>|\n-{5,} Weitergeleitete Nachricht/);
+    setBody(quoteStart >= 0 ? `${body.slice(0, quoteStart)}${signature}${body.slice(quoteStart)}` : `${body.replace(/\s+$/, "")}${signature}`);
+  }
+
+  async function onSubmit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (sending) return;
+    if (!to.trim()) {
+      setError("Bitte gib mindestens einen Empfänger an.");
+      toRef.current?.focus();
+      return;
+    }
+    if (totalAttachmentBytes >= WARN_ATTACHMENT_BYTES) {
       const proceed = window.confirm("Die Anhänge sind größer als 20 MB. Trotzdem senden?");
       if (!proceed) return;
     }
-    const payload: Draft = {
-      id: draftId,
-      accountId,
-      to,
-      cc,
-      bcc,
-      subject,
-      body: signatureEnabled && !body.includes(DEFAULT_SIGNATURE) ? `${body}${DEFAULT_SIGNATURE}` : body,
-      attachments
-    };
+    const payload: Draft = { id: draftId, accountId, to, cc, bcc, subject, body, attachments, ...threading };
     setSending(true);
     setError("");
     try {
       await sendComposer(payload);
     } catch (sendError) {
-      setError(String(sendError));
+      setError(sendError instanceof Error ? sendError.message : String(sendError));
     } finally {
       setSending(false);
     }
   }
 
+  const title = subject.trim() || (threading.inReplyTo ? "Antwort" : "Neue Nachricht");
+
   return (
-    <div className="overlay-enter fixed inset-0 z-[2147483647] flex items-center justify-center bg-scrim/40 p-3 backdrop-blur-sm sm:p-6">
-      <form onSubmit={onSubmit} className="dialog-enter tr-panel flex h-[min(760px,calc(100vh-3rem))] w-[min(940px,calc(100vw-3rem))] overflow-hidden rounded-[20px] shadow-[0_32px_100px_rgba(0,0,0,0.65)]">
-        <aside className="hidden w-60 border-r border-ink/[0.07] bg-canvas p-4 md:block">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">Entwürfe</div>
-          <div className="mail-scroll max-h-[640px] space-y-2 overflow-y-auto">
+    <div
+      className="overlay-enter fixed inset-0 z-[2147483647] flex items-center justify-center bg-scrim/40 p-3 backdrop-blur-sm sm:p-6"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeComposer();
+        }
+      }}
+    >
+      <form
+        ref={formRef}
+        onSubmit={(event) => void onSubmit(event)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void onSubmit();
+          }
+        }}
+        className="dialog-enter flex h-[min(780px,calc(100vh-3rem))] w-[min(1000px,calc(100vw-3rem))] overflow-hidden rounded-[14px] border border-line bg-canvas shadow-[0_32px_90px_rgb(0_0_0/0.35)]"
+      >
+        <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-sidebar md:flex">
+          <div className="flex h-16 items-center px-4 text-[11px] font-bold uppercase tracking-[0.07em] text-label-3">Entwürfe</div>
+          <div className="mail-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
             {drafts.length === 0 ? (
-              <div className="rounded-lg bg-ink/[0.04] px-3 py-2 text-xs text-ink/45">
+              <div className="flex flex-col items-center px-3 py-10 text-center text-[13px] text-label-2">
+                <FileText size={18} className="mb-2 text-label-3" />
                 Keine Entwürfe
               </div>
             ) : null}
             {drafts.map((draft) => (
-              <div key={draft.id} className="rounded-xl border border-ink/[0.06] bg-ink/[0.025] px-3 py-2.5 transition hover:bg-ink/[0.05]">
-                <button type="button" className="w-full text-left" onClick={() => editDraft(draft)}>
-                  <div className="truncate text-sm font-medium">{draft.subject || "(Kein Betreff)"}</div>
-                  <div className="truncate text-xs text-ink/45">{draft.to || "Unbekannter Empfänger"}</div>
+              <div
+                key={draft.id}
+                className={cn("group relative rounded-[10px] px-3 py-2.5 transition-colors", draft.id === draftId ? "bg-canvas shadow-[0_0_0_1px_rgb(var(--line))]" : "hover:bg-ink/[0.04]")}
+              >
+                <button type="button" className="w-full pr-6 text-left" onClick={() => editDraft(draft)}>
+                  <div className="truncate text-[13px] font-semibold">{draft.subject || "(Kein Betreff)"}</div>
+                  <div className="truncate text-[12px] text-label-2">{draft.to || "Kein Empfänger"}</div>
+                  {draft.updatedAt ? <div className="mt-0.5 text-[11px] tabular-nums text-label-3">{formatDraftTime(draft.updatedAt)}</div> : null}
                 </button>
-                <div className="mt-2 flex justify-end">
-                  <button type="button" className="text-xs text-ink/45 hover:text-ink" onClick={() => draft.id && void deleteComposerDraft(draft.id)}>
-                    Löschen
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  title="Entwurf löschen"
+                  aria-label="Entwurf löschen"
+                  className="absolute right-1.5 top-2 hidden rounded-[6px] p-1 text-label-3 hover:bg-danger/10 hover:text-danger group-hover:block"
+                  onClick={() => {
+                    if (!draft.id) return;
+                    void deleteComposerDraft(draft.id);
+                    if (draft.id === draftId) closeComposer();
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             ))}
           </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-between border-b border-ink/[0.07] px-5 sm:px-6">
-            <div>
-              <h2 className="text-sm font-semibold">Neue Nachricht</h2>
-              <p className="mt-0.5 text-[11px] text-ink/38">{autosaveInfo || "Wird automatisch als Entwurf gespeichert"}</p>
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line px-5 sm:px-6">
+            <div className="min-w-0">
+              <h2 className="truncate font-display text-[18px] font-extrabold">{title}</h2>
+              <p className="text-[12px] text-label-3">{autosaveInfo || "Wird automatisch als Entwurf gespeichert"}</p>
             </div>
-            <button type="button" className="rounded-lg p-2 text-ink/55 hover:bg-ink/[0.06] hover:text-ink" onClick={closeComposer} title="Schließen">
+            <button type="button" className="reader-icon-button" onClick={closeComposer} title="Schließen (Esc)">
               <X size={18} />
             </button>
           </header>
-          <div className="grid gap-0 border-b border-ink/[0.07] px-5 py-2 text-sm sm:px-6">
-            <label className="grid h-9 grid-cols-[70px_1fr] items-center">
-              <span className="text-ink/45">Von</span>
-              <select value={accountId} onChange={(event) => setAccountId(Number(event.target.value))} className="h-full bg-transparent text-ink outline-none">
+          <div className="shrink-0 border-b border-line px-5 text-[14px] sm:px-6">
+            <label className="flex h-11 items-center gap-3 border-b border-line">
+              <span className="w-16 shrink-0 text-label-2">Von</span>
+              <select value={accountId} onChange={(event) => setAccountId(Number(event.target.value))} className="h-full min-w-0 flex-1 bg-transparent font-medium text-ink outline-none focus-visible:outline-none">
                 {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>{account.email}</option>
+                  <option key={account.id} value={account.id}>{account.displayName && account.displayName !== account.email ? `${account.displayName} <${account.email}>` : account.email}</option>
                 ))}
               </select>
             </label>
-            <LineInput label="An" value={to} onChange={setTo} required />
-            <LineInput label="CC" value={cc} onChange={setCc} />
-            <LineInput label="BCC" value={bcc} onChange={setBcc} />
-            <LineInput label="Betreff" value={subject} onChange={setSubject} />
+            <LineInput label="An" value={to} onChange={setTo} inputRef={toRef} trailing={showCopies ? undefined : (
+              <button type="button" className="shrink-0 rounded-[6px] px-2 py-1 text-[12px] font-semibold text-label-2 hover:bg-surface hover:text-ink" onClick={() => setShowCopies(true)}>
+                Cc/Bcc
+              </button>
+            )} />
+            {showCopies ? (
+              <>
+                <LineInput label="Cc" value={cc} onChange={setCc} />
+                <LineInput label="Bcc" value={bcc} onChange={setBcc} />
+              </>
+            ) : null}
+            <label className="flex h-12 items-center gap-3">
+              <span className="w-16 shrink-0 text-label-2">Betreff</span>
+              <input value={subject} onChange={(event) => setSubject(event.target.value)} className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-ink outline-none focus-visible:outline-none" />
+            </label>
           </div>
           <datalist id="contact-suggestions">
             {contacts.map((contact) => (
-              <option key={contact.id} value={contact.email}>
-                {contact.name || contact.email}
+              <option key={contact.id} value={contact.name ? `${contact.name} <${contact.email}>` : contact.email}>
+                {contact.email}
               </option>
             ))}
           </datalist>
           <textarea
+            ref={bodyRef}
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Schreibe deine Nachricht …"
-            className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-5 leading-7 text-ink outline-none placeholder:text-ink/30 sm:px-6"
+            className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-5 text-[15px] leading-7 text-ink outline-none focus-visible:outline-none placeholder:text-label-3 sm:px-6"
           />
-          {error ? <div className="mx-5 mb-2 rounded-lg border border-ink/[0.08] bg-surface px-4 py-3 text-sm text-ink">{error}</div> : null}
-          {totalAttachmentBytes >= WARN_ATTACHMENT_BYTES ? (
-            <div className="mx-5 mb-2 rounded-lg border border-ink/[0.08] bg-surface px-4 py-2 text-xs text-ink/65">
-              Große Anhänge erkannt ({formatBytes(totalAttachmentBytes)}).
-            </div>
-          ) : null}
+          {error ? <div className="mx-5 mb-3 rounded-[10px] bg-danger/10 px-4 py-2.5 text-[13px] font-medium text-danger sm:mx-6">{error}</div> : null}
           {attachments.length > 0 ? (
-            <div className="grid gap-2 border-t border-ink/[0.06] px-5 py-3 text-sm">
+            <div className="flex flex-wrap gap-2 px-5 pb-3 sm:px-6">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="truncate">{attachment.fileName}</div>
-                    <div className="text-xs text-ink/45">{attachment.contentType} · {formatBytes(attachment.size || 0)}</div>
+                <div key={attachment.id} className="flex max-w-[260px] items-center gap-2.5 rounded-[10px] bg-surface py-1.5 pl-2 pr-1.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-canvas text-[10px] font-extrabold uppercase text-ink/70">
+                    {attachment.fileName.split(".").pop()?.slice(0, 4) || <Paperclip size={14} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-semibold">{attachment.fileName}</div>
+                    <div className="text-[11px] text-label-2">{formatBytes(attachment.size || 0)}</div>
                   </div>
-                  <button type="button" onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))}>
-                    <X size={15} />
+                  <button type="button" className="rounded-[6px] p-1 text-label-3 hover:bg-surface-2 hover:text-ink" title="Entfernen" onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))}>
+                    <X size={14} />
                   </button>
                 </div>
               ))}
+              {totalAttachmentBytes >= WARN_ATTACHMENT_BYTES ? (
+                <div className="flex items-center rounded-[10px] px-2 text-[12px] font-medium text-flag">Groß: {formatBytes(totalAttachmentBytes)}</div>
+              ) : null}
             </div>
           ) : null}
-          <footer className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-t border-ink/[0.07] px-5 py-3 sm:px-6">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => void attachFile()} className="inline-flex items-center gap-2 rounded-lg border border-ink/[0.06] px-3 py-2 text-sm text-ink/75 hover:bg-ink/[0.05] hover:text-ink">
-                <Paperclip size={16} />
-                Anhang
+          <footer className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-5">
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => void attachFile()} className="inline-flex h-9 items-center gap-2 rounded-[8px] px-3 text-[13px] font-semibold text-label-2 hover:bg-surface hover:text-ink">
+                <Paperclip size={16} /> Anhang
               </button>
               <button
                 type="button"
-                className="rounded-lg border border-ink/[0.06] px-3 py-2 text-sm text-ink/75 hover:bg-ink/[0.05] hover:text-ink"
-                onClick={() => setSignatureEnabled((value) => !value)}
+                disabled={!signature}
+                title={signature ? "Signatur einfügen" : "Lege deine Signatur unter Einstellungen → Allgemein fest"}
+                className="inline-flex h-9 items-center gap-2 rounded-[8px] px-3 text-[13px] font-semibold text-label-2 hover:bg-surface hover:text-ink disabled:opacity-40"
+                onClick={insertSignature}
               >
-                Signatur {signatureEnabled ? "an" : "aus"}
+                <PenLine size={16} /> Signatur
               </button>
             </div>
-            <button disabled={sending || accounts.length === 0} className="accent-primary inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
-              <Send size={16} />
-              {sending ? "Sendet..." : "Senden"}
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="hidden text-[12px] text-label-3 sm:inline">Strg + Enter</span>
+              <button disabled={sending || accounts.length === 0} className="accent-primary pressable inline-flex h-10 items-center gap-2 rounded-[10px] px-5 text-[14px] font-bold disabled:opacity-50">
+                <Send size={16} />
+                {sending ? "Sendet …" : "Senden"}
+              </button>
+            </div>
           </footer>
         </div>
       </form>
@@ -245,19 +308,29 @@ export function Composer() {
   );
 }
 
-function LineInput(props: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
+function LineInput(props: { label: string; value: string; onChange: (value: string) => void; inputRef?: React.Ref<HTMLInputElement>; trailing?: React.ReactNode }) {
   return (
-    <label className="grid h-9 grid-cols-[70px_1fr] items-center border-t border-ink/[0.06]">
-      <span className="text-ink/45">{props.label}</span>
+    <label className="flex h-11 items-center gap-3 border-b border-line">
+      <span className="w-16 shrink-0 text-label-2">{props.label}</span>
       <input
+        ref={props.inputRef}
         value={props.value}
-        required={props.required}
         onChange={(event) => props.onChange(event.target.value)}
-        list={props.label === "Betreff" ? undefined : "contact-suggestions"}
-        className="h-full bg-transparent text-ink outline-none"
+        list="contact-suggestions"
+        autoComplete="off"
+        className="h-full min-w-0 flex-1 bg-transparent text-ink outline-none focus-visible:outline-none"
       />
+      {props.trailing}
     </label>
   );
+}
+
+function formatDraftTime(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  return date.toDateString() === today.toDateString()
+    ? date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
 }
 
 function formatBytes(value: number): string {

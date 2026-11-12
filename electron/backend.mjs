@@ -24,8 +24,31 @@ const defaultSettings = {
   notificationPreview: false,
   runInBackground: true,
   accountNotifications: {},
-  accountAppearance: {}
+  accountAppearance: {},
+  signature: "",
+  signatureAuto: false,
+  undoSendSeconds: 5
 };
+
+const UNDO_SEND_CHOICES = [0, 5, 10, 20];
+const MAX_SIGNATURE_LENGTH = 2000;
+const MAX_SNOOZE_MS = 366 * 86400000;
+// Message-IDs für In-Reply-To/References: nur sichtbare Zeichen, keine Zeilenumbrüche.
+const MESSAGE_ID_PATTERN = /^<[^<>\s]{1,500}>$/;
+
+function sanitizeMessageIdList(value, max = 20) {
+  if (typeof value !== "string") return undefined;
+  const ids = value.split(/\s+/).filter((item) => MESSAGE_ID_PATTERN.test(item)).slice(-max);
+  return ids.length ? ids.join(" ") : undefined;
+}
+
+function sanitizeSettings(settings) {
+  const next = { ...defaultSettings, ...(settings && typeof settings === "object" ? settings : {}) };
+  next.signature = typeof next.signature === "string" ? next.signature.slice(0, MAX_SIGNATURE_LENGTH) : "";
+  next.signatureAuto = Boolean(next.signatureAuto);
+  next.undoSendSeconds = UNDO_SEND_CHOICES.includes(Number(next.undoSendSeconds)) ? Number(next.undoSendSeconds) : defaultSettings.undoSendSeconds;
+  return next;
+}
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -138,13 +161,16 @@ export class LunaBackend {
     try {
       stateNeedsEncryption = !(await this.localFileIsEncrypted(this.file));
       this.state = { ...emptyState(), ...await this.readLocalJsonFile(this.file) };
-      this.state.settings = { ...defaultSettings, ...this.state.settings };
+      this.state.settings = sanitizeSettings(this.state.settings);
     } catch {}
     const attachmentsMigrated = await this.migrateAttachmentsToDisk();
     const bodiesMigrated = await this.migrateBodiesToDisk();
     const cacheEncrypted = await this.migrateLocalCacheEncryption();
     if (stateNeedsEncryption || attachmentsMigrated || bodiesMigrated || cacheEncrypted) await this.persist();
     if (this.normalizeFolders()) await this.persist();
+    this.snoozeTimer = setInterval(() => void this.wakeSnoozedEmails().catch(() => undefined), 20000);
+    this.snoozeTimer.unref();
+    void this.wakeSnoozedEmails().catch(() => undefined);
     this.autoSyncTimer = setInterval(() => {
       this.lastAutoSync = Date.now();
       for (const account of this.state.accounts) {
@@ -680,14 +706,20 @@ export class LunaBackend {
       .filter((item) => !accountId || item.accountId === Number(accountId))
       .map((folder) => ({
         ...folder,
-        unreadCount: this.state.emails.filter((email) => email.folderId === folder.id && !email.isRead && !email.deletedAt).length
+        unreadCount: this.state.emails.filter((email) => email.folderId === folder.id && !email.isRead && !email.deletedAt && !this.isSnoozed(email)).length
       }));
+  }
+
+  isSnoozed(email, now = Date.now()) {
+    return Boolean(email.snoozedUntil) && new Date(email.snoozedUntil).getTime() > now;
   }
 
   get_emails({ folderId, query = "", view, accountId, filters = {} }) {
     const term = String(query || "").toLowerCase();
+    const now = Date.now();
     return this.state.emails
       .filter((email) => !email.deletedAt)
+      .filter((email) => (view === "snoozed") === this.isSnoozed(email, now))
       .filter((email) => !folderId || email.folderId === Number(folderId))
       .filter((email) => !accountId || email.accountId === Number(accountId))
       .filter((email) => view !== "favorites" || email.isFavorite)
@@ -707,7 +739,9 @@ export class LunaBackend {
       .filter((email) => !filters.dateRange || Date.now() - new Date(email.receivedAt).getTime() < (filters.dateRange === "today" ? 86400000 : 604800000))
       .filter((email) => !filters.before || new Date(email.receivedAt) < new Date(filters.before))
       .filter((email) => !filters.after || new Date(email.receivedAt) > new Date(filters.after))
-      .sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt)))
+      .sort((a, b) => view === "snoozed"
+        ? String(a.snoozedUntil).localeCompare(String(b.snoozedUntil))
+        : String(b.receivedAt).localeCompare(String(a.receivedAt)))
       .slice(0, 200)
       .map((email) => this.emailSummary(email));
   }
@@ -824,10 +858,62 @@ export class LunaBackend {
     return email.isImportant;
   }
 
-  get_mail_counts({ accountId } = {}) {
-    const emails = this.state.emails.filter((email) => !email.deletedAt && (!accountId || email.accountId === Number(accountId)));
+  async snooze_email({ id, until }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+    const time = new Date(String(until)).getTime();
+    if (!Number.isFinite(time) || time <= Date.now() || time - Date.now() > MAX_SNOOZE_MS) {
+      throw new Error("Ungültiger Erinnerungszeitpunkt.");
+    }
+    email.snoozedUntil = new Date(time).toISOString();
+    await this.persist();
+    return email.snoozedUntil;
+  }
+
+  async unsnooze_email({ id }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email || !email.snoozedUntil) return;
+    email.snoozedUntil = undefined;
+    await this.persist();
+  }
+
+  /** Holt fällige „Später“-Mails zurück in den Posteingang, markiert sie ungelesen und meldet sie. */
+  async wakeSnoozedEmails() {
     const now = Date.now();
+    const due = this.state.emails.filter((email) => email.snoozedUntil && new Date(email.snoozedUntil).getTime() <= now);
+    if (!due.length) return;
+    for (const email of due) {
+      email.snoozedUntil = undefined;
+      email.isRead = false;
+    }
+    await this.persist();
+    for (const email of due) {
+      if (email.uid) {
+        void this.withMailbox(email.accountId, email.folderId, (client) =>
+          client.messageFlagsRemove(email.uid, ["\\Seen"], { uid: true })
+        ).catch(() => undefined);
+      }
+    }
+    this.emit("snooze-due", due.map((email) => email.id));
+    if (this.settings.notificationsEnabled && Notification.isSupported()) {
+      for (const email of due.slice(0, 5)) {
+        const notification = new Notification({
+          title: "Erinnerung",
+          body: this.settings.notificationPreview ? email.subject || "(Kein Betreff)" : "Eine zurückgestellte Mail ist wieder da.",
+          silent: !this.settings.notificationSound
+        });
+        notification.on("click", this.showWindow);
+        notification.show();
+      }
+    }
+  }
+
+  get_mail_counts({ accountId } = {}) {
+    const now = Date.now();
+    const scoped = this.state.emails.filter((email) => !email.deletedAt && (!accountId || email.accountId === Number(accountId)));
+    const emails = scoped.filter((email) => !this.isSnoozed(email, now));
     return {
+      snoozed: scoped.length - emails.length,
       favorites: emails.filter((item) => item.isFavorite).length,
       important: emails.filter((item) => item.isImportant).length,
       unread: emails.filter((item) => !item.isRead && this.folder(item.folderId).role === "inbox").length,
@@ -922,6 +1008,8 @@ export class LunaBackend {
         bcc: draft.bcc || undefined,
         subject: draft.subject,
         text: draft.body,
+        inReplyTo: sanitizeMessageIdList(draft.inReplyTo, 1),
+        references: sanitizeMessageIdList(draft.references),
         attachments
     };
     let info;
@@ -1103,7 +1191,7 @@ export class LunaBackend {
   async delete_contact({ id }) { this.state.contacts = this.state.contacts.filter((item) => item.id !== Number(id)); await this.persist(); }
 
   get_settings() { return this.state.settings; }
-  async save_settings({ settings }) { this.state.settings = { ...defaultSettings, ...settings }; await this.persist(); }
+  async save_settings({ settings }) { this.state.settings = sanitizeSettings(settings); await this.persist(); }
 
   export_backup() {
     return {

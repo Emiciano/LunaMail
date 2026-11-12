@@ -37,7 +37,7 @@ export function AppLayout() {
 
       <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-sidebar">
         <MailSidebar />
-        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas lg:my-2.5 lg:mr-2.5 lg:rounded-[22px] lg:border lg:border-line lg:shadow-[0_8px_30px_rgb(0_0_0/0.06)]">
+        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas lg:my-2.5 lg:mr-2.5 lg:rounded-[14px] lg:border lg:border-line lg:shadow-[0_8px_30px_rgb(0_0_0/0.06)]">
           <div className="relative min-w-0 flex-1 overflow-hidden">
             <div key={viewKey} className="view-enter h-full">
               {selectedView === "dashboard" ? <Dashboard /> : selectedView === "health" ? <SystemStatus /> : <MailList />}

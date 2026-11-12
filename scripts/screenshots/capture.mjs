@@ -37,6 +37,37 @@ for (const theme of themes) {
   await page.getByText("Drehplan für Freitag").first().click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(outDir, `${theme}-nachricht.png`) });
+
+  // Schnellantwort und „Später erinnern“ im Lesefenster.
+  await page.getByPlaceholder(/Antwort an/).click();
+  await page.keyboard.type("Danke Lena, passt perfekt. Ich bin um 8 Uhr da.");
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(outDir, `${theme}-schnellantwort.png`) });
+  await page.getByPlaceholder(/Antwort an/).fill("");
+  await page.locator("body").click({ position: { x: 5, y: 5 } }).catch(() => undefined);
+  await page.getByText("Drehplan für Freitag").first().click().catch(() => undefined);
+  await page.waitForTimeout(300);
+  await page.getByRole("button", { name: "Später erinnern" }).last().click();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: path.join(outDir, `${theme}-erinnern-menue.png`) });
+  await page.getByText("Morgen früh").first().click();
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: path.join(outDir, `${theme}-rueckgaengig.png`) });
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: /Erinnerungen/ }).first().click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outDir, `${theme}-erinnerungen.png`) });
+  await page.getByRole("button", { name: /Posteingang/ }).first().click();
+  await page.waitForTimeout(300);
+
+  await page.keyboard.press("Control+k");
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, `${theme}-befehle.png`) });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Shift+?");
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, `${theme}-tastenkuerzel.png`) });
   await page.keyboard.press("Escape");
 
   await page.keyboard.press("n");
@@ -44,6 +75,10 @@ for (const theme of themes) {
   await page.screenshot({ path: path.join(outDir, `${theme}-verfassen.png`) });
   await page.getByTitle("Schließen").last().click().catch(() => undefined);
   await page.getByRole("button", { name: "Einstellungen" }).last().click();
+  await page.getByRole("button", { name: "Allgemein", exact: true }).click();
+  await page.waitForTimeout(300);
+  await page.getByText("Schreiben", { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(outDir, `${theme}-einstellungen-schreiben.png`) });
   await page.getByRole("button", { name: "Design", exact: true }).click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(outDir, `${theme}-einstellungen.png`) });

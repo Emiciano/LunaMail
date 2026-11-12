@@ -1,20 +1,22 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AppLayout } from "./layouts/AppLayout";
+import { ActionIsland } from "./components/ActionIsland";
 import { CommandPalette } from "./components/CommandPalette";
+import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useTheme } from "./hooks/useTheme";
 import { ensureNotificationPermission } from "./services/notifications";
 import { mailService } from "./services/mailService";
 import { isDesktop } from "./services/desktop";
-import { setupMailStoreListeners, useMailStore } from "./stores/mailStore";
+import { setupMailStoreListeners, snoozePresets, useMailStore } from "./stores/mailStore";
 
 const Composer = lazy(() => import("./components/Composer").then((module) => ({ default: module.Composer })));
 const QuickLook = lazy(() => import("./components/QuickLook").then((module) => ({ default: module.QuickLook })));
 const SettingsPanel = lazy(() => import("./components/SettingsPanel").then((module) => ({ default: module.SettingsPanel })));
 
 export default function App() {
-  const { accounts, hasSynced, syncing, sync, realtimeSyncInboxes, closeSettings, closeEmail, composer, selectedEmail, loadInitial, startupStatus, settings, settingsOpen, openComposer, replyToSelected, deleteSelected } = useMailStore(useShallow((state) => ({
+  const { accounts, hasSynced, syncing, sync, realtimeSyncInboxes, closeSettings, closeEmail, composer, selectedEmail, loadInitial, startupStatus, settings, settingsOpen, openComposer, replyToSelected, deleteSelected, replyAllToSelected, forwardSelected, archiveSelected, toggleFavoriteSelected, markUnreadSelected, snoozeSelected, openAdjacentEmail } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     hasSynced: state.hasSynced,
     syncing: state.syncing,
@@ -30,8 +32,16 @@ export default function App() {
     settingsOpen: state.settingsOpen,
     openComposer: state.openComposer,
     replyToSelected: state.replyToSelected,
-    deleteSelected: state.deleteSelected
+    deleteSelected: state.deleteSelected,
+    replyAllToSelected: state.replyAllToSelected,
+    forwardSelected: state.forwardSelected,
+    archiveSelected: state.archiveSelected,
+    toggleFavoriteSelected: state.toggleFavoriteSelected,
+    markUnreadSelected: state.markUnreadSelected,
+    snoozeSelected: state.snoozeSelected,
+    openAdjacentEmail: state.openAdjacentEmail
   })));
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [quickLookOpen, setQuickLookOpen] = useState(false);
   const [pageHidden, setPageHidden] = useState(document.hidden);
@@ -126,28 +136,62 @@ export default function App() {
         input?.select();
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "p") {
+      if ((event.ctrlKey || event.metaKey) && (key === "k" || (event.shiftKey && key === "p"))) {
         event.preventDefault();
         setPaletteOpen((value) => !value);
         return;
       }
-      if (isTyping) return;
+      if (isTyping || event.ctrlKey || event.metaKey || event.altKey) return;
+      // Solange ein Dialog offen ist, gelten nur dessen eigene Tasten.
+      const overlayOpen = Boolean(composer) || settingsOpen || paletteOpen;
+      if (key === "escape") {
+        if (shortcutsOpen) setShortcutsOpen(false);
+        else if (quickLookOpen) setQuickLookOpen(false);
+        else if (!overlayOpen) closeEmail();
+        return;
+      }
+      if (overlayOpen || shortcutsOpen) return;
 
-      if (key === "n") {
+      const hasTarget = Boolean(selectedEmail) || useMailStore.getState().selectedEmailIds.length > 0;
+      if (event.key === "?") {
+        event.preventDefault();
+        setShortcutsOpen(true);
+      } else if (key === "n") {
         event.preventDefault();
         openComposer();
-      } else if (key === "r") {
+      } else if (key === "j" || (selectedEmail && event.key === "ArrowDown")) {
+        event.preventDefault();
+        void openAdjacentEmail(1);
+      } else if (key === "k" || (selectedEmail && event.key === "ArrowUp")) {
+        event.preventDefault();
+        void openAdjacentEmail(-1);
+      } else if (key === "r" && selectedEmail) {
         event.preventDefault();
         replyToSelected();
+      } else if (key === "a" && selectedEmail) {
+        event.preventDefault();
+        replyAllToSelected();
+      } else if (key === "f" && selectedEmail) {
+        event.preventDefault();
+        forwardSelected();
+      } else if (key === "e" && hasTarget) {
+        event.preventDefault();
+        void archiveSelected();
+      } else if (key === "s" && hasTarget) {
+        event.preventDefault();
+        void toggleFavoriteSelected();
+      } else if (key === "u" && hasTarget) {
+        event.preventDefault();
+        void markUnreadSelected();
+      } else if (key === "h" && hasTarget) {
+        event.preventDefault();
+        const tomorrow = snoozePresets().find((preset) => preset.id === "tomorrow");
+        if (tomorrow) void snoozeSelected(tomorrow.until);
       } else if (event.code === "Space") {
         if (!selectedEmail) return;
         event.preventDefault();
         setQuickLookOpen(true);
-      } else if (key === "escape") {
-        // Esc schließt zuerst die Schnellansicht, sonst die geöffnete Mail.
-        if (quickLookOpen) setQuickLookOpen(false);
-        else if (!composer && !settingsOpen) closeEmail();
-      } else if (event.key === "Delete") {
+      } else if (event.key === "Delete" || event.key === "#") {
         event.preventDefault();
         void deleteSelected();
       }
@@ -155,7 +199,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeEmail, composer, deleteSelected, openComposer, quickLookOpen, replyToSelected, selectedEmail, settingsOpen]);
+  }, [archiveSelected, closeEmail, composer, deleteSelected, forwardSelected, markUnreadSelected, openAdjacentEmail, openComposer, paletteOpen, quickLookOpen, replyAllToSelected, replyToSelected, selectedEmail, settingsOpen, shortcutsOpen, snoozeSelected, toggleFavoriteSelected]);
 
   return (
     <main className="h-full bg-canvas text-ink">
@@ -166,7 +210,9 @@ export default function App() {
           {quickLookOpen && selectedEmail ? <QuickLook email={selectedEmail} onClose={() => setQuickLookOpen(false)} /> : null}
           {settingsOpen ? <SettingsPanel onClose={closeSettings} /> : null}
         </Suspense>
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onShowShortcuts={() => setShortcutsOpen(true)} />
+        {shortcutsOpen ? <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} /> : null}
+        <ActionIsland />
         {!bootReady ? (
           <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-canvas">
             <div className="flex flex-col items-center gap-4">

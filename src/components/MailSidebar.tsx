@@ -1,4 +1,4 @@
-import { Activity, AlertCircle, Archive, ChevronRight, FileText, Folder, Inbox, LayoutDashboard, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
+import { Activity, AlarmClock, AlertCircle, Archive, ChevronRight, FileText, Folder, Inbox, LayoutDashboard, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -30,7 +30,7 @@ export function MailSidebar() {
   const {
     accounts, folders, selectedAccountId, selectedFolderId, selectedView, selectedSpecialAccountId,
     mailCounts, selectFolder, selectSpecialView, openUnifiedInbox, openHealth,
-    openSettings, openDashboard
+    openSettings, openDashboard, openSnoozed, accountAppearance
   } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
@@ -44,7 +44,9 @@ export function MailSidebar() {
     openUnifiedInbox: state.openUnifiedInbox,
     openHealth: state.openHealth,
     openSettings: state.openSettings,
-    openDashboard: state.openDashboard
+    openDashboard: state.openDashboard,
+    openSnoozed: state.openSnoozed,
+    accountAppearance: state.settings.accountAppearance
   })));
   const [expanded, setExpanded] = useState<ExpandedState>(readExpandedState);
 
@@ -86,6 +88,7 @@ export function MailSidebar() {
         <nav className="space-y-0.5">
           <SideButton active={selectedView === "dashboard"} icon={<LayoutDashboard size={17} />} label="Dashboard" onClick={openDashboard} />
           <SideButton active={selectedView === "unifiedInbox" && !selectedSpecialAccountId} icon={<Inbox size={17} />} label="Alle Posteingänge" count={mailCounts.unread} onClick={() => void openUnifiedInbox()} />
+          <SideButton active={selectedView === "snoozed"} icon={<AlarmClock size={17} />} label="Erinnerungen" count={mailCounts.snoozed} onClick={() => void openSnoozed()} />
           <SideButton active={selectedView === "health"} icon={<Activity size={17} />} label="Systemstatus" onClick={() => void openHealth()} />
         </nav>
 
@@ -107,7 +110,7 @@ export function MailSidebar() {
                   onClick={() => toggleAccount(account)}
                 >
                   <ChevronRight size={14} className={`shrink-0 text-label-3 transition-transform ${accountOpen ? "rotate-90" : ""}`} />
-                  <AccountAvatar account={account} />
+                  <AccountAvatar account={account} color={accountAppearance?.[String(account.id)]?.color} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-semibold">{account.displayName || account.email}</span>
                     {account.displayName && account.displayName.trim().toLowerCase() !== account.email.trim().toLowerCase()
@@ -168,8 +171,8 @@ export function MailSidebar() {
 function SideButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
   return (
     <button
-      className={`pressable flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] ${
-        active ? "bg-ink/[0.08] font-semibold text-ink" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
+      className={`pressable relative flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] ${
+        active ? "bg-canvas font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_1px_rgb(var(--line))]" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
       }`}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
@@ -182,7 +185,7 @@ function SideButton({ active, icon, label, count, onClick }: { active: boolean; 
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <div className="mb-1.5 mt-6 px-3 text-[12px] font-bold uppercase tracking-[0.04em] text-label-3">{title}</div>;
+  return <div className="mb-1.5 mt-6 px-3 text-[11px] font-bold uppercase tracking-[0.07em] text-label-3">{title}</div>;
 }
 
 function FolderButton({ folder, active, onClick }: { folder: MailFolder; active: boolean; onClick: () => void }) {
@@ -223,7 +226,11 @@ function CountBadge({ count }: { count: number }) {
   return <span className="min-w-5 text-right text-[13px] font-medium tabular-nums text-label-2">{count > 99 ? "99+" : count}</span>;
 }
 
-function AccountAvatar({ account }: { account?: Account }) {
+function AccountAvatar({ account, color }: { account?: Account; color?: string }) {
   const label = account?.displayName || account?.email || "L";
-  return <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[13px] font-semibold text-white">{label.charAt(0).toUpperCase()}</span>;
+  return (
+    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[13px] font-semibold text-white" style={color ? { backgroundColor: color } : undefined}>
+      {label.charAt(0).toUpperCase()}
+    </span>
+  );
 }

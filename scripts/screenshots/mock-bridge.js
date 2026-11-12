@@ -32,14 +32,18 @@
     mail(105, "Deutsche Bahn <noreply@bahn.de>", "Ihre Buchungsbestätigung", "Vielen Dank für Ihre Buchung. Ihr Ticket finden Sie im Anhang.", 60 * 28, { isRead: true, hasAttachments: true, tags: [tags[1]] }),
     mail(106, "Sophie Wagner <sophie@example.com>", "Fotos vom Wochenende", "Hier sind die Bilder vom Samstag, die schönsten habe ich markiert.", 60 * 50, { isRead: true }),
     mail(107, "Adobe <mail@adobe.example>", "Ihre Rechnung für Oktober", "Ihre monatliche Rechnung für Creative Cloud ist jetzt verfügbar.", 60 * 80, { isRead: true }),
-    mail(108, "Jonas Keller <jonas@example.com>", "Kurze Frage zum Schnitt", "Kannst du mir die Projektdatei von letzter Woche schicken? Ich finde sie nicht mehr.", 60 * 120, { isRead: true })
+    mail(108, "Jonas Keller <jonas@example.com>", "Kurze Frage zum Schnitt", "Kannst du mir die Projektdatei von letzter Woche schicken? Ich finde sie nicht mehr.", 60 * 120, { isRead: true }),
+    mail(109, "Studio Nord <buchung@studio.example>", "Mietvertrag Studio B", "Anbei der Vertrag für die Studiomiete im Dezember. Bitte unterschrieben zurücksenden.", 60 * 30, { isRead: true, snoozedUntil: new Date(now + 14 * 3600_000).toISOString() }),
+    mail(110, "Steuerbüro Lang <info@lang.example>", "Unterlagen für das 4. Quartal", "Bitte schicken Sie uns bis Monatsende die Belege für Oktober bis Dezember.", 60 * 40, { isRead: true, snoozedUntil: new Date(now + 3 * 86400_000).toISOString() })
   ];
+  const snoozed = (email) => email.snoozedUntil && new Date(email.snoozedUntil).getTime() > Date.now();
   const settings = {
     theme, accentColor: "white", layoutMode: "standard", fontSize: 16, syncIntervalMinutes: 15, externalImages: "never", senderLogos: true,
     allowLocalSecretFallback: false, notificationsEnabled: false, notificationSound: false, notificationPreview: false,
-    runInBackground: true, accountNotifications: {}, accountAppearance: {}
+    runInBackground: true, accountNotifications: {}, accountAppearance: {},
+    signature: "Viele Grüße\nEmilio\nAll Seasons Production", signatureAuto: true, undoSendSeconds: 5
   };
-  const counts = { favorites: 1, important: 1, unread: 5, withAttachments: 2, today: 3, thisWeek: 8, perAccount: [{ accountId: 1, favorites: 1, important: 1 }, { accountId: 2, favorites: 0, important: 0 }] };
+  const counts = { snoozed: 2, favorites: 1, important: 1, unread: 5, withAttachments: 2, today: 3, thisWeek: 8, perAccount: [{ accountId: 1, favorites: 1, important: 1 }, { accountId: 2, favorites: 0, important: 0 }] };
   const health = {
     sync: { queuePendingTotal: 0, queueFailedTotal: 0, queueInFlightTotal: 0, accounts: [
       { accountId: 1, idleActive: true, pollingActive: false, pollingIntervalSeconds: 900, queuePending: 0, queueFailed: 0, queueInFlight: 0, lastSyncAt: new Date(Date.now() - 60_000).toISOString(), lastSyncDurationMs: 1200, consecutiveFailures: 0 },
@@ -61,10 +65,14 @@
     get_health_status: () => health,
     get_mail_counts: () => counts,
     get_drafts: () => [],
-    get_emails: () => emails.slice(),
+    get_emails: ({ view }) => emails.filter((email) => (view === "snoozed") === Boolean(snoozed(email))),
+    snooze_email: ({ id, until }) => { const email = emails.find((item) => item.id === id); if (email) email.snoozedUntil = until; return until; },
+    unsnooze_email: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) email.snoozedUntil = undefined; },
+    save_draft: () => 1,
+    toggle_favorite: () => true,
     move_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },
     delete_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },
-    search_emails: () => emails,
+    search_emails: () => emails.filter((email) => !snoozed(email)),
     get_email: ({ id }) => emails.find((email) => email.id === id),
     hydrate_email: ({ id }) => emails.find((email) => email.id === id),
     mark_email_read: () => undefined
