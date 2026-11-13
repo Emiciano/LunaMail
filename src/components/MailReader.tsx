@@ -66,6 +66,12 @@ export function MailReader() {
 
   const [confirmBlock, setConfirmBlock] = useState(false);
   const position = selectedEmail ? emails.findIndex((email) => email.id === selectedEmail.id) : -1;
+  // Richtung fürs Blättern: nächste Mail kommt von unten, vorherige von oben.
+  const lastPosition = useRef({ id: selectedEmail?.id, position, direction: 1 });
+  if (selectedEmail && lastPosition.current.id !== selectedEmail.id) {
+    lastPosition.current = { id: selectedEmail.id, position, direction: position >= lastPosition.current.position ? 1 : -1 };
+  }
+  const direction = lastPosition.current.direction;
 
   if (!selectedEmail) return null;
 
@@ -99,7 +105,7 @@ export function MailReader() {
           <div className="flex items-center gap-0.5">
             <button className="reader-icon-button" title="Vorherige Mail (K)" disabled={position <= 0} onClick={() => void openAdjacentEmail(-1)}><ChevronUp size={18} /></button>
             <button className="reader-icon-button" title="Nächste Mail (J)" disabled={position < 0 || position >= emails.length - 1} onClick={() => void openAdjacentEmail(1)}><ChevronDown size={18} /></button>
-            {position >= 0 ? <span className="ml-1.5 text-[12px] font-medium tabular-nums text-label-3">{position + 1} von {emails.length}</span> : null}
+            {position >= 0 ? <span className="ml-1.5 overflow-hidden text-[12px] font-medium tabular-nums text-label-3"><span key={position} className="count-tick">{position + 1}</span> von {emails.length}</span> : null}
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <button className="reader-icon-button" title="Antworten (R)" onClick={replyToSelected}><Reply size={18} /></button>
@@ -108,7 +114,7 @@ export function MailReader() {
             <span className="mx-1.5 h-5 w-px bg-line" />
             <SnoozeMenu onSnooze={(until) => void snoozeSelected(until)} />
             <button className={cn("reader-icon-button", selectedEmail.isFavorite && "text-flag hover:text-flag")} title={selectedEmail.isFavorite ? "Favorit entfernen (S)" : "Favorit (S)"} onClick={() => void toggleFavoriteSelected()}>
-              <Star size={18} className={selectedEmail.isFavorite ? "fill-current" : undefined} />
+              <Star key={String(selectedEmail.isFavorite)} size={18} className={selectedEmail.isFavorite ? "pop-in fill-current" : undefined} />
             </button>
             <button className="reader-icon-button" title="Als ungelesen markieren (U)" onClick={() => void markUnreadSelected()}><Mail size={18} /></button>
             <button className="reader-icon-button" title="Archivieren (E)" onClick={() => void archiveSelected()}><Archive size={18} /></button>
@@ -118,7 +124,7 @@ export function MailReader() {
             <button className="reader-icon-button" title="Schließen (Esc)" onClick={closeEmail}><X size={19} /></button>
           </div>
         </div>
-        <article className="w-full px-6 pb-8 pt-7 lg:px-10">
+        <article key={selectedEmail.id} data-direction={direction} className="reader-swap w-full px-6 pb-8 pt-7 lg:px-10">
           <header className="mb-6 border-b border-line pb-5">
             {selectedEmail.snoozedUntil && new Date(selectedEmail.snoozedUntil).getTime() > Date.now() ? (
               <div className="mb-5 flex items-center gap-3 rounded-[10px] bg-surface px-4 py-2.5 text-[13px] font-medium text-label-2">

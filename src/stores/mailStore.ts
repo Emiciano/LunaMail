@@ -1,3 +1,4 @@
+import { transitionTheme } from "../hooks/useTheme";
 import { create } from "zustand";
 import { isDesktop, listenDesktop } from "../services/desktop";
 import type { Account, BlockedSender, Contact, Draft, Email, Folder, HealthStatus, MailCounts, MailRule, RuleInput, Settings, SmartCategory, SyncReport, Tag } from "../types";
@@ -1253,7 +1254,12 @@ export const useMailStore = create<MailState>((set, get) => ({
   },
   async updateSettings(settings) {
     await mailService.saveSettings(settings);
-    set({ settings });
+    const previous = get().settings;
+    if (previous && previous.theme !== settings.theme) {
+      transitionTheme(settings.theme, () => set({ settings }));
+    } else {
+      set({ settings });
+    }
   },
   async loadTags() {
     const tags = await mailService.getTags();

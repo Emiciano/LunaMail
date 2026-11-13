@@ -9,8 +9,20 @@ import { useMailStore } from "../stores/mailStore";
  * bestätigt Aktionen, zeigt Fehler und bietet „Rückgängig“ an.
  */
 export function ActionIsland() {
-  const { island, dismissIsland } = useMailStore(useShallow((state) => ({ island: state.island, dismissIsland: state.dismissIsland })));
+  const { island: current, dismissIsland } = useMailStore(useShallow((state) => ({ island: state.island, dismissIsland: state.dismissIsland })));
   const [now, setNow] = useState(Date.now());
+  // Die letzte Insel bleibt kurz stehen, damit sie sichtbar abtauchen kann.
+  const [shown, setShown] = useState(current);
+  useEffect(() => {
+    if (current) {
+      setShown(current);
+      return;
+    }
+    const timer = window.setTimeout(() => setShown(undefined), 200);
+    return () => window.clearTimeout(timer);
+  }, [current]);
+  const island = current ?? shown;
+  const leaving = !current;
 
   useEffect(() => {
     if (!island?.endsAt) return;
@@ -27,9 +39,9 @@ export function ActionIsland() {
       <div
         key={island.id}
         role={island.kind === "error" ? "alert" : "status"}
-        className="island-enter pointer-events-auto relative flex min-h-11 max-w-[min(560px,100%)] items-center gap-3 rounded-[12px] bg-ink py-1.5 pl-4 pr-1.5 text-[14px] font-medium text-canvas shadow-[0_16px_40px_rgb(0_0_0/0.28)]"
+        className={cn(leaving ? "island-leave" : "island-enter", "pointer-events-auto relative flex min-h-11 max-w-[min(560px,100%)] items-center gap-3 rounded-[12px] bg-ink py-1.5 pl-4 pr-1.5 text-[14px] font-medium text-canvas shadow-[0_16px_40px_rgb(0_0_0/0.28)]")}
       >
-        <Icon size={16} className={cn("shrink-0", island.kind === "error" ? "text-danger" : "text-canvas/70")} />
+        <Icon size={16} className={cn("pop-in shrink-0", island.kind === "error" ? "text-danger" : "text-canvas/70")} />
         <span className="min-w-0 flex-1 truncate">
           {island.message}
           {secondsLeft !== undefined ? <span className="ml-1.5 tabular-nums text-canvas/50">{secondsLeft} s</span> : null}

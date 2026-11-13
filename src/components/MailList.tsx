@@ -112,14 +112,14 @@ export function MailList() {
       <header className="flex shrink-0 items-end justify-between gap-4 px-1 pb-3 pt-6">
         <div className="min-w-0">
           <h1 className="truncate font-display text-[30px] font-extrabold leading-[34px]">{title}</h1>
-          <p className="mt-1 truncate text-[13px] font-medium text-label-2">{subtitle}</p>
+          <p key={subtitle} className="view-enter mt-1 truncate text-[13px] font-medium text-label-2">{subtitle}</p>
         </div>
       </header>
 
       {showsMailList ? (
         <>
           <div className="shrink-0 px-1 pb-2">
-            <label className="search-field flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition focus-within:bg-surface-2 focus-within:ring-2 focus-within:ring-ink/15">
+            <label className="search-field flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition-[max-width,background-color,box-shadow] duration-300 ease-out focus-within:max-w-[680px] focus-within:bg-surface-2 focus-within:ring-2 focus-within:ring-ink/15">
               <Search size={17} />
               <input
                 id="mail-search-input"
@@ -202,8 +202,8 @@ export function MailList() {
           >
             {loading && emails.length === 0 ? <MailListSkeleton /> : null}
             {!loading && emails.length === 0 ? (
-              <div className="mx-auto flex max-w-sm flex-col items-center px-6 py-16 text-center">
-                <span className="flex h-14 w-14 items-center justify-center rounded-[14px] bg-surface text-label-2">
+              <div className="view-enter mx-auto flex max-w-sm flex-col items-center px-6 py-16 text-center">
+                <span className="pop-in flex h-14 w-14 items-center justify-center rounded-[14px] bg-surface text-label-2">
                   {snoozedView ? <AlarmClock size={20} /> : syncError ? <AlertCircle size={20} /> : <MailOpen size={20} />}
                 </span>
                 <h2 className="mt-4 font-display text-[20px] font-bold">
@@ -323,7 +323,7 @@ function ToolbarButton({ label, icon, onClick, disabled = false, danger = false 
   return (
     <button
       className={cn(
-        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] transition-colors",
+        "pressable inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] transition-[color,background-color,opacity,transform] duration-200",
         danger ? "text-danger hover:bg-danger/10" : "text-label-2 hover:bg-surface hover:text-ink",
         disabled && "pointer-events-none opacity-30"
       )}
@@ -393,14 +393,14 @@ const MailRow = memo(function MailRow({
           className={cn("mail-checkbox absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 transition-opacity", selected || anySelected ? "opacity-100" : "opacity-0 group-hover/tile:opacity-100 group-focus-visible:opacity-100")}
           aria-label="Mail auswählen"
         />
-        {unread && !anySelected ? <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-[rgb(var(--accent))]" aria-label="Ungelesen" /> : null}
+        {unread && !anySelected ? <span className="dot-in absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-[rgb(var(--accent))]" aria-label="Ungelesen" /> : null}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("min-w-0 flex-1 truncate text-[15px] leading-5", unread ? "font-extrabold" : "font-semibold")}>{sender}</span>
           {email.hasAttachments ? <Paperclip size={13} className="shrink-0 text-label-2" /> : null}
-          {email.isImportant ? <AlertCircle size={13} className="shrink-0 text-flag" /> : null}
-          {email.isFavorite ? <Star size={13} className="shrink-0 fill-flag text-flag" /> : null}
+          {email.isImportant ? <AlertCircle size={13} className="pop-in shrink-0 text-flag" /> : null}
+          {email.isFavorite ? <Star size={13} className="pop-in shrink-0 fill-flag text-flag" /> : null}
           {snoozedView ? <AlarmClock size={13} className="shrink-0 text-label-2" /> : null}
           <time className={cn("ml-1 shrink-0 whitespace-nowrap text-[13px] font-medium tabular-nums", unread ? "text-ink" : "text-label-2")}>{timeLabel}</time>
         </span>
@@ -424,7 +424,7 @@ const MailRow = memo(function MailRow({
           </span>
         ) : null}
       </span>
-      <span className="absolute right-2.5 top-2 hidden items-center gap-0.5 rounded-[10px] border border-line bg-canvas p-0.5 shadow-float group-hover:flex">
+      <span className="pointer-events-none absolute right-2.5 top-2 flex translate-x-2 scale-95 items-center gap-0.5 rounded-[10px] border border-line bg-canvas p-0.5 opacity-0 shadow-float transition-[opacity,transform] duration-200 ease-out group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:scale-100 group-hover:opacity-100">
         <QuickButton label={email.isRead ? "Als ungelesen markieren" : "Als gelesen markieren"} onClick={() => void onQuickAction(email.id, "read")}><MailOpen size={14} /></QuickButton>
         {snoozedView
           ? <QuickButton label="Jetzt zurückholen" onClick={() => void onUnsnooze(email.id)}><Inbox size={14} /></QuickButton>
@@ -454,7 +454,7 @@ function QuickButton({ label, children, onClick, active = false, danger = false 
     <button
       type="button"
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-[7px] transition-colors",
+        "pressable inline-flex h-7 w-7 items-center justify-center rounded-[7px] transition-colors",
         active ? "text-flag" : danger ? "text-label-2 hover:bg-danger/10 hover:text-danger" : "text-label-2 hover:bg-surface hover:text-ink"
       )}
       onClick={(event) => {
@@ -507,11 +507,12 @@ function MailListSkeleton() {
   return (
     <div className="space-y-1 p-3">
       {Array.from({ length: 7 }).map((_, index) => (
-        <div key={index} className="flex animate-pulse gap-3 py-3">
-          <div className="h-11 w-11 rounded-full bg-surface" />
+        <div key={index} className="stagger-item flex gap-3 py-3" style={{ "--i": index } as CSSProperties}>
+          <div className="shimmer h-11 w-11 rounded-full" />
           <div className="flex-1 space-y-2 pt-1">
-            <div className="h-3 w-1/2 rounded-full bg-surface" />
-            <div className="h-3 w-3/4 rounded-full bg-surface" />
+            <div className="shimmer h-3 w-1/2 rounded-full" />
+            <div className="shimmer h-3 w-3/4 rounded-full" />
+            <div className="shimmer h-3 w-2/3 rounded-full" />
           </div>
         </div>
       ))}

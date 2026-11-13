@@ -7,6 +7,7 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import type { Email, MailCounts } from "../types";
 import { SenderAvatar } from "./SenderAvatar";
+import { useCountUp } from "../hooks/useCountUp";
 
 const UNREAD_PREVIEW_COUNT = 5;
 
@@ -181,6 +182,7 @@ export function Dashboard() {
 }
 
 function StatTile({ index, label, value, hint, icon, inverse = false, onClick }: { index: number; label: string; value: number; hint: string; icon: ReactNode; inverse?: boolean; onClick: () => void }) {
+  const shown = useCountUp(value);
   return (
     <button
       className={cn(
@@ -195,7 +197,7 @@ function StatTile({ index, label, value, hint, icon, inverse = false, onClick }:
         {icon}
       </span>
       <span className="flex w-full items-end justify-between">
-        <span className="font-display text-[44px] font-extrabold leading-[44px]">{value}</span>
+        <span className="font-display text-[44px] font-extrabold leading-[44px] tabular-nums">{shown}</span>
         <span className="text-[12px] font-semibold opacity-70">{hint}</span>
       </span>
     </button>
@@ -203,9 +205,10 @@ function StatTile({ index, label, value, hint, icon, inverse = false, onClick }:
 }
 
 function WeekValue({ label, value }: { label: string; value: number }) {
+  const shown = useCountUp(value, 600);
   return (
     <div>
-      <div className="font-display text-[24px] font-extrabold">{value}</div>
+      <div className="font-display text-[24px] font-extrabold tabular-nums">{shown}</div>
       <div className="text-[12px] text-label-2">{label}</div>
     </div>
   );

@@ -170,7 +170,7 @@ export function Composer() {
             void onSubmit();
           }
         }}
-        className="dialog-enter flex h-[min(780px,calc(100vh-3rem))] w-[min(1000px,calc(100vw-3rem))] overflow-hidden rounded-[14px] border border-line bg-canvas shadow-[0_32px_90px_rgb(0_0_0/0.35)]"
+        className="composer-enter flex h-[min(780px,calc(100vh-3rem))] w-[min(1000px,calc(100vw-3rem))] overflow-hidden rounded-[14px] border border-line bg-canvas shadow-[0_32px_90px_rgb(0_0_0/0.35)]"
       >
         <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-sidebar md:flex">
           <div className="flex h-16 items-center px-4 text-[11px] font-bold uppercase tracking-[0.07em] text-label-3">Entwürfe</div>
@@ -181,10 +181,11 @@ export function Composer() {
                 Keine Entwürfe
               </div>
             ) : null}
-            {drafts.map((draft) => (
+            {drafts.map((draft, draftIndex) => (
               <div
                 key={draft.id}
-                className={cn("group relative rounded-[10px] px-3 py-2.5 transition-colors", draft.id === draftId ? "bg-canvas shadow-[0_0_0_1px_rgb(var(--line))]" : "hover:bg-ink/[0.04]")}
+                style={{ "--i": draftIndex } as React.CSSProperties}
+                className={cn("stagger-item group relative rounded-[10px] px-3 py-2.5 transition-colors", draft.id === draftId ? "bg-canvas shadow-[0_0_0_1px_rgb(var(--line))]" : "hover:bg-ink/[0.04]")}
               >
                 <button type="button" className="w-full pr-6 text-left" onClick={() => editDraft(draft)}>
                   <div className="truncate text-[13px] font-semibold">{draft.subject || "(Kein Betreff)"}</div>
@@ -234,8 +235,8 @@ export function Composer() {
             )} />
             {showCopies ? (
               <>
-                <LineInput label="Cc" value={cc} onChange={setCc} />
-                <LineInput label="Bcc" value={bcc} onChange={setBcc} />
+                <div className="row-reveal"><LineInput label="Cc" value={cc} onChange={setCc} /></div>
+                <div className="row-reveal" style={{ animationDelay: "50ms" }}><LineInput label="Bcc" value={bcc} onChange={setBcc} /></div>
               </>
             ) : null}
             <label className="flex h-12 items-center gap-3">
@@ -257,11 +258,11 @@ export function Composer() {
             placeholder="Schreibe deine Nachricht …"
             className="mail-scroll min-h-0 flex-1 resize-none bg-transparent px-5 py-5 text-[15px] leading-7 text-ink outline-none focus-visible:outline-none placeholder:text-label-3 sm:px-6"
           />
-          {error ? <div className="mx-5 mb-3 rounded-[10px] bg-danger/10 px-4 py-2.5 text-[13px] font-medium text-danger sm:mx-6">{error}</div> : null}
+          {error ? <div className="view-enter mx-5 mb-3 rounded-[10px] bg-danger/10 px-4 py-2.5 text-[13px] font-medium text-danger sm:mx-6">{error}</div> : null}
           {attachments.length > 0 ? (
             <div className="flex flex-wrap gap-2 px-5 pb-3 sm:px-6">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="flex max-w-[260px] items-center gap-2.5 rounded-[10px] bg-surface py-1.5 pl-2 pr-1.5">
+                <div key={attachment.id} className="pop-in flex max-w-[260px] items-center gap-2.5 rounded-[10px] bg-surface py-1.5 pl-2 pr-1.5">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-canvas text-[10px] font-extrabold uppercase text-ink/70">
                     {attachment.fileName.split(".").pop()?.slice(0, 4) || <Paperclip size={14} />}
                   </span>

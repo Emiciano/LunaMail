@@ -218,8 +218,8 @@ select:focus-visible,
 }
 
 .mail-row-enter {
-  animation: mail-row-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--i, 0) * 8ms);
+  animation: mail-row-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 28ms);
 }
 
 .mail-reader-backdrop {
@@ -227,7 +227,7 @@ select:focus-visible,
 }
 
 .mail-reader-panel {
-  animation: mail-reader-panel 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: mail-reader-panel 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .reader-icon-button {
@@ -291,7 +291,7 @@ select:focus-visible,
 @keyframes mail-row-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -311,7 +311,7 @@ select:focus-visible,
 @keyframes mail-reader-panel {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(22px) scale(0.965);
   }
   to {
     opacity: 1;
@@ -342,7 +342,7 @@ select:focus-visible,
 
 /* Wechsel zwischen Ansichten, Overlays und Karten: kurz und weich wie in der Android-App. */
 .view-enter {
-  animation: view-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: view-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .overlay-enter {
@@ -354,7 +354,7 @@ select:focus-visible,
 }
 
 .rise-in {
-  animation: rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: calc(min(var(--i, 0), 6) * 18ms);
 }
 
@@ -373,7 +373,8 @@ select:focus-visible,
 @keyframes view-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
@@ -596,4 +597,257 @@ kbd,
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
+}
+
+/* ───────────── Bewegung ─────────────
+ * Alle Animationen nutzen dieselben zwei Kurven: „out“ für Auftauchen, „spring“ für kleine Hüpfer.
+ * Bei „Bewegung reduzieren“ greift oben die globale Regel und verkürzt alles auf 1 ms.
+ */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Auf- und Zuklappen ohne feste Höhe: Grid-Zeile von 0fr auf 1fr. */
+.collapse-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 260ms var(--ease-out), opacity 200ms ease;
+}
+
+.collapse-grid[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.collapse-grid > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.collapse-grid[data-open="true"] .stagger-item {
+  animation: slide-in-left 260ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+
+.stagger-item {
+  animation: rise-in 240ms var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 24ms);
+}
+
+.side-active {
+  animation: pill-in 260ms var(--ease-out) backwards;
+}
+
+.side-active .side-icon {
+  animation: icon-bounce 420ms var(--ease-spring) backwards;
+}
+
+.count-tick {
+  display: inline-block;
+  animation: count-tick 320ms var(--ease-spring) backwards;
+}
+
+.pop-in {
+  animation: pop-in 360ms var(--ease-spring) backwards;
+}
+
+.dot-in {
+  animation: pop-in 300ms var(--ease-spring) backwards;
+}
+
+/* Inhalt des Lesefensters: beim Blättern mit J/K kommt die neue Mail aus der passenden Richtung. */
+.reader-swap {
+  animation: reader-swap 300ms var(--ease-out) backwards;
+}
+
+.reader-swap[data-direction="-1"] {
+  --swap-from: -18px;
+}
+
+.reader-swap > * {
+  animation: rise-in 380ms var(--ease-out) backwards;
+}
+
+.reader-swap > *:nth-child(2) { animation-delay: 45ms; }
+.reader-swap > *:nth-child(3) { animation-delay: 90ms; }
+.reader-swap > *:nth-child(4) { animation-delay: 135ms; }
+.reader-swap > *:nth-child(5) { animation-delay: 170ms; }
+.reader-swap > *:nth-child(n + 6) { animation-delay: 200ms; }
+
+.composer-enter {
+  transform-origin: bottom right;
+  animation: composer-enter 320ms var(--ease-out) both;
+}
+
+.row-reveal {
+  animation: row-reveal 240ms var(--ease-out) backwards;
+}
+
+.island-leave {
+  animation: island-leave 200ms ease-in both;
+}
+
+.fab-enter {
+  animation: fab-enter 480ms var(--ease-spring) 200ms backwards;
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--surface));
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--canvas) / 0.55), transparent);
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+.slide-up-in {
+  animation: slide-up-in 420ms var(--ease-out) backwards;
+}
+
+.mail-checkbox::after {
+  transition: transform 180ms var(--ease-spring);
+}
+
+.mail-checkbox {
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+/* Designwechsel per View Transition: das neue Design breitet sich kreisförmig vom Klick aus. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pill-in {
+  from {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgb(var(--line));
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes icon-bounce {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.22) rotate(-6deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes count-tick {
+  from {
+    opacity: 0;
+    transform: translateY(-7px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes reader-swap {
+  from {
+    opacity: 0.4;
+    transform: translateY(var(--swap-from, 18px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes composer-enter {
+  from {
+    opacity: 0;
+    transform: translate(24px, 32px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes row-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 48px;
+  }
+}
+
+@keyframes island-leave {
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+@keyframes fab-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-30deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

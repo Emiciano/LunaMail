@@ -1,6 +1,6 @@
 import { Activity, AlarmClock, AlertCircle, Archive, ChevronRight, FileText, Folder, Inbox, LayoutDashboard, Send, Settings, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useMailStore } from "../stores/mailStore";
 import type { Account, Folder as MailFolder } from "../types";
@@ -120,12 +120,13 @@ export function MailSidebar() {
                   {accountUnread > 0 ? <CountBadge count={accountUnread} /> : null}
                 </button>
 
-                {accountOpen ? (
+                <div className="collapse-grid" data-open={accountOpen} inert={!accountOpen}>
                   <nav className="mb-2 ml-3 mt-0.5 space-y-0.5 pl-2">
                     <SideButton
                       active={selectedView === "favorites" && selectedSpecialAccountId === account.id}
                       icon={<Star size={15} />}
                       label="Favoriten"
+                      index={0}
                       count={specialByAccount.get(account.id)?.favorites}
                       onClick={() => void selectSpecialView("favorites", account.id)}
                     />
@@ -133,11 +134,12 @@ export function MailSidebar() {
                       active={selectedView === "important" && selectedSpecialAccountId === account.id}
                       icon={<AlertCircle size={15} />}
                       label="Wichtig"
+                      index={1}
                       count={specialByAccount.get(account.id)?.important}
                       onClick={() => void selectSpecialView("important", account.id)}
                     />
-                    {primaryFolders.map((folder) => (
-                      <FolderButton key={folder.id} folder={folder} active={selectedView === "folder" && selectedFolderId === folder.id} onClick={() => void selectFolder(folder.id)} />
+                    {primaryFolders.map((folder, folderIndex) => (
+                      <FolderButton key={folder.id} index={folderIndex + 2} folder={folder} active={selectedView === "folder" && selectedFolderId === folder.id} onClick={() => void selectFolder(folder.id)} />
                     ))}
                     {customFolders.length > 0 ? (
                       <>
@@ -151,7 +153,7 @@ export function MailSidebar() {
                       </>
                     ) : null}
                   </nav>
-                ) : null}
+                </div>
               </section>
             );
           })}
@@ -168,16 +170,17 @@ export function MailSidebar() {
   );
 }
 
-function SideButton({ active, icon, label, count, onClick }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void }) {
+function SideButton({ active, icon, label, count, onClick, index }: { active: boolean; icon: ReactNode; label: string; count?: number; onClick: () => void; index?: number }) {
   return (
     <button
-      className={`pressable relative flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] ${
-        active ? "bg-canvas font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_1px_rgb(var(--line))]" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
+      style={index !== undefined ? ({ "--i": index } as CSSProperties) : undefined}
+      className={`pressable relative flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] transition-[background-color,box-shadow,color] duration-200 ${index !== undefined ? "stagger-item " : ""}${
+        active ? "side-active bg-canvas font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_1px_rgb(var(--line))]" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
       }`}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
     >
-      <span className={active ? "text-ink" : "text-label-2"}>{icon}</span>
+      <span className={`side-icon inline-flex ${active ? "text-ink" : "text-label-2"}`}>{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {count && count > 0 ? <CountBadge count={count} /> : null}
     </button>
@@ -188,9 +191,9 @@ function SectionTitle({ title }: { title: string }) {
   return <div className="mb-1.5 mt-6 px-3 text-[11px] font-bold uppercase tracking-[0.07em] text-label-3">{title}</div>;
 }
 
-function FolderButton({ folder, active, onClick }: { folder: MailFolder; active: boolean; onClick: () => void }) {
+function FolderButton({ folder, active, onClick, index }: { folder: MailFolder; active: boolean; onClick: () => void; index?: number }) {
   const Icon = folderIcons[folder.role];
-  return <SideButton active={active} icon={<Icon size={15} />} label={folderLabel(folder)} count={folder.unreadCount} onClick={onClick} />;
+  return <SideButton active={active} index={index} icon={<Icon size={15} />} label={folderLabel(folder)} count={folder.unreadCount} onClick={onClick} />;
 }
 
 export function folderLabel(folder: MailFolder) {
@@ -223,7 +226,11 @@ function translateFolderName(name: string) {
 }
 
 function CountBadge({ count }: { count: number }) {
-  return <span className="min-w-5 text-right text-[13px] font-medium tabular-nums text-label-2">{count > 99 ? "99+" : count}</span>;
+  return (
+    <span className="min-w-5 overflow-hidden text-right text-[13px] font-medium tabular-nums text-label-2">
+      <span key={count} className="count-tick">{count > 99 ? "99+" : count}</span>
+    </span>
+  );
 }
 
 function AccountAvatar({ account, color }: { account?: Account; color?: string }) {

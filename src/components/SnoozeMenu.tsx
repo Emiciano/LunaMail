@@ -1,6 +1,6 @@
 import { AlarmClock } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { snoozePresets } from "../stores/mailStore";
 
@@ -51,8 +51,8 @@ export function SnoozeMenu({ onSnooze, align = "right", trigger, className }: {
       {open ? (
         <div className={cn("menu-enter absolute top-full z-[80] mt-2 w-64 rounded-[12px] border border-line bg-canvas p-1.5 shadow-float", align === "right" ? "right-0" : "left-0")}>
           <div className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-label-3">Später erinnern</div>
-          {presets.map((preset) => (
-            <button key={preset.id} className="flex h-9 w-full items-center justify-between gap-3 rounded-[8px] px-2.5 text-left text-[14px] font-medium hover:bg-surface" onClick={() => choose(preset.until)}>
+          {presets.map((preset, index) => (
+            <button key={preset.id} style={{ "--i": index + 1 } as CSSProperties} className="stagger-item pressable flex h-9 w-full items-center justify-between gap-3 rounded-[8px] px-2.5 text-left text-[14px] font-medium transition-colors hover:bg-surface" onClick={() => choose(preset.until)}>
               <span>{preset.label}</span>
               <span className="text-[12px] tabular-nums text-label-2">{preset.detail}</span>
             </button>

@@ -45,13 +45,13 @@ export function AppLayout() {
           </div>
           <MailReader />
           <button
-            className="pressable accent-primary compose-fab absolute bottom-6 right-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full shadow-float transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+            className="group pressable fab-enter accent-primary compose-fab absolute bottom-6 right-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full shadow-float transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!hasAccounts}
             onClick={() => openComposer()}
             title="Neue Nachricht"
             aria-label="Neue Nachricht"
           >
-            <SquarePen size={22} />
+            <SquarePen size={22} className="transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:-rotate-12 group-hover:scale-110" />
           </button>
         </div>
       </section>

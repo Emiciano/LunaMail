@@ -1,6 +1,6 @@
 import { AlarmClock, Archive, CornerDownLeft, Inbox, Keyboard, LayoutDashboard, Moon, RefreshCw, Search, Settings, SquarePen, Star, Sun, AlertCircle, UserRound } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "../lib/cn";
@@ -128,11 +128,11 @@ export function CommandPalette({ open, onClose, onShowShortcuts }: { open: boole
             const header = command.group !== lastGroup ? command.group : undefined;
             lastGroup = command.group;
             return (
-              <div key={command.id}>
+              <div key={command.id} className="stagger-item" style={{ "--i": index } as CSSProperties}>
                 {header ? <div className="px-2.5 pb-1 pt-2.5 text-[11px] font-bold uppercase tracking-[0.06em] text-label-3">{header}</div> : null}
                 <button
                   data-index={index}
-                  className={cn("flex h-10 w-full items-center gap-3 rounded-[8px] px-2.5 text-left text-[14px] font-medium", index === active ? "bg-surface text-ink" : "text-ink/85")}
+                  className={cn("flex h-10 w-full items-center gap-3 rounded-[8px] px-2.5 transition-colors duration-100 text-left text-[14px] font-medium", index === active ? "bg-surface text-ink" : "text-ink/85")}
                   onMouseMove={() => setActive(index)}
                   onClick={() => run(command)}
                 >
