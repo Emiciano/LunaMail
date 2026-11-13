@@ -1,4 +1,4 @@
-import { AlertCircle, CalendarClock, Inbox, RefreshCw, Star } from "lucide-react";
+import { AlarmClock, AlertCircle, CalendarClock, Inbox, RefreshCw, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -7,6 +7,7 @@ import { mailService } from "../services/mailService";
 import { useMailStore } from "../stores/mailStore";
 import type { Email, MailCounts } from "../types";
 import { SenderAvatar } from "./SenderAvatar";
+import { useCountUp } from "../hooks/useCountUp";
 
 const UNREAD_PREVIEW_COUNT = 5;
 
@@ -14,7 +15,7 @@ const UNREAD_PREVIEW_COUNT = 5;
 export function Dashboard() {
   const {
     accounts, folders, mailCounts, healthStatus, lastSyncAt, syncing, databaseSizeBytes,
-    sync, selectEmail, openUnifiedInbox, selectSpecialView
+    sync, selectEmail, openUnifiedInbox, selectSpecialView, openSnoozed
   } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
@@ -26,8 +27,10 @@ export function Dashboard() {
     sync: state.sync,
     selectEmail: state.selectEmail,
     openUnifiedInbox: state.openUnifiedInbox,
-    selectSpecialView: state.selectSpecialView
+    selectSpecialView: state.selectSpecialView,
+    openSnoozed: state.openSnoozed
   })));
+  const [snoozed, setSnoozed] = useState<Email[]>([]);
   const [counts, setCounts] = useState<MailCounts>(mailCounts);
   const [unreadMails, setUnreadMails] = useState<Email[]>([]);
 
@@ -36,9 +39,11 @@ export function Dashboard() {
     let active = true;
     void Promise.all([
       mailService.getMailCounts(undefined),
-      mailService.getEmails(undefined, undefined, "unified_inbox", undefined, { unreadOnly: true })
-    ]).then(([nextCounts, emails]) => {
+      mailService.getEmails(undefined, undefined, "unified_inbox", undefined, { unreadOnly: true }),
+      mailService.getEmails(undefined, undefined, "snoozed")
+    ]).then(([nextCounts, emails, snoozedEmails]) => {
       if (!active) return;
+      setSnoozed(snoozedEmails.slice(0, 3));
       setCounts(nextCounts);
       setUnreadMails(emails.slice(0, UNREAD_PREVIEW_COUNT));
     }).catch(() => undefined);
@@ -92,7 +97,7 @@ export function Dashboard() {
       </div>
 
       <div className="flex flex-col items-start gap-4 xl:flex-row">
-        <section className="rise-in w-full min-w-0 rounded-[22px] border border-line p-5 xl:flex-[1.6]" style={{ "--i": 5 } as CSSProperties}>
+        <section className="rise-in w-full min-w-0 rounded-[14px] border border-line p-5 xl:flex-[1.6]" style={{ "--i": 5 } as CSSProperties}>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-[20px] font-extrabold">Neu für dich</h2>
             <button className="text-[13px] font-semibold text-label-2 hover:text-ink" onClick={() => void openUnifiedInbox()}>Alle Posteingänge</button>
@@ -101,7 +106,7 @@ export function Dashboard() {
           {unreadMails.map((email, index) => (
             <button
               key={email.id}
-              className={cn("flex w-full items-center gap-3 rounded-[14px] px-2 py-2.5 text-left transition-colors hover:bg-ink/[0.03]", index < unreadMails.length - 1 && "border-b border-line")}
+              className={cn("flex w-full items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-ink/[0.03]", index < unreadMails.length - 1 && "border-b border-line")}
               onClick={() => void selectEmail(email)}
             >
               <SenderAvatar address={email.sender} name={senderName(email.sender)} className="h-10 w-10 text-[14px]" />
@@ -117,7 +122,7 @@ export function Dashboard() {
         </section>
 
         <div className="flex w-full min-w-0 flex-col gap-4 xl:flex-1">
-          <section className="rise-in rounded-[22px] border border-line p-5" style={{ "--i": 6 } as CSSProperties}>
+          <section className="rise-in rounded-[14px] border border-line p-5" style={{ "--i": 6 } as CSSProperties}>
             <h2 className="mb-2 font-display text-[20px] font-extrabold">Konten</h2>
             {accounts.length === 0 ? <p className="py-2 text-[14px] text-label-2">Noch kein Konto verbunden.</p> : null}
             {accounts.map((account) => {
@@ -139,7 +144,27 @@ export function Dashboard() {
               );
             })}
           </section>
-          <section className="rise-in rounded-[22px] bg-surface p-5" style={{ "--i": 7 } as CSSProperties}>
+          {snoozed.length > 0 ? (
+            <section className="rise-in rounded-[14px] border border-line p-5" style={{ "--i": 7 } as CSSProperties}>
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="font-display text-[20px] font-extrabold">Als Nächstes</h2>
+                <button className="text-[13px] font-semibold text-label-2 hover:text-ink" onClick={() => void openSnoozed()}>Erinnerungen</button>
+              </div>
+              {snoozed.map((email) => (
+                <button key={email.id} className="flex w-full items-center gap-3 rounded-[10px] px-1 py-2 text-left hover:bg-ink/[0.03]" onClick={() => void selectEmail(email)}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-surface text-label-2"><AlarmClock size={16} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold">{email.subject || "(Kein Betreff)"}</span>
+                    <span className="block truncate text-[12px] text-label-2">{senderName(email.sender)}</span>
+                  </span>
+                  <span className="shrink-0 text-[12px] font-medium tabular-nums text-label-2">
+                    {email.snoozedUntil ? new Date(email.snoozedUntil).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                  </span>
+                </button>
+              ))}
+            </section>
+          ) : null}
+          <section className="rise-in rounded-[14px] bg-surface p-5" style={{ "--i": 8 } as CSSProperties}>
             <h2 className="font-display text-[20px] font-extrabold">Diese Woche</h2>
             <div className="mt-3.5 grid grid-cols-3 gap-2">
               <WeekValue label="Empfangen" value={counts.thisWeek} />
@@ -157,10 +182,11 @@ export function Dashboard() {
 }
 
 function StatTile({ index, label, value, hint, icon, inverse = false, onClick }: { index: number; label: string; value: number; hint: string; icon: ReactNode; inverse?: boolean; onClick: () => void }) {
+  const shown = useCountUp(value);
   return (
     <button
       className={cn(
-        "pressable rise-in flex h-[132px] flex-col justify-between rounded-[22px] px-5 py-[18px] text-left hover:-translate-y-0.5",
+        "pressable rise-in flex h-[132px] flex-col justify-between rounded-[14px] px-5 py-[18px] text-left hover:-translate-y-0.5",
         inverse ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-surface-2"
       )}
       style={{ "--i": index } as CSSProperties}
@@ -171,7 +197,7 @@ function StatTile({ index, label, value, hint, icon, inverse = false, onClick }:
         {icon}
       </span>
       <span className="flex w-full items-end justify-between">
-        <span className="font-display text-[44px] font-extrabold leading-[44px]">{value}</span>
+        <span className="font-display text-[44px] font-extrabold leading-[44px] tabular-nums">{shown}</span>
         <span className="text-[12px] font-semibold opacity-70">{hint}</span>
       </span>
     </button>
@@ -179,9 +205,10 @@ function StatTile({ index, label, value, hint, icon, inverse = false, onClick }:
 }
 
 function WeekValue({ label, value }: { label: string; value: number }) {
+  const shown = useCountUp(value, 600);
   return (
     <div>
-      <div className="font-display text-[24px] font-extrabold">{value}</div>
+      <div className="font-display text-[24px] font-extrabold tabular-nums">{shown}</div>
       <div className="text-[12px] text-label-2">{label}</div>
     </div>
   );

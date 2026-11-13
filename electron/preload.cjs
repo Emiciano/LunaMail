@@ -4,6 +4,7 @@ const allowedEvents = new Set([
   "sync-account-complete",
   "sync-account-error",
   "email-hydrated",
+  "snooze-due",
   "window-maximized-changed",
   "update-status"
 ]);

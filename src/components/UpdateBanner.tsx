@@ -9,7 +9,7 @@ export function UpdateBanner() {
   const ready = state.status === "ready";
   const downloading = state.status === "downloading";
   return (
-    <div className="rise-in mb-3 rounded-[14px] bg-ink p-3 text-canvas">
+    <div className="slide-up-in mb-3 rounded-[14px] bg-ink p-3 text-canvas">
       <div className="text-[13px] font-semibold">
         {ready ? "Update bereit" : state.status === "error" ? "Update fehlgeschlagen" : "Neue Version verfügbar"}
       </div>

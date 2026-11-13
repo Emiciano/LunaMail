@@ -37,7 +37,7 @@ export function AppLayout() {
 
       <section className="tr-shell flex h-full min-h-0 overflow-hidden bg-sidebar">
         <MailSidebar />
-        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas lg:my-2.5 lg:mr-2.5 lg:rounded-[22px] lg:border lg:border-line lg:shadow-[0_8px_30px_rgb(0_0_0/0.06)]">
+        <div className="app-workspace relative flex min-w-0 flex-1 overflow-hidden bg-canvas lg:my-2.5 lg:mr-2.5 lg:rounded-[14px] lg:border lg:border-line lg:shadow-[0_8px_30px_rgb(0_0_0/0.06)]">
           <div className="relative min-w-0 flex-1 overflow-hidden">
             <div key={viewKey} className="view-enter h-full">
               {selectedView === "dashboard" ? <Dashboard /> : selectedView === "health" ? <SystemStatus /> : <MailList />}
@@ -45,13 +45,13 @@ export function AppLayout() {
           </div>
           <MailReader />
           <button
-            className="pressable accent-primary compose-fab absolute bottom-6 right-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full shadow-float transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+            className="group pressable fab-enter accent-primary compose-fab absolute bottom-6 right-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full shadow-float transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!hasAccounts}
             onClick={() => openComposer()}
             title="Neue Nachricht"
             aria-label="Neue Nachricht"
           >
-            <SquarePen size={22} />
+            <SquarePen size={22} className="transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:-rotate-12 group-hover:scale-110" />
           </button>
         </div>
       </section>

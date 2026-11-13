@@ -1,13 +1,29 @@
+import { transitionTheme } from "../hooks/useTheme";
 import { create } from "zustand";
 import { isDesktop, listenDesktop } from "../services/desktop";
-import type { Account, Contact, Draft, Email, Folder, HealthStatus, MailCounts, MailRule, RuleInput, Settings, SmartCategory, SyncReport, Tag } from "../types";
-import { mailService, type MailQueryFilters } from "../services/mailService";
+import type { Account, BlockedSender, Contact, Draft, Email, Folder, HealthStatus, MailCounts, MailRule, RuleInput, Settings, SmartCategory, SyncReport, Tag } from "../types";
+import { mailService, type BackendView, type MailQueryFilters } from "../services/mailService";
 import { ensureNotificationPermission, showDesktopNotification } from "../services/notifications";
 import { parseSearchQuery } from "../lib/searchParser";
 
 const notifiedMessageIds = new Set<number>();
 let refreshScheduled: number | undefined;
 let listenersReady = false;
+let islandTimer: number | undefined;
+let islandCounter = 0;
+const pendingSends = new Map<number, { timer: number; draft: Draft }>();
+
+export type IslandKind = "info" | "success" | "error" | "sending";
+export type Island = {
+  id: number;
+  kind: IslandKind;
+  message: string;
+  actionLabel?: string;
+  action?: () => void;
+  /** Für „Wird gesendet“: Ende des Countdowns als Zeitstempel. */
+  endsAt?: number;
+};
+export type SnoozePreset = { id: string; label: string; detail: string; until: Date };
 
 type MailState = {
   accounts: Account[];
@@ -15,7 +31,7 @@ type MailState = {
   emails: Email[];
   selectedAccountId?: number;
   selectedFolderId?: number;
-  selectedView: "folder" | "favorites" | "important" | "unifiedInbox" | "dashboard" | "health";
+  selectedView: "folder" | "favorites" | "important" | "unifiedInbox" | "snoozed" | "dashboard" | "health";
   selectedSpecialAccountId?: number;
   selectedCategoryId?: number;
   selectedEmail?: Email;
@@ -42,6 +58,21 @@ type MailState = {
   composer?: Partial<Draft>;
   drafts: Draft[];
   settingsOpen: boolean;
+  island?: Island;
+  showIsland: (island: Omit<Island, "id">, durationMs?: number) => void;
+  dismissIsland: () => void;
+  openSnoozed: () => Promise<void>;
+  snoozeSelected: (until: Date, ids?: number[]) => Promise<void>;
+  unsnoozeEmail: (id: number) => Promise<void>;
+  markUnreadSelected: () => Promise<void>;
+  openAdjacentEmail: (direction: 1 | -1) => Promise<void>;
+  replyAllToSelected: () => void;
+  quickReply: (body: string) => Promise<void>;
+  blockedSenders: BlockedSender[];
+  loadBlockedSenders: () => Promise<void>;
+  blockSender: (sender: string) => Promise<void>;
+  unblockSender: (address: string) => Promise<void>;
+  unsubscribeEmail: (email: Email) => Promise<boolean>;
   loadInitial: () => Promise<void>;
   saveAccount: (account: Parameters<typeof mailService.saveAccount>[0]) => Promise<void>;
   connectGoogleAccount: (clientId: string) => Promise<void>;
@@ -95,7 +126,7 @@ type MailState = {
   deleteTag: (id: number) => Promise<void>;
   setEmailTags: (emailId: number, tagIds: number[]) => Promise<void>;
   setSelectedEmailTags: (tagIds: number[]) => Promise<void>;
-  quickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive") => Promise<void>;
+  quickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive" | "snooze") => Promise<void>;
   handleSyncAccountComplete: (report: SyncReport) => void;
   handleSyncAccountError: (payload: { accountId: number; message: string }) => void;
   handleEmailHydrated: (email: Email) => void;
@@ -115,7 +146,10 @@ const defaultSettings: Settings = {
   notificationPreview: false,
   runInBackground: true,
   accountNotifications: {},
-  accountAppearance: {}
+  accountAppearance: {},
+  signature: "",
+  signatureAuto: false,
+  undoSendSeconds: 5
 };
 
 const THEMES: Settings["theme"][] = ["light", "dark", "silver"];
@@ -129,8 +163,8 @@ function resolveCountScopeAccountId(state: Pick<MailState, "selectedAccountId" |
   return state.selectedSpecialAccountId ?? state.selectedAccountId ?? state.accounts[0]?.id;
 }
 
-function resolveBackendView(view: MailState["selectedView"]): "favorites" | "important" | "unified_inbox" | undefined {
-  if (view === "favorites" || view === "important") return view;
+function resolveBackendView(view: MailState["selectedView"]): BackendView | undefined {
+  if (view === "favorites" || view === "important" || view === "snoozed") return view;
   if (view === "unifiedInbox") return "unified_inbox";
   return undefined;
 }
@@ -280,6 +314,93 @@ async function notifyNewMessages(report: SyncReport, state: MailState) {
   }
 }
 
+/** Vorschläge für „Später erinnern“, wie in Apple Mail: heute Abend, morgen früh, Wochenende, nächste Woche. */
+export function snoozePresets(now = new Date()): SnoozePreset[] {
+  const at = (days: number, hour: number) => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, hour, 0, 0, 0);
+    return date;
+  };
+  const weekday = (date: Date) => date.toLocaleDateString("de-DE", { weekday: "short" }).replace(".", "");
+  const time = (date: Date) => `${weekday(date)}, ${date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+  const presets: SnoozePreset[] = [];
+  const inOneHour = new Date(now.getTime() + 60 * 60_000);
+  presets.push({ id: "hour", label: "In einer Stunde", detail: inOneHour.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }), until: inOneHour });
+  if (now.getHours() < 17) {
+    const evening = at(0, 18);
+    presets.push({ id: "evening", label: "Heute Abend", detail: time(evening), until: evening });
+  }
+  const tomorrow = at(1, 8);
+  presets.push({ id: "tomorrow", label: "Morgen früh", detail: time(tomorrow), until: tomorrow });
+  const day = now.getDay();
+  if (day >= 1 && day <= 4) {
+    const saturday = at(6 - day, 9);
+    presets.push({ id: "weekend", label: "Am Wochenende", detail: time(saturday), until: saturday });
+  }
+  const daysToMonday = ((8 - day) % 7) || 7;
+  const monday = at(daysToMonday, 8);
+  presets.push({ id: "next-week", label: "Nächste Woche", detail: time(monday), until: monday });
+  return presets;
+}
+
+/** Signatur mit dem üblichen Trenner „-- “, damit Mailprogramme sie erkennen. */
+export function signatureBlock(settings: Settings) {
+  const text = (settings.signature ?? "").trim();
+  return text ? `\n\n-- \n${text}` : "";
+}
+
+function selectionOrOpen(get: StoreGet) {
+  const state = get();
+  return state.selectedEmailIds.length ? state.selectedEmailIds : state.selectedEmail ? [state.selectedEmail.id] : [];
+}
+
+/** Die Mail, die nach dem Entfernen von `ids` in der Liste an deren Stelle rückt. */
+function emailAfterRemoval(emails: Email[], ids: number[]) {
+  const removed = new Set(ids);
+  const lastIndex = Math.max(...emails.map((email, index) => (removed.has(email.id) ? index : -1)));
+  if (lastIndex < 0) return undefined;
+  return emails.slice(lastIndex + 1).find((email) => !removed.has(email.id))
+    ?? [...emails.slice(0, lastIndex)].reverse().find((email) => !removed.has(email.id));
+}
+
+function ownAddresses(state: MailState) {
+  return new Set(state.accounts.map((account) => account.email.toLowerCase()));
+}
+
+function splitAddresses(value?: string) {
+  return (value ?? "").split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((item) => item.trim()).filter(Boolean);
+}
+
+function bareAddress(value: string) {
+  return (value.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? value.match(/[^\s<>"',;]+@[^\s<>"',;]+/)?.[0] ?? value).toLowerCase();
+}
+
+function replySubject(subject: string) {
+  return /^(re|aw):/i.test(subject.trim()) ? subject : `Re: ${subject}`;
+}
+
+function quoteBody(selected: Email) {
+  const receivedAt = new Date(selected.receivedAt).toLocaleString("de-DE", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return [
+    `Am ${receivedAt} schrieb ${selected.sender}:`,
+    "> " + (selected.bodyText || selected.preview || "").split("\n").join("\n> ")
+  ].join("\n");
+}
+
+function replyThreading(selected: Email) {
+  return /^<[^<>\s]+>$/.test(selected.messageId) ? { inReplyTo: selected.messageId, references: selected.messageId } : {};
+}
+
+/** „Rückgängig“ für Löschen und Archivieren: Mails zurück in ihren ursprünglichen Ordner. */
+async function restoreEmails(get: StoreGet, set: StoreSet, originalFolders: Map<number, number>) {
+  try {
+    await Promise.all([...originalFolders].map(([id, folderId]) => mailService.moveEmail(id, folderId)));
+    get().showIsland({ kind: "success", message: originalFolders.size === 1 ? "Wiederhergestellt" : `${originalFolders.size} Nachrichten wiederhergestellt` });
+  } catch (error) {
+    get().showIsland({ kind: "error", message: `Wiederherstellen fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
+  }
+  await refreshVisibleEmails(get, set);
+}
+
 export function setupMailStoreListeners() {
   if (listenersReady || !isDesktop) return;
   listenersReady = true;
@@ -291,6 +412,12 @@ export function setupMailStoreListeners() {
   });
   void listenDesktop<Email>("email-hydrated", (event) => {
     useMailStore.getState().handleEmailHydrated(event.payload);
+  });
+  void listenDesktop<number[]>("snooze-due", (event) => {
+    const count = Array.isArray(event.payload) ? event.payload.length : 0;
+    const store = useMailStore.getState();
+    void refreshVisibleEmails(useMailStore.getState, useMailStore.setState);
+    if (count > 0) store.showIsland({ kind: "info", message: count === 1 ? "Eine Erinnerung ist fällig" : `${count} Erinnerungen sind fällig` });
   });
 }
 
@@ -318,6 +445,7 @@ export const useMailStore = create<MailState>((set, get) => ({
   searchFilters: {},
   drafts: [],
   settingsOpen: false,
+  blockedSenders: [],
   async loadInitial() {
     set({ loading: true, startupStatus: "Konten laden..." });
     try {
@@ -707,10 +835,8 @@ export const useMailStore = create<MailState>((set, get) => ({
     const id = await mailService.saveDraft(draft);
     const accountId = draft.accountId ?? get().selectedAccountId;
     const drafts = await mailService.getDrafts(accountId);
-    set((state) => ({
-      drafts,
-      composer: state.composer ? { ...state.composer, ...draft, id } : state.composer
-    }));
+    // Den offenen Editor nicht neu setzen: sonst springt beim Tippen der Cursor.
+    set({ drafts });
     return id;
   },
   async deleteComposerDraft(id) {
@@ -727,94 +853,124 @@ export const useMailStore = create<MailState>((set, get) => ({
     set({ settingsOpen: false });
   },
   async sendComposer(draft) {
-    await mailService.sendMail(draft);
-    const drafts = await mailService.getDrafts(draft.accountId);
-    set({ composer: undefined, drafts });
+    const seconds = get().settings.undoSendSeconds ?? 5;
+    if (seconds <= 0) {
+      await mailService.sendMail(draft);
+      const drafts = await mailService.getDrafts(draft.accountId);
+      set({ composer: undefined, drafts });
+      get().showIsland({ kind: "success", message: "Nachricht gesendet" });
+      return;
+    }
+    // „Senden rückgängig“: erst als Entwurf sichern, dann nach Ablauf der Frist wirklich senden.
+    const id = await mailService.saveDraft(draft);
+    const saved: Draft = { ...draft, id };
+    set({ composer: undefined });
+    const key = ++islandCounter;
+    const timer = window.setTimeout(() => {
+      pendingSends.delete(key);
+      void (async () => {
+        try {
+          await mailService.sendMail(saved);
+          const drafts = await mailService.getDrafts(saved.accountId);
+          set({ drafts });
+          get().showIsland({ kind: "success", message: "Nachricht gesendet" });
+        } catch (error) {
+          get().showIsland({
+            kind: "error",
+            message: `Senden fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`,
+            actionLabel: "Öffnen",
+            action: () => get().openComposer(saved)
+          }, 12_000);
+        }
+      })();
+    }, seconds * 1000);
+    pendingSends.set(key, { timer, draft: saved });
+    get().showIsland({
+      kind: "sending",
+      message: "Wird gesendet",
+      endsAt: Date.now() + seconds * 1000,
+      actionLabel: "Rückgängig",
+      action: () => {
+        const pending = pendingSends.get(key);
+        if (!pending) return;
+        window.clearTimeout(pending.timer);
+        pendingSends.delete(key);
+        get().openComposer(pending.draft);
+      }
+    }, seconds * 1000);
   },
   async deleteSelected() {
-    const selectedIds = get().selectedEmailIds.length
-      ? get().selectedEmailIds
-      : get().selectedEmail
-        ? [get().selectedEmail!.id]
-        : [];
+    const selectedIds = selectionOrOpen(get);
     if (!selectedIds.length) return;
     const selectedFolder = get().folders.find((folder) => folder.id === get().selectedFolderId);
     const emailsBeforeDelete = get().emails;
     const selectedEmailBeforeDelete = get().selectedEmail;
+    const readerWasOpen = Boolean(selectedEmailBeforeDelete) && get().selectedEmailIds.length === 0;
+    const nextEmail = readerWasOpen ? emailAfterRemoval(emailsBeforeDelete, selectedIds) : undefined;
+    const originalFolders = new Map(emailsBeforeDelete.filter((email) => selectedIds.includes(email.id)).map((email) => [email.id, email.folderId]));
+    if (selectedEmailBeforeDelete) originalFolders.set(selectedEmailBeforeDelete.id, selectedEmailBeforeDelete.folderId);
     const selectedIdSet = new Set(selectedIds);
+    const permanent = get().selectedView === "folder" && selectedFolder?.role === "trash";
     try {
-      if (get().selectedView === "folder" && selectedFolder?.role === "trash") {
-        set({
-          emails: emailsBeforeDelete.filter((email) => !selectedIdSet.has(email.id)),
-          selectedEmail: undefined,
-          selectedEmailIds: [],
-          syncStatus: `${selectedIds.length} Mails werden endgültig gelöscht...`,
-          syncError: undefined
-        });
-        await mailService.deleteEmailsPermanently(selectedIds);
-      } else {
-        set({ emails: emailsBeforeDelete.filter((email) => !selectedIdSet.has(email.id)) });
-        await Promise.all(selectedIds.map((id) => mailService.deleteEmail(id)));
-      }
+      set({
+        emails: emailsBeforeDelete.filter((email) => !selectedIdSet.has(email.id)),
+        selectedEmail: undefined,
+        selectedEmailIds: [],
+        syncError: undefined
+      });
+      if (permanent) await mailService.deleteEmailsPermanently(selectedIds);
+      else await Promise.all(selectedIds.map((id) => mailService.deleteEmail(id)));
     } catch (error) {
       set({
-        syncError: `Löschen fehlgeschlagen: ${String(error)}`,
-        syncStatus: "Nachricht wurde nicht gelöscht",
         emails: emailsBeforeDelete,
         selectedEmail: selectedEmailBeforeDelete,
-        selectedEmailIds: selectedIds
+        selectedEmailIds: readerWasOpen ? [] : selectedIds
       });
+      get().showIsland({ kind: "error", message: `Löschen fehlgeschlagen: ${String(error)}` });
       return;
     }
-    const view = get().selectedView;
-    const specialAccountId = get().selectedSpecialAccountId;
-    const countScopeAccountId = resolveCountScopeAccountId(get());
-    const [emails, folders, mailCounts] = await Promise.all([
-      view === "folder"
-        ? mailService.getEmails(get().selectedFolderId, get().query, undefined, get().selectedAccountId, get().searchFilters)
-        : mailService.getEmails(undefined, get().query, resolveBackendView(view), specialAccountId, get().searchFilters),
-      mailService.getFolders(),
-      mailService.getMailCounts(countScopeAccountId)
-    ]);
-    set({
-      selectedEmail: undefined,
-      selectedEmailIds: [],
-      emails,
-      folders,
-      mailCounts,
-      mailCountsAccountId: countScopeAccountId,
-      syncStatus: "Nachrichten gelöscht"
-    });
+    if (nextEmail) void get().selectEmail(nextEmail);
+    const label = selectedIds.length === 1 ? "Nachricht" : `${selectedIds.length} Nachrichten`;
+    get().showIsland(permanent
+      ? { kind: "success", message: `${label} endgültig gelöscht` }
+      : { kind: "success", message: `${label} in den Papierkorb gelegt`, actionLabel: "Rückgängig", action: () => void restoreEmails(get, set, originalFolders) });
+    await refreshVisibleEmails(get, set);
   },
   async markReadSelected() {
-    const selectedIds = get().selectedEmailIds.length
-      ? get().selectedEmailIds
-      : get().selectedEmail
-        ? [get().selectedEmail!.id]
-        : [];
+    const selectedIds = selectionOrOpen(get);
     if (!selectedIds.length) return;
     patchReadState(set, selectedIds, true);
     set({ selectedEmailIds: [] });
     void Promise.all(selectedIds.map((id) => mailService.markRead(id, true)));
   },
+  async markUnreadSelected() {
+    const selectedIds = selectionOrOpen(get);
+    if (!selectedIds.length) return;
+    patchReadState(set, selectedIds, false);
+    set({ selectedEmailIds: [], selectedEmail: undefined });
+    void Promise.all(selectedIds.map((id) => mailService.markRead(id, false)));
+  },
   async archiveSelected() {
-    const selectedIds = get().selectedEmailIds.length
-      ? get().selectedEmailIds
-      : get().selectedEmail
-        ? [get().selectedEmail!.id]
-        : [];
+    const selectedIds = selectionOrOpen(get);
     if (!selectedIds.length) return;
 
-    const emailsById = new Map(get().emails.map((email) => [email.id, email]));
+    const emailsBeforeArchive = get().emails;
+    const emailsById = new Map(emailsBeforeArchive.map((email) => [email.id, email]));
+    const opened = get().selectedEmail;
+    if (opened) emailsById.set(opened.id, opened);
     const archiveByAccount = new Map(
       get().folders
         .filter((folder) => folder.role === "archive")
         .map((folder) => [folder.accountId, folder.id])
     );
-
-    const emailsBeforeArchive = get().emails;
+    const readerWasOpen = Boolean(opened) && get().selectedEmailIds.length === 0;
+    const nextEmail = readerWasOpen ? emailAfterRemoval(emailsBeforeArchive, selectedIds) : undefined;
+    const originalFolders = new Map(selectedIds.flatMap((id) => {
+      const email = emailsById.get(id);
+      return email ? [[id, email.folderId] as const] : [];
+    }));
     const selectedIdSet = new Set(selectedIds);
-    set({ emails: emailsBeforeArchive.filter((email) => !selectedIdSet.has(email.id)) });
+    set({ emails: emailsBeforeArchive.filter((email) => !selectedIdSet.has(email.id)), selectedEmail: undefined, selectedEmailIds: [] });
     try {
       await Promise.all(selectedIds.map(async (id) => {
         const email = emailsById.get(id);
@@ -826,21 +982,131 @@ export const useMailStore = create<MailState>((set, get) => ({
         await mailService.moveEmail(id, archiveFolderId);
       }));
     } catch (error) {
-      set({ emails: emailsBeforeArchive, syncError: `Archivieren fehlgeschlagen: ${String(error)}` });
+      set({ emails: emailsBeforeArchive, selectedEmail: opened });
+      get().showIsland({ kind: "error", message: `Archivieren fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
       return;
     }
-
-    const view = get().selectedView;
-    const specialAccountId = get().selectedSpecialAccountId;
-    const countScopeAccountId = resolveCountScopeAccountId(get());
-    const [emails, folders, mailCounts] = await Promise.all([
-      view === "folder"
-        ? mailService.getEmails(get().selectedFolderId, get().query, undefined, get().selectedAccountId, get().searchFilters)
-        : mailService.getEmails(undefined, get().query, resolveBackendView(view), specialAccountId, get().searchFilters),
-      mailService.getFolders(),
-      mailService.getMailCounts(countScopeAccountId)
-    ]);
-    set({ selectedEmail: undefined, selectedEmailIds: [], emails, folders, mailCounts, mailCountsAccountId: countScopeAccountId });
+    if (nextEmail) void get().selectEmail(nextEmail);
+    get().showIsland({
+      kind: "success",
+      message: selectedIds.length === 1 ? "Archiviert" : `${selectedIds.length} Nachrichten archiviert`,
+      actionLabel: "Rückgängig",
+      action: () => void restoreEmails(get, set, originalFolders)
+    });
+    await refreshVisibleEmails(get, set);
+  },
+  async snoozeSelected(until, ids) {
+    const selectedIds = ids ?? selectionOrOpen(get);
+    if (!selectedIds.length) return;
+    const emailsBefore = get().emails;
+    const readerWasOpen = Boolean(get().selectedEmail) && !ids && get().selectedEmailIds.length === 0;
+    const nextEmail = readerWasOpen ? emailAfterRemoval(emailsBefore, selectedIds) : undefined;
+    const idSet = new Set(selectedIds);
+    set({ emails: emailsBefore.filter((email) => !idSet.has(email.id)), selectedEmail: readerWasOpen ? undefined : get().selectedEmail, selectedEmailIds: [] });
+    try {
+      await Promise.all(selectedIds.map((id) => mailService.snoozeEmail(id, until.toISOString())));
+    } catch (error) {
+      set({ emails: emailsBefore });
+      get().showIsland({ kind: "error", message: `Erinnerung konnte nicht gesetzt werden: ${error instanceof Error ? error.message : String(error)}` });
+      return;
+    }
+    if (nextEmail) void get().selectEmail(nextEmail);
+    const when = until.toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    get().showIsland({
+      kind: "success",
+      message: `Erinnerung: ${when}`,
+      actionLabel: "Rückgängig",
+      action: () => {
+        void Promise.all(selectedIds.map((id) => mailService.unsnoozeEmail(id))).then(() => refreshVisibleEmails(get, set));
+      }
+    });
+    await refreshVisibleEmails(get, set);
+  },
+  async unsnoozeEmail(id) {
+    set((state) => ({ emails: state.selectedView === "snoozed" ? state.emails.filter((email) => email.id !== id) : state.emails }));
+    await mailService.unsnoozeEmail(id);
+    get().showIsland({ kind: "success", message: "Zurück im Posteingang" });
+    await refreshVisibleEmails(get, set);
+  },
+  async openSnoozed() {
+    set({ selectedView: "snoozed", selectedAccountId: undefined, selectedSpecialAccountId: undefined, selectedFolderId: undefined, selectedCategoryId: undefined, selectedEmail: undefined, selectedEmailIds: [], searchFilters: {}, loading: true });
+    try {
+      const [emails, mailCounts] = await Promise.all([
+        mailService.getEmails(undefined, get().query, "snoozed"),
+        mailService.getMailCounts(undefined)
+      ]);
+      set({ emails, mailCounts, mailCountsAccountId: undefined });
+    } catch (error) {
+      set({ syncError: `Erinnerungen konnten nicht geladen werden: ${String(error)}`, emails: [] });
+    } finally {
+      set({ loading: false });
+    }
+  },
+  async openAdjacentEmail(direction) {
+    const { emails, selectedEmail } = get();
+    if (emails.length === 0) return;
+    const index = selectedEmail ? emails.findIndex((email) => email.id === selectedEmail.id) : -1;
+    const next = index < 0 ? emails[0] : emails[index + direction];
+    if (next) await get().selectEmail(next);
+  },
+  async loadBlockedSenders() {
+    set({ blockedSenders: await mailService.getBlockedSenders() });
+  },
+  async blockSender(sender) {
+    try {
+      const result = await mailService.blockSender(sender, true);
+      const opened = get().selectedEmail;
+      if (opened && bareAddress(opened.sender) === result.address) set({ selectedEmail: undefined });
+      await get().loadBlockedSenders();
+      get().showIsland({
+        kind: "success",
+        message: result.moved > 0
+          ? `Absender blockiert · ${result.moved} ${result.moved === 1 ? "Mail" : "Mails"} im Papierkorb`
+          : "Absender blockiert",
+        actionLabel: "Rückgängig",
+        action: () => void get().unblockSender(result.address)
+      }, 7000);
+    } catch (error) {
+      get().showIsland({ kind: "error", message: `Blockieren fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
+    }
+    await refreshVisibleEmails(get, set);
+  },
+  async unblockSender(address) {
+    await mailService.unblockSender(address);
+    await get().loadBlockedSenders();
+    get().showIsland({ kind: "success", message: `${address} nicht mehr blockiert` });
+  },
+  async unsubscribeEmail(email) {
+    try {
+      const result = await mailService.unsubscribe(email.id);
+      if (!result.completed) {
+        get().showIsland({ kind: "info", message: "Die Abmeldeseite des Absenders wurde im Browser geöffnet" });
+        return false;
+      }
+      const now = new Date().toISOString();
+      const sender = bareAddress(email.sender);
+      set((state) => ({
+        emails: state.emails.map((item) => (bareAddress(item.sender) === sender ? { ...item, unsubscribedAt: now } : item)),
+        selectedEmail: state.selectedEmail && bareAddress(state.selectedEmail.sender) === sender ? { ...state.selectedEmail, unsubscribedAt: now } : state.selectedEmail
+      }));
+      get().showIsland({ kind: "success", message: "Abgemeldet · kann beim Absender ein paar Tage dauern" }, 7000);
+      return true;
+    } catch (error) {
+      get().showIsland({ kind: "error", message: `Abmelden fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` }, 8000);
+      return false;
+    }
+  },
+  showIsland(island, durationMs = 5000) {
+    if (islandTimer) window.clearTimeout(islandTimer);
+    const id = ++islandCounter;
+    set({ island: { ...island, id } });
+    islandTimer = window.setTimeout(() => {
+      if (get().island?.id === id) set({ island: undefined });
+    }, Math.max(1500, durationMs));
+  },
+  dismissIsland() {
+    if (islandTimer) window.clearTimeout(islandTimer);
+    set({ island: undefined });
   },
   async moveSelected(targetFolderId) {
     const selectedIds = get().selectedEmailIds.length
@@ -869,6 +1135,9 @@ export const useMailStore = create<MailState>((set, get) => ({
         ? [get().selectedEmail!.id]
         : [];
     if (!selectedIds.length) return;
+    const opened = get().selectedEmail;
+    if (opened && selectedIds.includes(opened.id)) set({ selectedEmail: { ...opened, isFavorite: !opened.isFavorite } });
+    set((state) => ({ emails: state.emails.map((email) => (selectedIds.includes(email.id) ? { ...email, isFavorite: !email.isFavorite } : email)) }));
     await Promise.all(selectedIds.map((id) => mailService.toggleFavorite(id)));
     const view = get().selectedView;
     const specialAccountId = get().selectedSpecialAccountId;
@@ -888,6 +1157,9 @@ export const useMailStore = create<MailState>((set, get) => ({
         ? [get().selectedEmail!.id]
         : [];
     if (!selectedIds.length) return;
+    const opened = get().selectedEmail;
+    if (opened && selectedIds.includes(opened.id)) set({ selectedEmail: { ...opened, isImportant: !opened.isImportant } });
+    set((state) => ({ emails: state.emails.map((email) => (selectedIds.includes(email.id) ? { ...email, isImportant: !email.isImportant } : email)) }));
     await Promise.all(selectedIds.map((id) => mailService.toggleImportant(id)));
     const view = get().selectedView;
     const specialAccountId = get().selectedSpecialAccountId;
@@ -903,33 +1175,69 @@ export const useMailStore = create<MailState>((set, get) => ({
   replyToSelected() {
     const selected = get().selectedEmail;
     if (!selected) return;
-    const receivedAt = new Date(selected.receivedAt).toLocaleString();
-    const quotedBody = [
-      "",
-      `Am ${receivedAt} schrieb ${selected.sender}:`,
-      "> " + (selected.bodyText || selected.preview || "").split("\n").join("\n> ")
-    ].join("\n");
     set({
       composer: {
         accountId: selected.accountId,
         to: selected.sender,
-        subject: selected.subject.startsWith("Re:") ? selected.subject : `Re: ${selected.subject}`,
-        body: quotedBody,
-        attachments: []
+        subject: replySubject(selected.subject),
+        body: `${get().settings.signatureAuto ? signatureBlock(get().settings) : ""}\n\n${quoteBody(selected)}`,
+        attachments: [],
+        ...replyThreading(selected)
       }
     });
     void get().loadDrafts(selected.accountId);
   },
+  replyAllToSelected() {
+    const selected = get().selectedEmail;
+    if (!selected) return;
+    const own = ownAddresses(get());
+    const seen = new Set<string>();
+    const unique = (list: string[]) => list.filter((entry) => {
+      const address = bareAddress(entry);
+      if (!address || own.has(address) || seen.has(address)) return false;
+      seen.add(address);
+      return true;
+    });
+    const to = unique([selected.sender, ...splitAddresses(selected.recipients)]);
+    const cc = unique(splitAddresses(selected.cc));
+    set({
+      composer: {
+        accountId: selected.accountId,
+        to: (to.length ? to : [selected.sender]).join(", "),
+        cc: cc.join(", "),
+        subject: replySubject(selected.subject),
+        body: `${get().settings.signatureAuto ? signatureBlock(get().settings) : ""}\n\n${quoteBody(selected)}`,
+        attachments: [],
+        ...replyThreading(selected)
+      }
+    });
+    void get().loadDrafts(selected.accountId);
+  },
+  async quickReply(text) {
+    const selected = get().selectedEmail;
+    if (!selected || !text.trim()) return;
+    const draft: Draft = {
+      accountId: selected.accountId,
+      to: selected.sender,
+      subject: replySubject(selected.subject),
+      body: `${text.trim()}${get().settings.signatureAuto ? signatureBlock(get().settings) : ""}\n\n${quoteBody(selected)}`,
+      attachments: [],
+      ...replyThreading(selected)
+    };
+    await get().sendComposer(draft);
+  },
   forwardSelected() {
     const selected = get().selectedEmail;
     if (!selected) return;
-    const receivedAt = new Date(selected.receivedAt).toLocaleString();
+    const receivedAt = new Date(selected.receivedAt).toLocaleString("de-DE");
     const forwardBody = [
+      get().settings.signatureAuto ? signatureBlock(get().settings) : "",
       "",
-      "--- Weitergeleitete Nachricht ---",
+      "---------- Weitergeleitete Nachricht ----------",
       `Von: ${selected.sender}`,
-      `Betreff: ${selected.subject}`,
       `Datum: ${receivedAt}`,
+      `Betreff: ${selected.subject}`,
+      `An: ${selected.recipients}`,
       "",
       selected.bodyText || selected.preview || ""
     ].join("\n");
@@ -937,7 +1245,7 @@ export const useMailStore = create<MailState>((set, get) => ({
       composer: {
         accountId: selected.accountId,
         to: "",
-        subject: selected.subject.startsWith("Fwd:") ? selected.subject : `Fwd: ${selected.subject}`,
+        subject: /^(fwd?|wg):/i.test(selected.subject.trim()) ? selected.subject : `Fwd: ${selected.subject}`,
         body: forwardBody,
         attachments: []
       }
@@ -946,7 +1254,12 @@ export const useMailStore = create<MailState>((set, get) => ({
   },
   async updateSettings(settings) {
     await mailService.saveSettings(settings);
-    set({ settings });
+    const previous = get().settings;
+    if (previous && previous.theme !== settings.theme) {
+      transitionTheme(settings.theme, () => set({ settings }));
+    } else {
+      set({ settings });
+    }
   },
   async loadTags() {
     const tags = await mailService.getTags();
@@ -1016,55 +1329,29 @@ export const useMailStore = create<MailState>((set, get) => ({
   async quickAction(emailId, action) {
     const email = get().emails.find((item) => item.id === emailId);
     if (!email) return;
-    // Löschen und Archivieren nehmen die Zeile sofort aus der Liste, damit sie ohne Wartezeit
-    // herausgleitet; schlägt der Auftrag fehl, kommt sie zurück.
-    const emailsBefore = get().emails;
-    if (action === "delete") {
-      set({ emails: emailsBefore.filter((item) => item.id !== emailId) });
-      try {
-        await mailService.deleteEmail(emailId);
-      } catch (error) {
-        set({
-          emails: emailsBefore,
-          syncError: `Löschen fehlgeschlagen: ${String(error)}`,
-          syncStatus: "Nachricht wurde nicht gelöscht"
-        });
-        return;
-      }
-    } else if (action === "favorite") {
-      await mailService.toggleFavorite(emailId);
-    } else if (action === "important") {
-      await mailService.toggleImportant(emailId);
-    } else if (action === "read") {
-      patchReadState(set, [emailId], true);
-      void mailService.markRead(emailId, true);
+    if (action === "read") {
+      patchReadState(set, [emailId], !email.isRead);
+      void mailService.markRead(emailId, !email.isRead);
       return;
-    } else if (action === "archive") {
-      const archiveFolder = get().folders.find((folder) => folder.accountId === email.accountId && folder.role === "archive");
-      if (!archiveFolder) {
-        set({ syncError: "Kein Archiv-Ordner gefunden." });
-        return;
-      }
-      set({ emails: emailsBefore.filter((item) => item.id !== emailId) });
-      try {
-        await mailService.moveEmail(emailId, archiveFolder.id);
-      } catch (error) {
-        set({ emails: emailsBefore, syncError: `Archivieren fehlgeschlagen: ${String(error)}` });
-        return;
-      }
     }
-    const view = get().selectedView;
-    const specialAccountId = get().selectedSpecialAccountId;
-    const countScopeAccountId = resolveCountScopeAccountId(get());
-    const [emails, folders, mailCounts] = await Promise.all([
-      view === "folder"
-        ? mailService.getEmails(get().selectedFolderId, get().query, undefined, get().selectedAccountId, get().searchFilters)
-        : view === "dashboard"
-          ? mailService.getEmails(get().selectedFolderId, get().query, undefined, get().selectedAccountId, get().searchFilters)
-          : mailService.getEmails(undefined, get().query, resolveBackendView(view), specialAccountId, get().searchFilters),
-      mailService.getFolders(),
-      mailService.getMailCounts(countScopeAccountId)
-    ]);
-    set({ emails, folders, mailCounts, mailCountsAccountId: countScopeAccountId });
+    if (action === "favorite" || action === "important") {
+      const key = action === "favorite" ? "isFavorite" : "isImportant";
+      set((state) => ({ emails: state.emails.map((item) => (item.id === emailId ? { ...item, [key]: !item[key] } : item)) }));
+      await (action === "favorite" ? mailService.toggleFavorite(emailId) : mailService.toggleImportant(emailId));
+      await refreshVisibleEmails(get, set);
+      return;
+    }
+    if (action === "snooze") {
+      await get().snoozeSelected(snoozePresets()[0].until, [emailId]);
+      return;
+    }
+    // Löschen und Archivieren laufen über dieselben Wege wie die Toolbar, inklusive „Rückgängig“.
+    const previousSelection = get().selectedEmailIds;
+    set({ selectedEmailIds: [emailId] });
+    if (action === "delete") await get().deleteSelected();
+    else await get().archiveSelected();
+    if (get().selectedEmailIds.length === 0 && previousSelection.length > 0) {
+      set({ selectedEmailIds: previousSelection.filter((id) => id !== emailId) });
+    }
   }
 }));

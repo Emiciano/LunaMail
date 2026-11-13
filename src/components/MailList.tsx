@@ -1,4 +1,4 @@
-import { AlertCircle, Archive, CheckCheck, MailOpen, Paperclip, RefreshCw, Search, Star, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { AlarmClock, AlertCircle, Archive, CheckCheck, Inbox, MailOpen, Paperclip, RefreshCw, Search, Star, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -7,6 +7,7 @@ import { useMailStore } from "../stores/mailStore";
 import type { Email } from "../types";
 import { folderLabel } from "./MailSidebar";
 import { SenderAvatar } from "./SenderAvatar";
+import { SnoozeMenu } from "./SnoozeMenu";
 
 const PAGE_SIZE = 30;
 
@@ -16,7 +17,8 @@ export function MailList() {
     selectedCategoryId, categories, query,
     search, selectCategory, selectEmail, toggleEmailSelection, setEmailSelection,
     deleteSelected, markReadSelected, archiveSelected, toggleFavoriteSelected, toggleImportantSelected,
-    quickAction, sync, loading, hasSynced, syncError, settings, tags, searchFilters, setSearchFilters, setSelectedEmailTags
+    quickAction, sync, loading, hasSynced, syncError, settings, tags, searchFilters, setSearchFilters, setSelectedEmailTags,
+    snoozeSelected, unsnoozeEmail
   } = useMailStore(useShallow((state) => ({
     accounts: state.accounts,
     folders: state.folders,
@@ -47,8 +49,11 @@ export function MailList() {
     tags: state.tags,
     searchFilters: state.searchFilters,
     setSearchFilters: state.setSearchFilters,
-    setSelectedEmailTags: state.setSelectedEmailTags
+    setSelectedEmailTags: state.setSelectedEmailTags,
+    snoozeSelected: state.snoozeSelected,
+    unsnoozeEmail: state.unsnoozeEmail
   })));
+  const snoozedView = selectedView === "snoozed";
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [searchDraft, setSearchDraft] = useState(query);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
@@ -107,14 +112,14 @@ export function MailList() {
       <header className="flex shrink-0 items-end justify-between gap-4 px-1 pb-3 pt-6">
         <div className="min-w-0">
           <h1 className="truncate font-display text-[30px] font-extrabold leading-[34px]">{title}</h1>
-          <p className="mt-1 truncate text-[13px] font-medium text-label-2">{subtitle}</p>
+          <p key={subtitle} className="view-enter mt-1 truncate text-[13px] font-medium text-label-2">{subtitle}</p>
         </div>
       </header>
 
       {showsMailList ? (
         <>
           <div className="shrink-0 px-1 pb-2">
-            <label className="search-field flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition focus-within:bg-surface-2 focus-within:ring-2 focus-within:ring-ink/15">
+            <label className="search-field flex h-9 max-w-[520px] items-center gap-2 rounded-[10px] bg-surface px-2.5 text-label-2 transition-[max-width,background-color,box-shadow] duration-300 ease-out focus-within:max-w-[680px] focus-within:bg-surface-2 focus-within:ring-2 focus-within:ring-ink/15">
               <Search size={17} />
               <input
                 id="mail-search-input"
@@ -131,13 +136,13 @@ export function MailList() {
             </label>
             {selectedView === "unifiedInbox" && categories.length > 0 ? (
               <div className="scrollbar-hidden mt-2.5 flex gap-1.5 overflow-x-auto text-[13px] font-semibold">
-                <button className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${!selectedCategoryId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`} onClick={() => void selectCategory(undefined)}>
+                <button className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 pressable ${!selectedCategoryId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`} onClick={() => void selectCategory(undefined)}>
                   Alle
                 </button>
                 {categories.map((category) => (
                   <button
                     key={category.id}
-                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${selectedCategoryId === category.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
+                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 pressable ${selectedCategoryId === category.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
                     onClick={() => void selectCategory(category.id)}
                   >
                     {category.label}
@@ -148,7 +153,7 @@ export function MailList() {
             {tags.length > 0 ? (
               <div className="scrollbar-hidden mt-2.5 flex gap-1.5 overflow-x-auto text-[13px] font-semibold">
                 <button
-                  className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${!searchFilters.tagId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
+                  className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 pressable ${!searchFilters.tagId ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
                   onClick={() => void setSearchFilters({ ...searchFilters, tagId: undefined })}
                 >
                   Alle
@@ -156,7 +161,7 @@ export function MailList() {
                 {tags.map((tag) => (
                   <button
                     key={tag.id}
-                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 pressable ${searchFilters.tagId === tag.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
+                    className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 pressable ${searchFilters.tagId === tag.id ? "bg-ink text-canvas" : "bg-surface text-ink/80 hover:bg-surface-2"}`}
                     onClick={() => void setSearchFilters({ ...searchFilters, tagId: tag.id })}
                   >
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
@@ -175,6 +180,7 @@ export function MailList() {
             onRefresh={() => void sync(false)}
             onRead={() => void markReadSelected()}
             onFavorite={() => void toggleFavoriteSelected()}
+            onSnooze={(until) => void snoozeSelected(until)}
             onImportant={() => void toggleImportantSelected()}
             onTags={openTagPicker}
             onArchive={() => void archiveSelected()}
@@ -196,18 +202,18 @@ export function MailList() {
           >
             {loading && emails.length === 0 ? <MailListSkeleton /> : null}
             {!loading && emails.length === 0 ? (
-              <div className="mx-auto flex max-w-sm flex-col items-center px-6 py-16 text-center">
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface text-label-2">
-                  {syncError ? <AlertCircle size={20} /> : <MailOpen size={20} />}
+              <div className="view-enter mx-auto flex max-w-sm flex-col items-center px-6 py-16 text-center">
+                <span className="pop-in flex h-14 w-14 items-center justify-center rounded-[14px] bg-surface text-label-2">
+                  {snoozedView ? <AlarmClock size={20} /> : syncError ? <AlertCircle size={20} /> : <MailOpen size={20} />}
                 </span>
                 <h2 className="mt-4 font-display text-[20px] font-bold">
-                  {accounts.length === 0 ? "Noch kein Konto verbunden" : syncError ? "Synchronisation fehlgeschlagen" : hasSynced ? "Keine Nachrichten gefunden" : "Bereit für die erste Synchronisierung"}
+                  {snoozedView ? "Keine Erinnerungen" : accounts.length === 0 ? "Noch kein Konto verbunden" : syncError ? "Synchronisation fehlgeschlagen" : hasSynced ? "Keine Nachrichten gefunden" : "Bereit für die erste Synchronisierung"}
                 </h2>
                 <p className="mt-2 text-[14px] leading-5 text-label-2">
-                  {accounts.length === 0 ? "Verbinde in den Einstellungen ein E-Mail-Konto, um loszulegen." : syncError ? syncError : hasSynced ? "In dieser Ansicht gibt es momentan keine passenden E-Mails." : "LunaMail lädt deine Nachrichten sicher auf dieses Gerät."}
+                  {snoozedView ? "Stelle eine Mail mit dem Wecker-Symbol oder der Taste H zurück. Sie kommt zur gewählten Zeit wieder in den Posteingang." : accounts.length === 0 ? "Verbinde in den Einstellungen ein E-Mail-Konto, um loszulegen." : syncError ? syncError : hasSynced ? "In dieser Ansicht gibt es momentan keine passenden E-Mails." : "LunaMail lädt deine Nachrichten sicher auf dieses Gerät."}
                 </p>
                 {accounts.length > 0 && !hasSynced ? (
-                  <button className="accent-primary mt-5 inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[14px] font-bold" onClick={() => void sync(false)}>
+                  <button className="accent-primary mt-5 inline-flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-[14px] font-bold" onClick={() => void sync(false)}>
                     <RefreshCw size={13} /> Jetzt synchronisieren
                   </button>
                 ) : null}
@@ -224,6 +230,8 @@ export function MailList() {
                 accountColor={settings.accountAppearance?.[String(email.accountId)]?.color}
                 permanentlyDeletes={permanentlyDeletes}
                 showsRecipient={showsRecipient}
+                snoozedView={snoozedView}
+                onUnsnooze={unsnoozeEmail}
                 enterIndex={index < 15 ? index : 0}
                 leaving={leavingIds.has(email.id)}
                 onSelect={selectEmail}
@@ -237,7 +245,7 @@ export function MailList() {
 
       {tagPickerOpen ? (
         <div className="overlay-enter fixed inset-0 z-[2147483646] flex items-center justify-center bg-scrim/40 p-6" onClick={() => setTagPickerOpen(false)}>
-          <section className="dialog-enter w-[min(420px,calc(100vw-2rem))] rounded-xl border border-ink/[0.08] bg-surface p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <section className="dialog-enter w-[min(420px,calc(100vw-2rem))] rounded-[14px] border border-line bg-canvas p-5 shadow-float" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold">Tags zuweisen</h2>
@@ -277,8 +285,9 @@ export function MailList() {
 
 function ActionToolbar({
   allSelected, selectedCount, permanentlyDeletes, onSelectAll, onRefresh, onRead,
-  onFavorite, onImportant, onTags, onArchive, onDelete
+  onFavorite, onSnooze, onImportant, onTags, onArchive, onDelete
 }: {
+  onSnooze: (until: Date) => void;
   allSelected: boolean;
   selectedCount: number;
   permanentlyDeletes: boolean;
@@ -302,6 +311,7 @@ function ActionToolbar({
       <ToolbarButton label="Als gelesen markieren" icon={<CheckCheck size={16} />} onClick={onRead} disabled={disabled} />
       <ToolbarButton label="Favorisieren" icon={<Star size={16} />} onClick={onFavorite} disabled={disabled} />
       <ToolbarButton label="Als wichtig markieren" icon={<AlertCircle size={16} />} onClick={onImportant} disabled={disabled} />
+      <SnoozeMenu onSnooze={onSnooze} className={cn(disabled && "pointer-events-none opacity-30")} trigger={<AlarmClock size={16} />} />
       <ToolbarButton label="Tags" icon={<TagIcon size={16} />} onClick={onTags} disabled={disabled} />
       <ToolbarButton label="Archivieren" icon={<Archive size={16} />} onClick={onArchive} disabled={disabled} />
       <ToolbarButton label={permanentlyDeletes ? "Endgültig löschen" : "Löschen"} icon={<Trash2 size={16} />} onClick={onDelete} disabled={disabled} danger />
@@ -313,7 +323,7 @@ function ToolbarButton({ label, icon, onClick, disabled = false, danger = false 
   return (
     <button
       className={cn(
-        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+        "pressable inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] transition-[color,background-color,opacity,transform] duration-200",
         danger ? "text-danger hover:bg-danger/10" : "text-label-2 hover:bg-surface hover:text-ink",
         disabled && "pointer-events-none opacity-30"
       )}
@@ -328,9 +338,11 @@ function ToolbarButton({ label, icon, onClick, disabled = false, danger = false 
 }
 
 const MailRow = memo(function MailRow({
-  email, active, selected, anySelected, accountLabel, accountColor, permanentlyDeletes, showsRecipient, enterIndex, leaving,
-  onSelect, onToggleSelection, onQuickAction
+  email, active, selected, anySelected, accountLabel, accountColor, permanentlyDeletes, showsRecipient, snoozedView, enterIndex, leaving,
+  onSelect, onToggleSelection, onQuickAction, onUnsnooze
 }: {
+  snoozedView: boolean;
+  onUnsnooze: (id: number) => Promise<void>;
   email: Email;
   active: boolean;
   selected: boolean;
@@ -343,9 +355,9 @@ const MailRow = memo(function MailRow({
   leaving: boolean;
   onSelect: (email: Email) => Promise<void>;
   onToggleSelection: (id: number, selected: boolean) => void;
-  onQuickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive") => Promise<void>;
+  onQuickAction: (emailId: number, action: "delete" | "favorite" | "important" | "read" | "archive" | "snooze") => Promise<void>;
 }) {
-  const timeLabel = useMemo(() => formatMailTime(email.receivedAt), [email.receivedAt]);
+  const timeLabel = useMemo(() => (snoozedView && email.snoozedUntil ? formatSnoozeTime(email.snoozedUntil) : formatMailTime(email.receivedAt)), [email.receivedAt, email.snoozedUntil, snoozedView]);
   const counterpart = showsRecipient && email.recipients ? email.recipients.split(",")[0] : email.sender;
   const sender = senderName(counterpart) || accountLabel || "Unbekannter Absender";
   const unread = !email.isRead;
@@ -361,7 +373,7 @@ const MailRow = memo(function MailRow({
       role="button"
       tabIndex={0}
       className={cn(
-        "mail-row group relative flex w-full cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors duration-150",
+        "mail-row group relative flex w-full cursor-pointer items-start gap-3 rounded-[12px] px-3 py-3 text-left transition-colors duration-150",
         "after:pointer-events-none after:absolute after:bottom-0 after:left-[68px] after:right-3 after:h-px after:bg-line",
         leaving ? "mail-row-leave" : "mail-row-enter",
         active ? "bg-surface after:opacity-0" : selected ? "bg-ink/[0.05] after:opacity-0" : "hover:bg-ink/[0.03] hover:after:opacity-0"
@@ -381,15 +393,16 @@ const MailRow = memo(function MailRow({
           className={cn("mail-checkbox absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 transition-opacity", selected || anySelected ? "opacity-100" : "opacity-0 group-hover/tile:opacity-100 group-focus-visible:opacity-100")}
           aria-label="Mail auswählen"
         />
-        {unread && !anySelected ? <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-[rgb(var(--accent))]" aria-label="Ungelesen" /> : null}
+        {unread && !anySelected ? <span className="dot-in absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-[rgb(var(--accent))]" aria-label="Ungelesen" /> : null}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("min-w-0 flex-1 truncate text-[15px] leading-5", unread ? "font-extrabold" : "font-semibold")}>{sender}</span>
           {email.hasAttachments ? <Paperclip size={13} className="shrink-0 text-label-2" /> : null}
-          {email.isImportant ? <AlertCircle size={13} className="shrink-0 text-flag" /> : null}
-          {email.isFavorite ? <Star size={13} className="shrink-0 fill-flag text-flag" /> : null}
-          <time className="ml-1 shrink-0 whitespace-nowrap text-[13px] font-medium text-label-2">{timeLabel}</time>
+          {email.isImportant ? <AlertCircle size={13} className="pop-in shrink-0 text-flag" /> : null}
+          {email.isFavorite ? <Star size={13} className="pop-in shrink-0 fill-flag text-flag" /> : null}
+          {snoozedView ? <AlarmClock size={13} className="shrink-0 text-label-2" /> : null}
+          <time className={cn("ml-1 shrink-0 whitespace-nowrap text-[13px] font-medium tabular-nums", unread ? "text-ink" : "text-label-2")}>{timeLabel}</time>
         </span>
         <span className={cn("mt-0.5 block truncate text-[14px] leading-5", unread ? "font-semibold text-ink" : "text-ink/85")}>{email.subject || "(Kein Betreff)"}</span>
         <span className="mt-0.5 line-clamp-2 text-[13px] leading-[18px] text-label-2">{email.preview || "Keine Vorschau verfügbar"}</span>
@@ -402,7 +415,7 @@ const MailRow = memo(function MailRow({
               </span>
             ) : null}
             {email.tags.slice(0, 3).map((tag) => (
-              <span key={tag.id} className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-label-2">
+              <span key={tag.id} className="inline-flex items-center gap-1 rounded-[6px] bg-surface px-2 py-0.5 text-[11px] font-medium text-label-2">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
                 {tag.name}
               </span>
@@ -411,8 +424,11 @@ const MailRow = memo(function MailRow({
           </span>
         ) : null}
       </span>
-      <span className="absolute right-2.5 top-2 hidden items-center gap-0.5 rounded-full border border-line bg-canvas p-0.5 shadow-float group-hover:flex">
+      <span className="pointer-events-none absolute right-2.5 top-2 flex translate-x-2 scale-95 items-center gap-0.5 rounded-[10px] border border-line bg-canvas p-0.5 opacity-0 shadow-float transition-[opacity,transform] duration-200 ease-out group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:scale-100 group-hover:opacity-100">
         <QuickButton label={email.isRead ? "Als ungelesen markieren" : "Als gelesen markieren"} onClick={() => void onQuickAction(email.id, "read")}><MailOpen size={14} /></QuickButton>
+        {snoozedView
+          ? <QuickButton label="Jetzt zurückholen" onClick={() => void onUnsnooze(email.id)}><Inbox size={14} /></QuickButton>
+          : <QuickButton label="In einer Stunde erinnern" onClick={() => void onQuickAction(email.id, "snooze")}><AlarmClock size={14} /></QuickButton>}
         <QuickButton label="Favorit" active={email.isFavorite} onClick={() => void onQuickAction(email.id, "favorite")}><Star size={14} /></QuickButton>
         <QuickButton label="Wichtig" active={email.isImportant} onClick={() => void onQuickAction(email.id, "important")}><AlertCircle size={14} /></QuickButton>
         <QuickButton label="Archivieren" onClick={() => void onQuickAction(email.id, "archive")}><Archive size={14} /></QuickButton>
@@ -438,7 +454,7 @@ function QuickButton({ label, children, onClick, active = false, danger = false 
     <button
       type="button"
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+        "pressable inline-flex h-7 w-7 items-center justify-center rounded-[7px] transition-colors",
         active ? "text-flag" : danger ? "text-label-2 hover:bg-danger/10 hover:text-danger" : "text-label-2 hover:bg-surface hover:text-ink"
       )}
       onClick={(event) => {
@@ -491,11 +507,12 @@ function MailListSkeleton() {
   return (
     <div className="space-y-1 p-3">
       {Array.from({ length: 7 }).map((_, index) => (
-        <div key={index} className="flex animate-pulse gap-3 py-3">
-          <div className="h-11 w-11 rounded-full bg-surface" />
+        <div key={index} className="stagger-item flex gap-3 py-3" style={{ "--i": index } as CSSProperties}>
+          <div className="shimmer h-11 w-11 rounded-full" />
           <div className="flex-1 space-y-2 pt-1">
-            <div className="h-3 w-1/2 rounded-full bg-surface" />
-            <div className="h-3 w-3/4 rounded-full bg-surface" />
+            <div className="shimmer h-3 w-1/2 rounded-full" />
+            <div className="shimmer h-3 w-3/4 rounded-full" />
+            <div className="shimmer h-3 w-2/3 rounded-full" />
           </div>
         </div>
       ))}
@@ -514,7 +531,18 @@ function viewTitle(view: ReturnType<typeof useMailStore.getState>["selectedView"
   if (view === "unifiedInbox") return selectedCategoryId ? "Alle Posteingänge · Kategorie" : "Alle Posteingänge";
   if (view === "favorites") return "Favoriten";
   if (view === "important") return "Wichtig";
+  if (view === "snoozed") return "Erinnerungen";
   return "Nachrichten";
+}
+
+function formatSnoozeTime(value: string) {
+  const date = new Date(value);
+  const time = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (day: Date) => new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+  const days = Math.round((startOfDay(date) - startOfDay(new Date())) / 86_400_000);
+  if (days <= 0) return `Heute, ${time}`;
+  if (days === 1) return `Morgen, ${time}`;
+  return `${date.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" })}, ${time}`;
 }
 
 /** „14:32“, „Gestern“, „Montag“ oder „03.10.26“ – wie in der Android-App. */

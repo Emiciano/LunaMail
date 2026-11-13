@@ -1,6 +1,8 @@
 import { Notification, safeStorage } from "electron";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
+import dns from "node:dns/promises";
 import fs from "node:fs/promises";
+import net from "node:net";
 import http from "node:http";
 import path from "node:path";
 import { ImapFlow } from "imapflow";
@@ -24,8 +26,85 @@ const defaultSettings = {
   notificationPreview: false,
   runInBackground: true,
   accountNotifications: {},
-  accountAppearance: {}
+  accountAppearance: {},
+  signature: "",
+  signatureAuto: false,
+  undoSendSeconds: 5
 };
+
+
+const UNDO_SEND_CHOICES = [0, 5, 10, 20];
+const MAX_SIGNATURE_LENGTH = 2000;
+const MAX_SNOOZE_MS = 366 * 86400000;
+// Message-IDs für In-Reply-To/References: nur sichtbare Zeichen, keine Zeilenumbrüche.
+const MESSAGE_ID_PATTERN = /^<[^<>\s]{1,500}>$/;
+
+function sanitizeMessageIdList(value, max = 20) {
+  if (typeof value !== "string") return undefined;
+  const ids = value.split(/\s+/).filter((item) => MESSAGE_ID_PATTERN.test(item)).slice(-max);
+  return ids.length ? ids.join(" ") : undefined;
+}
+
+const EMAIL_ADDRESS_PATTERN = /^[^\s@<>()",;:]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,63}$/i;
+
+function normalizeAddress(value) {
+  const text = String(value || "");
+  const address = (text.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? text.match(/[^\s<>"',;]+@[^\s<>"',;]+/)?.[0] ?? "").trim().toLowerCase();
+  return EMAIL_ADDRESS_PATTERN.test(address) ? address : "";
+}
+
+/** List-Unsubscribe (RFC 2369) und List-Unsubscribe-Post (RFC 8058) aus rohen Kopfzeilen. */
+function parseUnsubscribeHeaders(rawHeaders) {
+  const unfolded = String(rawHeaders || "").replace(/\r?\n[ \t]+/g, " ");
+  const value = unfolded.match(/^list-unsubscribe:\s*(.+)$/im)?.[1] ?? "";
+  const post = unfolded.match(/^list-unsubscribe-post:\s*(.+)$/im)?.[1] ?? "";
+  const result = { checked: true };
+  for (const [, target] of value.matchAll(/<([^<>]{1,2000})>/g)) {
+    const entry = target.trim();
+    if (!result.https && /^https:\/\//i.test(entry)) {
+      try {
+        result.https = new URL(entry).toString();
+      } catch {}
+    } else if (!result.mailto && /^mailto:/i.test(entry)) {
+      const [addressPart, query = ""] = entry.slice(7).split("?");
+      const address = decodeURIComponent(addressPart || "").trim().toLowerCase();
+      if (EMAIL_ADDRESS_PATTERN.test(address)) {
+        const params = new URLSearchParams(query);
+        result.mailto = { address, subject: (params.get("subject") || "unsubscribe").slice(0, 200), body: (params.get("body") || "").slice(0, 2000) };
+      }
+    }
+  }
+  result.oneClick = Boolean(result.https) && /list-unsubscribe=one-click/i.test(post);
+  return result;
+}
+
+function isPrivateAddress(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split(".").map(Number);
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  const lower = ip.toLowerCase();
+  return lower === "::1" || lower === "::" || lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80") || lower.startsWith("::ffff:");
+}
+
+/** Abmelde-Links kommen vom Absender: nur HTTPS ins öffentliche Internet, nie ins lokale Netz. */
+async function assertPublicHttpsUrl(value) {
+  const url = new URL(value);
+  if (url.protocol !== "https:" || url.username || url.password) throw new Error("Der Abmelde-Link ist ungültig.");
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".localhost")) throw new Error("Der Abmelde-Link zeigt ins lokale Netz.");
+  const addresses = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true });
+  if (!addresses.length || addresses.some((entry) => isPrivateAddress(entry.address))) throw new Error("Der Abmelde-Link zeigt ins lokale Netz.");
+  return url;
+}
+
+function sanitizeSettings(settings) {
+  const next = { ...defaultSettings, ...(settings && typeof settings === "object" ? settings : {}) };
+  next.signature = typeof next.signature === "string" ? next.signature.slice(0, MAX_SIGNATURE_LENGTH) : "";
+  next.signatureAuto = Boolean(next.signatureAuto);
+  next.undoSendSeconds = UNDO_SEND_CHOICES.includes(Number(next.undoSendSeconds)) ? Number(next.undoSendSeconds) : defaultSettings.undoSendSeconds;
+  return next;
+}
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -46,6 +125,7 @@ const emptyState = () => ({
   emailTags: {},
   rules: [],
   contacts: [],
+  blockedSenders: [],
   settings: { ...defaultSettings },
   secrets: {},
   sync: {}
@@ -138,13 +218,16 @@ export class LunaBackend {
     try {
       stateNeedsEncryption = !(await this.localFileIsEncrypted(this.file));
       this.state = { ...emptyState(), ...await this.readLocalJsonFile(this.file) };
-      this.state.settings = { ...defaultSettings, ...this.state.settings };
+      this.state.settings = sanitizeSettings(this.state.settings);
     } catch {}
     const attachmentsMigrated = await this.migrateAttachmentsToDisk();
     const bodiesMigrated = await this.migrateBodiesToDisk();
     const cacheEncrypted = await this.migrateLocalCacheEncryption();
     if (stateNeedsEncryption || attachmentsMigrated || bodiesMigrated || cacheEncrypted) await this.persist();
     if (this.normalizeFolders()) await this.persist();
+    this.snoozeTimer = setInterval(() => void this.wakeSnoozedEmails().catch(() => undefined), 20000);
+    this.snoozeTimer.unref();
+    void this.wakeSnoozedEmails().catch(() => undefined);
     this.autoSyncTimer = setInterval(() => {
       this.lastAutoSync = Date.now();
       for (const account of this.state.accounts) {
@@ -680,14 +763,20 @@ export class LunaBackend {
       .filter((item) => !accountId || item.accountId === Number(accountId))
       .map((folder) => ({
         ...folder,
-        unreadCount: this.state.emails.filter((email) => email.folderId === folder.id && !email.isRead && !email.deletedAt).length
+        unreadCount: this.state.emails.filter((email) => email.folderId === folder.id && !email.isRead && !email.deletedAt && !this.isSnoozed(email)).length
       }));
+  }
+
+  isSnoozed(email, now = Date.now()) {
+    return Boolean(email.snoozedUntil) && new Date(email.snoozedUntil).getTime() > now;
   }
 
   get_emails({ folderId, query = "", view, accountId, filters = {} }) {
     const term = String(query || "").toLowerCase();
+    const now = Date.now();
     return this.state.emails
       .filter((email) => !email.deletedAt)
+      .filter((email) => (view === "snoozed") === this.isSnoozed(email, now))
       .filter((email) => !folderId || email.folderId === Number(folderId))
       .filter((email) => !accountId || email.accountId === Number(accountId))
       .filter((email) => view !== "favorites" || email.isFavorite)
@@ -707,7 +796,9 @@ export class LunaBackend {
       .filter((email) => !filters.dateRange || Date.now() - new Date(email.receivedAt).getTime() < (filters.dateRange === "today" ? 86400000 : 604800000))
       .filter((email) => !filters.before || new Date(email.receivedAt) < new Date(filters.before))
       .filter((email) => !filters.after || new Date(email.receivedAt) > new Date(filters.after))
-      .sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt)))
+      .sort((a, b) => view === "snoozed"
+        ? String(a.snoozedUntil).localeCompare(String(b.snoozedUntil))
+        : String(b.receivedAt).localeCompare(String(a.receivedAt)))
       .slice(0, 200)
       .map((email) => this.emailSummary(email));
   }
@@ -824,10 +915,180 @@ export class LunaBackend {
     return email.isImportant;
   }
 
-  get_mail_counts({ accountId } = {}) {
-    const emails = this.state.emails.filter((email) => !email.deletedAt && (!accountId || email.accountId === Number(accountId)));
+  async snooze_email({ id, until }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+    const time = new Date(String(until)).getTime();
+    if (!Number.isFinite(time) || time <= Date.now() || time - Date.now() > MAX_SNOOZE_MS) {
+      throw new Error("Ungültiger Erinnerungszeitpunkt.");
+    }
+    email.snoozedUntil = new Date(time).toISOString();
+    await this.persist();
+    return email.snoozedUntil;
+  }
+
+  async unsnooze_email({ id }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email || !email.snoozedUntil) return;
+    email.snoozedUntil = undefined;
+    await this.persist();
+  }
+
+  /** Holt fällige „Später“-Mails zurück in den Posteingang, markiert sie ungelesen und meldet sie. */
+  async wakeSnoozedEmails() {
     const now = Date.now();
+    const due = this.state.emails.filter((email) => email.snoozedUntil && new Date(email.snoozedUntil).getTime() <= now);
+    if (!due.length) return;
+    for (const email of due) {
+      email.snoozedUntil = undefined;
+      email.isRead = false;
+    }
+    await this.persist();
+    for (const email of due) {
+      if (email.uid) {
+        void this.withMailbox(email.accountId, email.folderId, (client) =>
+          client.messageFlagsRemove(email.uid, ["\\Seen"], { uid: true })
+        ).catch(() => undefined);
+      }
+    }
+    this.emit("snooze-due", due.map((email) => email.id));
+    if (this.settings.notificationsEnabled && Notification.isSupported()) {
+      for (const email of due.slice(0, 5)) {
+        const notification = new Notification({
+          title: "Erinnerung",
+          body: this.settings.notificationPreview ? email.subject || "(Kein Betreff)" : "Eine zurückgestellte Mail ist wieder da.",
+          silent: !this.settings.notificationSound
+        });
+        notification.on("click", this.showWindow);
+        notification.show();
+      }
+    }
+  }
+
+  isBlockedSender(sender) {
+    const address = normalizeAddress(sender);
+    return Boolean(address) && (this.state.blockedSenders || []).some((entry) => entry.address === address);
+  }
+
+  /** Mails blockierter Absender wandern in den Papierkorb des jeweiligen Kontos (wie in Apple Mail). */
+  async moveEmailsOfBlockedSenders(ids) {
+    let moved = 0;
+    for (const id of ids) {
+      const email = this.state.emails.find((item) => item.id === id);
+      if (!email) continue;
+      const trash = this.state.folders.find((folder) => folder.accountId === email.accountId && folder.role === "trash" && folder.serverAvailable !== false);
+      if (!trash || email.folderId === trash.id) continue;
+      await this.move_email({ id, targetFolderId: trash.id });
+      moved += 1;
+    }
+    return moved;
+  }
+
+  get_blocked_senders() {
+    return [...(this.state.blockedSenders || [])].sort((a, b) => a.address.localeCompare(b.address));
+  }
+
+  async block_sender({ sender, moveExisting = true }) {
+    const address = normalizeAddress(sender);
+    if (!address) throw new Error("Ungültige Absenderadresse.");
+    if (this.state.accounts.some((account) => account.email.toLowerCase() === address)) {
+      throw new Error("Eigene Adressen können nicht blockiert werden.");
+    }
+    this.state.blockedSenders ||= [];
+    if (!this.state.blockedSenders.some((entry) => entry.address === address)) {
+      const name = String(sender || "").replace(/<[^>]*>/g, "").replace(/["']/g, "").trim().slice(0, 200);
+      this.state.blockedSenders.push({ address, name: name && name.toLowerCase() !== address ? name : undefined, createdAt: new Date().toISOString() });
+      await this.persist();
+    }
+    let moved = 0;
+    if (moveExisting) {
+      const ids = this.state.emails
+        .filter((email) => !email.deletedAt && normalizeAddress(email.sender) === address && this.folder(email.folderId).role === "inbox")
+        .map((email) => email.id);
+      moved = await this.moveEmailsOfBlockedSenders(ids);
+    }
+    return { address, moved };
+  }
+
+  async unblock_sender({ address }) {
+    const normalized = normalizeAddress(address);
+    this.state.blockedSenders = (this.state.blockedSenders || []).filter((entry) => entry.address !== normalized);
+    await this.persist();
+  }
+
+  /** Abmelde-Möglichkeiten einer Mail; ältere Mails holen die Kopfzeilen einmalig vom Server nach. */
+  async get_unsubscribe_info({ id }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+    if (!email.unsubscribe?.checked && email.uid) {
+      try {
+        const headers = await this.withMailbox(email.accountId, email.folderId, async (client) => {
+          const message = await client.fetchOne(String(email.uid), { headers: ["list-unsubscribe", "list-unsubscribe-post"] }, { uid: true });
+          return message?.headers ? message.headers.toString("utf8") : "";
+        });
+        email.unsubscribe = parseUnsubscribeHeaders(headers);
+        await this.persist();
+      } catch {
+        return this.unsubscribeSummary(email);
+      }
+    }
+    return this.unsubscribeSummary(email);
+  }
+
+  unsubscribeSummary(email) {
+    const info = email.unsubscribe || {};
+    const method = info.oneClick ? "one-click" : info.mailto ? "mailto" : info.https ? "website" : "none";
+    return { method, unsubscribedAt: email.unsubscribedAt, host: info.https ? new URL(info.https).hostname : info.mailto?.address.split("@")[1] };
+  }
+
+  async unsubscribe({ id }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+    const info = email.unsubscribe || {};
+    if (info.oneClick && info.https) {
+      const url = await assertPublicHttpsUrl(info.https);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "LunaMail" },
+        body: "List-Unsubscribe=One-Click",
+        redirect: "manual",
+        signal: AbortSignal.timeout(15000)
+      });
+      // Weiterleitungen werden nicht verfolgt (könnten ins lokale Netz zeigen); ein 3xx gilt als angenommen.
+      if (!response.ok && !(response.status >= 300 && response.status < 400)) throw new Error(`Der Absender hat die Abmeldung abgelehnt (HTTP ${response.status}).`);
+    } else if (info.mailto) {
+      await this.send_mail({
+        draft: {
+          accountId: email.accountId,
+          to: info.mailto.address,
+          subject: info.mailto.subject || "unsubscribe",
+          body: info.mailto.body || "unsubscribe",
+          attachments: []
+        }
+      });
+    } else if (info.https) {
+      // Ohne One-Click lässt sich die Abmeldung nur auf der Website des Absenders abschließen.
+      await assertPublicHttpsUrl(info.https);
+      await this.openExternal?.(info.https);
+      return { method: "website", completed: false };
+    } else {
+      throw new Error("Diese Mail bietet keine Abmeldung an.");
+    }
+    const address = normalizeAddress(email.sender);
+    const now = new Date().toISOString();
+    for (const item of this.state.emails) {
+      if (item.id === email.id || (address && normalizeAddress(item.sender) === address)) item.unsubscribedAt = now;
+    }
+    await this.persist();
+    return { method: info.oneClick ? "one-click" : "mailto", completed: true };
+  }
+
+  get_mail_counts({ accountId } = {}) {
+    const now = Date.now();
+    const scoped = this.state.emails.filter((email) => !email.deletedAt && (!accountId || email.accountId === Number(accountId)));
+    const emails = scoped.filter((email) => !this.isSnoozed(email, now));
     return {
+      snoozed: scoped.length - emails.length,
       favorites: emails.filter((item) => item.isFavorite).length,
       important: emails.filter((item) => item.isImportant).length,
       unread: emails.filter((item) => !item.isRead && this.folder(item.folderId).role === "inbox").length,
@@ -922,6 +1183,8 @@ export class LunaBackend {
         bcc: draft.bcc || undefined,
         subject: draft.subject,
         text: draft.body,
+        inReplyTo: sanitizeMessageIdList(draft.inReplyTo, 1),
+        references: sanitizeMessageIdList(draft.references),
         attachments
     };
     let info;
@@ -1103,7 +1366,7 @@ export class LunaBackend {
   async delete_contact({ id }) { this.state.contacts = this.state.contacts.filter((item) => item.id !== Number(id)); await this.persist(); }
 
   get_settings() { return this.state.settings; }
-  async save_settings({ settings }) { this.state.settings = { ...defaultSettings, ...settings }; await this.persist(); }
+  async save_settings({ settings }) { this.state.settings = sanitizeSettings(settings); await this.persist(); }
 
   export_backup() {
     return {
@@ -1113,11 +1376,15 @@ export class LunaBackend {
       settings: this.state.settings,
       rules: this.state.rules,
       contacts: this.state.contacts,
-      tags: this.state.tags
+      tags: this.state.tags,
+      blockedSenders: this.state.blockedSenders || []
     };
   }
   async import_backup({ backup }) {
-    this.state.settings = { ...defaultSettings, ...backup.settings };
+    this.state.settings = sanitizeSettings(backup.settings);
+    this.state.blockedSenders = (Array.isArray(backup.blockedSenders) ? backup.blockedSenders : [])
+      .map((entry) => ({ address: normalizeAddress(entry?.address), name: typeof entry?.name === "string" ? entry.name.slice(0, 200) : undefined, createdAt: String(entry?.createdAt || new Date().toISOString()) }))
+      .filter((entry) => entry.address);
     this.state.rules = backup.rules || [];
     this.state.contacts = backup.contacts || [];
     this.state.tags = backup.tags || [];
@@ -1244,6 +1511,10 @@ export class LunaBackend {
       }
       this.state.sync[id] = { lastSyncAt: new Date().toISOString(), lastSyncError: undefined };
       await this.persist();
+      if (report.blockedIds?.length) {
+        await this.moveEmailsOfBlockedSenders(report.blockedIds).catch((error) => report.errors.push(`Blockierte Mails: ${error?.message || error}`));
+        delete report.blockedIds;
+      }
       this.emit("sync-account-complete", report);
       this.notify(report);
       return report;
@@ -1369,8 +1640,11 @@ export class LunaBackend {
       isFavorite: message.flags?.has("\\Flagged") || false,
       isImportant: false,
       hasAttachments: Boolean(parsed.attachments?.length),
+      unsubscribe: parseUnsubscribeHeaders((parsed.headerLines || []).filter((item) => item.key.startsWith("list-unsubscribe")).map((item) => item.line).join("\r\n")),
       updatedAt: new Date().toISOString()
     };
+    if (!email.unsubscribe.https && !email.unsubscribe.mailto) email.unsubscribe = { checked: true };
+    const blocked = folder.role === "inbox" && this.isBlockedSender(email.sender);
     email.bodyPath = await this.storeEmailBody(
       email.id,
       parsed.text || "",
@@ -1379,6 +1653,10 @@ export class LunaBackend {
     this.state.emails.push(email);
     await this.storeParsedAttachments(email.id, parsed.attachments || []);
     report.messagesSynced += 1;
+    if (blocked) {
+      (report.blockedIds ||= []).push(email.id);
+      return;
+    }
     if (folder.role === "inbox") {
       report.newMessages.push({
         emailId: email.id,

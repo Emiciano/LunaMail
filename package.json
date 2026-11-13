@@ -1,6 +1,6 @@
 {
   "name": "lunamail",
-  "version": "0.9.62",
+  "version": "0.9.63",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",
@@ -20,7 +20,7 @@
     "imapflow": "^1.4.6",
     "lucide-react": "^0.468.0",
     "mailparser": "^3.9.14",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.5.5",

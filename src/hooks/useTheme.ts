@@ -26,12 +26,47 @@ const accentSoftValues: Record<AccentColor, string> = {
   gray: "248 250 252"
 };
 
+let lastPointer: { x: number; y: number } | null = null;
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; }, { capture: true, passive: true });
+}
+
+export function applyThemeClasses(theme: ThemeMode) {
+  const root = document.documentElement;
+  root.classList.remove("theme-light", "theme-dark", "theme-silver");
+  root.classList.add(`theme-${theme}`);
+  root.classList.toggle("dark", theme !== "light");
+}
+
+type ViewTransitionDocument = Document & { startViewTransition?: (update: () => void) => { ready: Promise<void> } };
+
+/** Wechselt das Design mit einer runden Einblendung ab der letzten Klickposition. */
+export function transitionTheme(theme: ThemeMode, update: () => void) {
+  const doc = document as ViewTransitionDocument;
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (!doc.startViewTransition || reduced) {
+    update();
+    return;
+  }
+  const x = lastPointer?.x ?? window.innerWidth / 2;
+  const y = lastPointer?.y ?? window.innerHeight / 2;
+  const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+  const transition = doc.startViewTransition(() => {
+    applyThemeClasses(theme);
+    update();
+  });
+  void transition.ready.then(() => {
+    document.documentElement.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+      { duration: 520, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" }
+    );
+  }).catch(() => undefined);
+}
+
 export function useTheme(theme: ThemeMode, accentColor: AccentColor, fontSize = 16) {
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("theme-light", "theme-dark", "theme-silver");
-    root.classList.add(`theme-${theme}`);
-    root.classList.toggle("dark", theme !== "light");
+    applyThemeClasses(theme);
     // „Standard“ (white) folgt dem Design: Schwarz im hellen, Weiß im dunklen Design.
     if (accentColor === "white") {
       for (const name of ["--accent", "--accent-soft", "--accent-contrast"]) root.style.removeProperty(name);

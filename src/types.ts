@@ -71,12 +71,16 @@ export type Email = {
   isImportant: boolean;
   deletedAt?: string;
   updatedAt?: string;
+  snoozedUntil?: string;
+  unsubscribe?: { checked?: boolean; https?: string; mailto?: { address: string }; oneClick?: boolean };
+  unsubscribedAt?: string;
   hasAttachments: boolean;
   attachments: Attachment[];
   tags: Tag[];
 };
 
 export type MailCounts = {
+  snoozed?: number;
   favorites: number;
   important: number;
   unread: number;
@@ -157,6 +161,8 @@ export type Draft = {
   body: string;
   updatedAt?: string;
   attachments: Attachment[];
+  inReplyTo?: string;
+  references?: string;
 };
 
 export type Settings = {
@@ -174,6 +180,9 @@ export type Settings = {
   runInBackground: boolean;
   accountNotifications: Record<string, boolean>;
   accountAppearance: Record<string, AccountAppearance>;
+  signature?: string;
+  signatureAuto?: boolean;
+  undoSendSeconds?: number;
   googleOAuthClientId?: string;
   defaultAccountId?: number;
 };
@@ -300,4 +309,16 @@ export type AttachmentPreview = {
   fileName: string;
   contentType: string;
   dataBase64: string;
+};
+
+export type BlockedSender = {
+  address: string;
+  name?: string;
+  createdAt: string;
+};
+
+export type UnsubscribeInfo = {
+  method: "one-click" | "mailto" | "website" | "none";
+  unsubscribedAt?: string;
+  host?: string;
 };

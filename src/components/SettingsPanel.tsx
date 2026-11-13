@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Download, ExternalLink, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
+import { Ban, Check, ChevronDown, Download, ExternalLink, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
@@ -13,7 +13,7 @@ import { useAppUpdate } from "../hooks/useAppUpdate";
 import { cn } from "../lib/cn";
 import { SenderAvatar } from "./SenderAvatar";
 
-type Tab = "accounts" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
+type Tab = "accounts" | "blocked" | "general" | "themes" | "security" | "sync" | "rules" | "contacts" | "tags" | "backup" | "about";
 
 const accentOptions: { value: AccentColor; label: string; className: string }[] = [
   { value: "white", label: "Standard", className: "bg-ink" },
@@ -52,7 +52,7 @@ function requestSecret(title: string): Promise<string | undefined> {
     overlay.className = "overlay-enter fixed inset-0 grid place-items-center bg-scrim/30 px-4 backdrop-blur-[6px]";
     overlay.style.zIndex = "2147483647";
     const panel = document.createElement("form");
-    panel.className = "dialog-enter w-full max-w-sm rounded-3xl border border-line bg-canvas p-6 text-ink shadow-float";
+    panel.className = "dialog-enter w-full max-w-sm rounded-[14px] border border-line bg-canvas p-6 text-ink shadow-float";
     const label = document.createElement("label");
     label.className = "block font-display text-[18px] font-extrabold leading-6";
     label.textContent = title;
@@ -110,6 +110,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     saveRule,
     deleteRule,
     loadContacts,
+    blockedSenders,
+    loadBlockedSenders,
+    unblockSender,
     saveContact,
     deleteContact,
     loadTags,
@@ -137,6 +140,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     saveRule: state.saveRule,
     deleteRule: state.deleteRule,
     loadContacts: state.loadContacts,
+    blockedSenders: state.blockedSenders,
+    loadBlockedSenders: state.loadBlockedSenders,
+    unblockSender: state.unblockSender,
     saveContact: state.saveContact,
     deleteContact: state.deleteContact,
     loadTags: state.loadTags,
@@ -183,8 +189,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void loadRules(selectedAccountId);
     void loadContacts();
+    void loadBlockedSenders();
     void loadTags();
-  }, [loadContacts, loadRules, loadTags, selectedAccountId]);
+  }, [loadBlockedSenders, loadContacts, loadRules, loadTags, selectedAccountId]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -522,7 +529,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-label="Einstellungen"
-        className="dialog-enter flex h-[min(860px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-3rem))] overflow-hidden rounded-3xl border border-line bg-canvas text-ink shadow-float"
+        className="dialog-enter flex h-[min(860px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-3rem))] overflow-hidden rounded-[14px] border border-line bg-canvas text-ink shadow-float"
       >
         <nav className="mail-scroll flex w-[248px] shrink-0 flex-col overflow-y-auto bg-sidebar px-3 pb-4 pt-7">
           <h2 className="px-3 font-display text-[26px] font-extrabold leading-8">Einstellungen</h2>
@@ -732,6 +739,32 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                     </Row>
                   </Group>
 
+                  <Group title="Schreiben">
+                    <Row label="Senden rückgängig" description="So lange kannst du eine gesendete Mail noch zurückholen.">
+                      <SelectControl
+                        label="Senden rückgängig"
+                        value={String(draft.undoSendSeconds ?? 5)}
+                        onChange={(value) => applySettings({ ...draft, undoSendSeconds: Number(value) })}
+                        options={[["0", "Aus"], ["5", "5 Sekunden"], ["10", "10 Sekunden"], ["20", "20 Sekunden"]]}
+                      />
+                    </Row>
+                    <Row label="Signatur automatisch einfügen" description="Gilt für neue Mails, Antworten und Weiterleitungen.">
+                      <Switch label="Signatur automatisch einfügen" checked={draft.signatureAuto ?? false} onChange={(checked) => applySettings({ ...draft, signatureAuto: checked })} />
+                    </Row>
+                    <div className="px-4 pb-4 pt-1">
+                      <textarea
+                        value={draft.signature ?? ""}
+                        maxLength={2000}
+                        rows={4}
+                        placeholder={"Viele Grüße\nEmilio"}
+                        aria-label="Signatur"
+                        onChange={(event) => setDraft({ ...draft, signature: event.target.value })}
+                        onBlur={(event) => applySettings({ ...draft, signature: event.currentTarget.value })}
+                        className="block w-full resize-y rounded-[10px] border border-line bg-canvas px-3 py-2.5 text-[14px] leading-6 text-ink outline-none placeholder:text-label-3 focus:border-ink/25"
+                      />
+                    </div>
+                  </Group>
+
                   <Group title="Konto & App">
                     <Row label="Standardkonto" description="Absender für neue Nachrichten.">
                       <SelectControl
@@ -788,7 +821,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                           >
                             <span
                               className={cn(
-                                "flex h-28 overflow-hidden rounded-2xl border transition-shadow",
+                                "flex h-28 overflow-hidden rounded-[12px] border transition-shadow",
                                 active ? "border-transparent ring-[2.5px] ring-[rgb(var(--accent))] ring-offset-2 ring-offset-surface" : "border-line group-hover:shadow-md"
                               )}
                               style={{ background: option.preview[0] }}
@@ -1033,6 +1066,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 </>
               ) : null}
 
+              {tab === "blocked" ? (
+                <Group title="Blockierte Absender" footer="Mails dieser Absender landen direkt im Papierkorb und lösen keine Benachrichtigung aus. Blockieren kannst du im Lesefenster über das Verbotsschild.">
+                  {blockedSenders.length === 0 ? <EmptyRow>Niemand blockiert.</EmptyRow> : null}
+                  {blockedSenders.map((entry) => (
+                    <div key={entry.address} className="flex items-center gap-3.5 px-4 py-3">
+                      <SenderAvatar address={entry.address} name={entry.name || entry.address} className="h-10 w-10 text-[14px]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[15px] font-bold">{entry.name || entry.address}</div>
+                        <div className="truncate text-[13px] text-label-2">{entry.name ? `${entry.address} · ` : ""}seit {new Date(entry.createdAt).toLocaleDateString("de-DE")}</div>
+                      </div>
+                      <SoftButton onClick={() => void unblockSender(entry.address)}>Freigeben</SoftButton>
+                    </div>
+                  ))}
+                </Group>
+              ) : null}
+
               {tab === "tags" ? (
                 <>
                   {tagFormOpen ? (
@@ -1089,7 +1138,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
               {tab === "about" ? (
                 <>
-                  <div className="flex items-center gap-5 rounded-[22px] bg-surface px-6 py-6">
+                  <div className="flex items-center gap-5 rounded-[14px] bg-surface px-6 py-6">
                     <img src="./icon.png" alt="" className="h-[72px] w-[72px] rounded-[18px] shadow-sm" />
                     <div className="min-w-0 flex-1">
                       <div className="font-display text-[28px] font-extrabold leading-8">LunaMail</div>
@@ -1141,7 +1190,8 @@ const tabs: { id: Tab; label: string; description: string; icon: LucideIcon }[] 
   { id: "rules", label: "Regeln", description: "Eingehende Mails automatisch sortieren und markieren.", icon: ListFilter },
   { id: "contacts", label: "Kontakte", description: "Adressen, die beim Schreiben vorgeschlagen werden.", icon: Users },
   { id: "tags", label: "Tags", description: "Eigene Schlagwörter für deine Mails.", icon: TagIcon },
-  { id: "general", label: "Allgemein", description: "Darstellung, Standardkonto und Benachrichtigungen.", icon: SlidersHorizontal },
+  { id: "blocked", label: "Blockiert", description: "Absender, deren Mails direkt im Papierkorb landen.", icon: Ban },
+  { id: "general", label: "Allgemein", description: "Darstellung, Schreiben, Standardkonto und Benachrichtigungen.", icon: SlidersHorizontal },
   { id: "themes", label: "Design", description: "Erscheinungsbild und Akzentfarbe.", icon: Palette },
   { id: "sync", label: "Synchronisierung", description: "Status und Diagnose der Verbindung zum Mailserver.", icon: RefreshCw },
   { id: "security", label: "Sicherheit", description: "Wie LunaMail Passwörter und Inhalte schützt.", icon: ShieldCheck },
@@ -1150,7 +1200,7 @@ const tabs: { id: Tab; label: string; description: string; icon: LucideIcon }[] 
 ];
 
 const navGroups: { title: string; tabs: Tab[] }[] = [
-  { title: "Mail", tabs: ["accounts", "rules", "contacts", "tags"] },
+  { title: "Mail", tabs: ["accounts", "rules", "contacts", "tags", "blocked"] },
   { title: "App", tabs: ["general", "themes", "sync"] },
   { title: "System", tabs: ["security", "backup", "about"] }
 ];
@@ -1168,7 +1218,7 @@ function Group({ title, action, footer, padded = false, children }: { title: str
         <h4 className="font-display text-[18px] font-extrabold">{title}</h4>
         {action}
       </div>
-      <div className={cn("overflow-hidden rounded-[18px] bg-surface", padded ? "p-5" : "divide-y divide-line")}>{children}</div>
+      <div className={cn("overflow-hidden rounded-[14px] bg-surface", padded ? "p-5" : "divide-y divide-line")}>{children}</div>
       {footer ? <p className="mt-2 px-1 text-[13px] leading-5 text-label-2">{footer}</p> : null}
     </section>
   );
