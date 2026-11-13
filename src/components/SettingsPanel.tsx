@@ -1,4 +1,4 @@
-import { Ban, Check, ChevronDown, Download, ExternalLink, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
+import { Ban, Check, ChevronDown, Download, ExternalLink, Globe, HardDrive, Image, Info, ListFilter, Lock, Palette, Pencil, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Star, Tag as TagIcon, Trash2, Upload, UserRound, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
@@ -1067,19 +1067,32 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               ) : null}
 
               {tab === "blocked" ? (
-                <Group title="Blockierte Absender" footer="Mails dieser Absender landen direkt im Papierkorb und lösen keine Benachrichtigung aus. Blockieren kannst du im Lesefenster über das Verbotsschild.">
-                  {blockedSenders.length === 0 ? <EmptyRow>Niemand blockiert.</EmptyRow> : null}
-                  {blockedSenders.map((entry) => (
-                    <div key={entry.address} className="flex items-center gap-3.5 px-4 py-3">
-                      <SenderAvatar address={entry.address} name={entry.name || entry.address} className="h-10 w-10 text-[14px]" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[15px] font-bold">{entry.name || entry.address}</div>
-                        <div className="truncate text-[13px] text-label-2">{entry.name ? `${entry.address} · ` : ""}seit {new Date(entry.createdAt).toLocaleDateString("de-DE")}</div>
+                <>
+                  <Group title="Spam-Schutz" footer="Prüft jede neue Mail direkt beim Abholen auf dem Gerät: zufällig erzeugte Absenderadressen, gefälschte Absender, fehlgeschlagene Echtheitsprüfung (SPF, DKIM, DMARC) und Domains, die schon Spam geschickt haben. Verdächtige Mails landen ohne Benachrichtigung im Spam-Ordner. Kontakte und Leute, denen du geschrieben hast, sind ausgenommen.">
+                    <Row label="Verdächtige Mails aussortieren" description="Links und Bilder in aussortierten Mails bleiben gesperrt.">
+                      <Switch label="Spam-Schutz" checked={draft.spamProtection ?? true} onChange={(checked) => applySettings({ ...draft, spamProtection: checked })} />
+                    </Row>
+                  </Group>
+                  <Group title="Blockierte Absender und Domains" footer="Mails dieser Absender landen direkt im Papierkorb und lösen keine Benachrichtigung aus. Blockieren kannst du im Lesefenster über das Verbotsschild, dort auch für eine ganze Domain.">
+                    {blockedSenders.length === 0 ? <EmptyRow>Niemand blockiert.</EmptyRow> : null}
+                    {blockedSenders.map((entry, index) => (
+                      <div key={`${entry.type ?? "address"}-${entry.address}`} className="stagger-item flex items-center gap-3.5 px-4 py-3" style={{ "--i": index } as CSSProperties}>
+                        {entry.type === "domain" ? (
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger"><Globe size={18} /></span>
+                        ) : (
+                          <SenderAvatar address={entry.address} name={entry.name || entry.address} className="h-10 w-10 text-[14px]" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[15px] font-bold">{entry.type === "domain" ? `@${entry.address}` : entry.name || entry.address}</div>
+                          <div className="truncate text-[13px] text-label-2">
+                            {entry.type === "domain" ? "Ganze Domain inkl. Unterdomains · " : entry.name ? `${entry.address} · ` : ""}seit {new Date(entry.createdAt).toLocaleDateString("de-DE")}
+                          </div>
+                        </div>
+                        <SoftButton onClick={() => void unblockSender(entry.address)}>Freigeben</SoftButton>
                       </div>
-                      <SoftButton onClick={() => void unblockSender(entry.address)}>Freigeben</SoftButton>
-                    </div>
-                  ))}
-                </Group>
+                    ))}
+                  </Group>
+                </>
               ) : null}
 
               {tab === "tags" ? (
@@ -1190,7 +1203,7 @@ const tabs: { id: Tab; label: string; description: string; icon: LucideIcon }[] 
   { id: "rules", label: "Regeln", description: "Eingehende Mails automatisch sortieren und markieren.", icon: ListFilter },
   { id: "contacts", label: "Kontakte", description: "Adressen, die beim Schreiben vorgeschlagen werden.", icon: Users },
   { id: "tags", label: "Tags", description: "Eigene Schlagwörter für deine Mails.", icon: TagIcon },
-  { id: "blocked", label: "Blockiert", description: "Absender, deren Mails direkt im Papierkorb landen.", icon: Ban },
+  { id: "blocked", label: "Spam & Blockiert", description: "Spam-Schutz sowie blockierte Absender und Domains.", icon: Ban },
   { id: "general", label: "Allgemein", description: "Darstellung, Schreiben, Standardkonto und Benachrichtigungen.", icon: SlidersHorizontal },
   { id: "themes", label: "Design", description: "Erscheinungsbild und Akzentfarbe.", icon: Palette },
   { id: "sync", label: "Synchronisierung", description: "Status und Diagnose der Verbindung zum Mailserver.", icon: RefreshCw },

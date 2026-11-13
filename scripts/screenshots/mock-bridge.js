@@ -15,6 +15,7 @@
     { id: 13, accountId: 1, name: "Drafts", remoteName: "Drafts", role: "drafts", unreadCount: 0 },
     { id: 14, accountId: 1, name: "Archive", remoteName: "Archive", role: "archive", unreadCount: 0 },
     { id: 15, accountId: 1, name: "Trash", remoteName: "Trash", role: "trash", unreadCount: 0 },
+    { id: 17, accountId: 1, name: "Spam", remoteName: "Spam", role: "spam", unreadCount: 2 },
     { id: 16, accountId: 1, name: "Projekte", remoteName: "Projekte", role: "custom", unreadCount: 1 },
     { id: 21, accountId: 2, name: "INBOX", remoteName: "INBOX", role: "inbox", unreadCount: 2 }
   ];
@@ -37,6 +38,11 @@
     mail(109, "Studio Nord <buchung@studio.example>", "Mietvertrag Studio B", "Anbei der Vertrag für die Studiomiete im Dezember. Bitte unterschrieben zurücksenden.", 60 * 30, { isRead: true, snoozedUntil: new Date(now + 14 * 3600_000).toISOString() }),
     mail(110, "Steuerbüro Lang <info@lang.example>", "Unterlagen für das 4. Quartal", "Bitte schicken Sie uns bis Monatsende die Belege für Oktober bis Dezember.", 60 * 40, { isRead: true, snoozedUntil: new Date(now + 3 * 86400_000).toISOString() })
   ];
+  const spamReasons = ["Absenderadresse wirkt zufällig erzeugt", "Ungewöhnliche Unterdomain", "Kein Absendername"];
+  emails.push(
+    mail(201, "fbaggoprgwiqrek@s.sellluna.com", "Ihr Paket wartet – Zustellung bestätigen", "Ihre Sendung konnte nicht zugestellt werden. Bestätigen Sie jetzt Ihre Adresse über den Link.", 20, { folderId: 17, spam: { reasons: spamReasons } }),
+    mail(202, "lrhrlknbx@s.sellluna.com", "Gewinnbenachrichtigung #48213", "Herzlichen Glückwunsch! Sie wurden als Gewinner ausgewählt. Klicken Sie hier, um Ihren Preis anzufordern.", 95, { folderId: 17, spam: { reasons: spamReasons.slice(0, 2).concat("Domain hat schon Spam geschickt") } })
+  );
   let blocked = [{ address: "angebote@gewinnspiel.example", name: "Gewinnspiel-Team", createdAt: new Date(now - 9 * 86400_000).toISOString() }];
   const snoozed = (email) => email.snoozedUntil && new Date(email.snoozedUntil).getTime() > Date.now();
   const settings = {
@@ -67,7 +73,9 @@
     get_health_status: () => health,
     get_mail_counts: () => counts,
     get_drafts: () => [],
-    get_emails: ({ view }) => emails.filter((email) => (view === "snoozed") === Boolean(snoozed(email))),
+    get_emails: ({ view, folderId }) => emails.filter((email) => (view === "snoozed") === Boolean(snoozed(email)) && (folderId === 17 ? email.folderId === 17 : email.folderId !== 17)),
+    mark_not_spam: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) { email.spam = undefined; email.folderId = 11; } return { address: "" }; },
+    mark_as_spam: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) { email.spam = { reasons: ["Von dir als Spam gemeldet"] }; email.folderId = 17; } return { moved: 1 }; },
     snooze_email: ({ id, until }) => { const email = emails.find((item) => item.id === id); if (email) email.snoozedUntil = until; return until; },
     unsnooze_email: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) email.snoozedUntil = undefined; },
     save_draft: () => 1,
@@ -77,7 +85,14 @@
     },
     unsubscribe: ({ id }) => { const email = emails.find((item) => item.id === id); if (email) email.unsubscribedAt = new Date().toISOString(); return { method: "one-click", completed: true }; },
     get_blocked_senders: () => blocked.slice(),
-    block_sender: ({ sender }) => { const address = (sender.match(/<(.+)>/) || [, sender])[1].toLowerCase(); blocked.push({ address, name: sender.replace(/<.*>/, "").trim(), createdAt: new Date().toISOString() }); const before = emails.length; emails = emails.filter((email) => !email.sender.toLowerCase().includes(address)); return { address, moved: before - emails.length }; },
+    block_sender: ({ sender, scope }) => {
+      const full = (sender.match(/<(.+)>/) || [, sender])[1].toLowerCase();
+      const address = scope === "domain" ? full.split("@")[1].split(".").slice(-2).join(".") : full;
+      blocked.push({ address, type: scope === "domain" ? "domain" : "address", name: scope === "domain" ? undefined : sender.replace(/<.*>/, "").trim(), createdAt: new Date().toISOString() });
+      const before = emails.length;
+      emails = emails.filter((email) => !email.sender.toLowerCase().includes(scope === "domain" ? address : full));
+      return { address, type: scope === "domain" ? "domain" : "address", moved: before - emails.length };
+    },
     unblock_sender: ({ address }) => { blocked = blocked.filter((entry) => entry.address !== address); },
     toggle_favorite: () => true,
     move_email: ({ id }) => { emails = emails.filter((email) => email.id !== id); },

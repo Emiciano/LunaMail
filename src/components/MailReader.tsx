@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { AlarmClock, Archive, Ban, MailX, Check, ChevronDown, ChevronUp, Download, Forward, Mail, Maximize2, Paperclip, Reply, ReplyAll, Send, Star, Trash2, UserPlus, X } from "lucide-react";
+import { AlarmClock, Archive, Ban, MailX, Check, ChevronDown, ChevronUp, Download, Forward, Mail, Maximize2, Paperclip, Reply, ReplyAll, Send, ShieldAlert, ShieldCheck, Star, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { desktopDialog, openExternalLink } from "../services/desktop";
@@ -18,7 +18,7 @@ const SAFE_LINK_SCHEME = /^(https:|mailto:|tel:)/i;
 export function MailReader() {
   const {
     selectedEmail: currentEmail, emails, settings, contacts, closeEmail, replyToSelected, replyAllToSelected, forwardSelected, archiveSelected, deleteSelected,
-    saveContact, updateSettings, toggleFavoriteSelected, markUnreadSelected, snoozeSelected, unsnoozeEmail, openAdjacentEmail, quickReply, openComposer, blockSender, unsubscribeEmail
+    saveContact, updateSettings, toggleFavoriteSelected, markUnreadSelected, snoozeSelected, unsnoozeEmail, openAdjacentEmail, quickReply, openComposer, blockSender, unsubscribeEmail, markNotSpam, markAsSpam
   } = useMailStore(useShallow((state) => ({
     selectedEmail: state.selectedEmail,
     emails: state.emails,
@@ -30,6 +30,8 @@ export function MailReader() {
     openAdjacentEmail: state.openAdjacentEmail,
     quickReply: state.quickReply,
     blockSender: state.blockSender,
+    markNotSpam: state.markNotSpam,
+    markAsSpam: state.markAsSpam,
     unsubscribeEmail: state.unsubscribeEmail,
     openComposer: state.openComposer,
     settings: state.settings,
@@ -57,11 +59,13 @@ export function MailReader() {
 
   // Externe Bilder nur nach ausdrücklichem Klick, und dann nur für diese eine Mail.
   const [imagesAllowedFor, setImagesAllowedFor] = useState<number>();
-  const imagesAllowed = settings.externalImages === "always" || (selectedEmail !== undefined && imagesAllowedFor === selectedEmail.id);
+  // Bei Spam-Verdacht bleiben Bilder und Links immer gesperrt.
+  const isSpam = Boolean(selectedEmail?.spam);
+  const imagesAllowed = !isSpam && (settings.externalImages === "always" || (selectedEmail !== undefined && imagesAllowedFor === selectedEmail.id));
   const htmlView = useMemo(() => {
     if (!selectedEmail?.bodyHtml || selectedEmail.bodyHtml.length > MAX_HTML_LENGTH) return undefined;
-    return sanitizeEmailHtml(selectedEmail.bodyHtml, imagesAllowed);
-  }, [selectedEmail?.bodyHtml, imagesAllowed]);
+    return sanitizeEmailHtml(selectedEmail.bodyHtml, imagesAllowed, isSpam);
+  }, [selectedEmail?.bodyHtml, imagesAllowed, isSpam]);
 
 
   const [confirmBlock, setConfirmBlock] = useState(false);
@@ -118,6 +122,9 @@ export function MailReader() {
             </button>
             <button className="reader-icon-button" title="Als ungelesen markieren (U)" onClick={() => void markUnreadSelected()}><Mail size={18} /></button>
             <button className="reader-icon-button" title="Archivieren (E)" onClick={() => void archiveSelected()}><Archive size={18} /></button>
+            {selectedEmail.spam ? null : (
+              <button className="reader-icon-button" title="Als Spam melden" onClick={() => void markAsSpam(selectedEmail)}><ShieldAlert size={18} /></button>
+            )}
             <button className="reader-icon-button reader-icon-danger" title="Absender blockieren" onClick={() => setConfirmBlock(true)}><Ban size={18} /></button>
             <button className="reader-icon-button reader-icon-danger" title="Löschen (Entf)" onClick={() => void deleteSelected()}><Trash2 size={18} /></button>
             <span className="mx-1.5 h-5 w-px bg-line" />
@@ -170,6 +177,14 @@ export function MailReader() {
             ) : null}
           </header>
 
+          {selectedEmail.spam ? (
+            <SpamBar
+              key={`spam-${selectedEmail.id}`}
+              reasons={selectedEmail.spam.reasons}
+              onNotSpam={() => void markNotSpam(selectedEmail)}
+              onBlock={() => setConfirmBlock(true)}
+            />
+          ) : null}
           <UnsubscribeBar key={`unsubscribe-${selectedEmail.id}`} email={selectedEmail} senderName={senderContact.name || senderContact.email} onUnsubscribe={unsubscribeEmail} onBlock={blockSender} />
           <section className="max-w-full text-[15px] leading-7 text-ink">
             {selectedEmail.bodyHtml && selectedEmail.bodyHtml.length > MAX_HTML_LENGTH ? (
@@ -236,6 +251,7 @@ export function MailReader() {
             </section>
           ) : null}
 
+{selectedEmail.spam ? null : (
           <QuickReply
             key={`reply-${selectedEmail.id}`}
             recipient={senderContact.name || senderContact.email || selectedEmail.sender}
@@ -246,6 +262,7 @@ export function MailReader() {
               if (composer && text.trim()) openComposer({ ...composer, body: `${text.trim()}${composer.body ?? ""}` });
             }}
           />
+          )}
           <footer className="mt-3 flex flex-wrap gap-2">
             <ActionButton icon={<ReplyAll size={15} />} label="Allen antworten" onClick={replyAllToSelected} />
             <ActionButton icon={<Forward size={15} />} label="Weiterleiten" onClick={forwardSelected} />
@@ -257,12 +274,13 @@ export function MailReader() {
           danger
           icon={<Ban size={20} />}
           title={`${senderContact.name || senderContact.email || "Absender"} blockieren?`}
-          message={<>Neue Mails von <strong className="text-ink">{senderContact.email || selectedEmail.sender}</strong> landen direkt im Papierkorb, ohne Benachrichtigung. Vorhandene Mails aus dem Posteingang werden ebenfalls verschoben. Aufheben kannst du das unter Einstellungen → Blockiert.</>}
+          message={<>Neue Mails von <strong className="text-ink">{senderContact.email || selectedEmail.sender}</strong> landen direkt im Papierkorb, ohne Benachrichtigung. Vorhandene Mails aus dem Posteingang werden ebenfalls verschoben. Aufheben kannst du das unter Einstellungen → Spam & Blockiert.</>}
           confirmLabel="Blockieren"
+          option={senderDomain(senderContact.email || selectedEmail.sender) ? { label: `Ganze Domain blockieren (@${senderDomain(senderContact.email || selectedEmail.sender)})`, defaultChecked: Boolean(selectedEmail.spam) } : undefined}
           onCancel={() => setConfirmBlock(false)}
-          onConfirm={() => {
+          onConfirm={(wholeDomain) => {
             setConfirmBlock(false);
-            void blockSender(selectedEmail.sender);
+            void blockSender(selectedEmail.sender, wholeDomain ? "domain" : "address");
           }}
         />
       ) : null}
@@ -413,7 +431,38 @@ async function downloadAttachment(attachmentId: number, fileName: string) {
   await mailService.downloadAttachment(attachmentId, destinationPath);
 }
 
-function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { document: string; blockedRemoteImages: number } {
+/** Registrierbare Domain des Absenders, z. B. „s.sellluna.com“ → „sellluna.com“. */
+function senderDomain(sender: string) {
+  const address = sender.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? sender.match(/[^\s<>"',;]+@[^\s<>"',;]+/)?.[0] ?? "";
+  const labels = (address.split("@")[1] ?? "").toLowerCase().split(".").filter(Boolean);
+  if (labels.length < 2) return "";
+  const take = labels.length > 2 && labels[labels.length - 1].length === 2 && ["co", "com", "net", "org", "gov", "ac", "edu", "or", "ne", "go"].includes(labels[labels.length - 2]) ? 3 : 2;
+  return labels.slice(-take).join(".");
+}
+
+function SpamBar({ reasons, onNotSpam, onBlock }: { reasons: string[]; onNotSpam: () => void; onBlock: () => void }) {
+  return (
+    <div className="view-enter mb-5 flex items-start gap-3 rounded-[12px] border border-danger/25 bg-danger/[0.06] px-4 py-3">
+      <span className="pop-in mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-danger/10 text-danger"><ShieldAlert size={17} /></span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[14px] font-semibold text-ink">Vom Spam-Schutz aussortiert</div>
+        <div className="mt-0.5 text-[13px] leading-5 text-label-2">
+          {reasons.length ? `${reasons.join(" · ")}.` : "Diese Mail wirkt verdächtig."} Links und Bilder sind zu deinem Schutz gesperrt.
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button className="pressable inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-canvas px-3 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_rgb(var(--line))] hover:bg-surface" onClick={onNotSpam}>
+          <ShieldCheck size={15} /> Kein Spam
+        </button>
+        <button className="pressable inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-danger px-3 text-[13px] font-semibold text-white hover:bg-danger/90" onClick={onBlock}>
+          <Ban size={14} /> Blockieren
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean, disableLinks = false): { document: string; blockedRemoteImages: number } {
   const clean = DOMPurify.sanitize(rawHtml, {
     WHOLE_DOCUMENT: true,
     FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "link", "meta", "base"],
@@ -425,7 +474,7 @@ function sanitizeEmailHtml(rawHtml: string, allowExternalImages: boolean): { doc
 
   for (const link of doc.querySelectorAll("a[href]")) {
     const href = (link.getAttribute("href") ?? "").trim();
-    if (!SAFE_LINK_SCHEME.test(href)) {
+    if (disableLinks || !SAFE_LINK_SCHEME.test(href)) {
       link.removeAttribute("href");
       continue;
     }
