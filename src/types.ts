@@ -72,6 +72,7 @@ export type Email = {
   deletedAt?: string;
   updatedAt?: string;
   snoozedUntil?: string;
+  spam?: { reasons: string[]; detectedAt?: string };
   unsubscribe?: { checked?: boolean; https?: string; mailto?: { address: string }; oneClick?: boolean };
   unsubscribedAt?: string;
   hasAttachments: boolean;
@@ -97,6 +98,7 @@ export type SyncReport = {
   requestedMessages: number;
   errors: string[];
   newMessages: NewMessageSummary[];
+  spamFiltered?: number;
 };
 
 export type NewMessageSummary = {
@@ -183,6 +185,7 @@ export type Settings = {
   signature?: string;
   signatureAuto?: boolean;
   undoSendSeconds?: number;
+  spamProtection?: boolean;
   googleOAuthClientId?: string;
   defaultAccountId?: number;
 };
@@ -313,6 +316,7 @@ export type AttachmentPreview = {
 
 export type BlockedSender = {
   address: string;
+  type?: "address" | "domain";
   name?: string;
   createdAt: string;
 };

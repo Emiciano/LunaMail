@@ -175,7 +175,7 @@ function SideButton({ active, icon, label, count, onClick, index }: { active: bo
     <button
       style={index !== undefined ? ({ "--i": index } as CSSProperties) : undefined}
       className={`pressable relative flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left text-[14px] transition-[background-color,box-shadow,color] duration-200 ${index !== undefined ? "stagger-item " : ""}${
-        active ? "side-active bg-canvas font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_1px_rgb(var(--line))]" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink"
+        active ? "side-active bg-canvas font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_1px_rgb(var(--line))] dark:bg-ink/[0.15] dark:shadow-none" : "font-medium text-ink/80 hover:bg-ink/[0.04] hover:text-ink dark:hover:bg-ink/[0.05]"
       }`}
       onClick={onClick}
       aria-current={active ? "page" : undefined}

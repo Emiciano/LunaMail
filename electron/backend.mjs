@@ -1,3 +1,4 @@
+import { assessSpam, baseDomain } from "./spamFilter.mjs";
 import { Notification, safeStorage } from "electron";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 import dns from "node:dns/promises";
@@ -29,7 +30,8 @@ const defaultSettings = {
   accountAppearance: {},
   signature: "",
   signatureAuto: false,
-  undoSendSeconds: 5
+  undoSendSeconds: 5,
+  spamProtection: true
 };
 
 
@@ -46,6 +48,8 @@ function sanitizeMessageIdList(value, max = 20) {
 }
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@<>()",;:]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,63}$/i;
+
+const DOMAIN_PATTERN = /^[a-z0-9-]{1,63}(\.[a-z0-9-]{1,63})*\.[a-z]{2,63}$/;
 
 function normalizeAddress(value) {
   const text = String(value || "");
@@ -102,6 +106,7 @@ function sanitizeSettings(settings) {
   const next = { ...defaultSettings, ...(settings && typeof settings === "object" ? settings : {}) };
   next.signature = typeof next.signature === "string" ? next.signature.slice(0, MAX_SIGNATURE_LENGTH) : "";
   next.signatureAuto = Boolean(next.signatureAuto);
+  next.spamProtection = next.spamProtection !== false;
   next.undoSendSeconds = UNDO_SEND_CHOICES.includes(Number(next.undoSendSeconds)) ? Number(next.undoSendSeconds) : defaultSettings.undoSendSeconds;
   return next;
 }
@@ -126,6 +131,8 @@ const emptyState = () => ({
   rules: [],
   contacts: [],
   blockedSenders: [],
+  trustedSenders: [],
+  spamDomains: {},
   settings: { ...defaultSettings },
   secrets: {},
   sync: {}
@@ -474,7 +481,9 @@ export class LunaBackend {
   }
 
   async invoke(command, args) {
-    const method = this[command];
+    // Nur öffentliche Befehle (snake_case) sind aus dem Renderer erreichbar, keine internen Hilfsmethoden.
+    const isCommand = typeof command === "string" && (/^[a-z]+(?:_[a-z]+)+$/.test(command) || command === "unsubscribe") && Object.hasOwn(Object.getPrototypeOf(this), command);
+    const method = isCommand ? this[command] : undefined;
     if (typeof method !== "function") throw new Error(`Unbekannter Backend-Befehl: ${command}`);
     return method.call(this, args || {});
   }
@@ -967,7 +976,112 @@ export class LunaBackend {
 
   isBlockedSender(sender) {
     const address = normalizeAddress(sender);
-    return Boolean(address) && (this.state.blockedSenders || []).some((entry) => entry.address === address);
+    if (!address) return false;
+    const domain = address.split("@")[1];
+    return (this.state.blockedSenders || []).some((entry) =>
+      entry.type === "domain" ? domain === entry.address || domain.endsWith(`.${entry.address}`) : entry.address === address
+    );
+  }
+
+  /** Kontakte, Empfänger eigener Mails und als „Kein Spam“ markierte Absender gelten als bekannt. */
+  isKnownSender(address) {
+    if (!address) return false;
+    if ((this.state.trustedSenders || []).includes(address)) return true;
+    if (this.state.accounts.some((account) => account.email.toLowerCase() === address)) return true;
+    if (this.state.contacts.some((contact) => String(contact.email || "").toLowerCase() === address)) return true;
+    const domain = address.split("@")[1];
+    if ((this.state.trustedSenders || []).includes(`@${baseDomain(domain)}`)) return true;
+    return this.state.emails.some((email) => this.folder(email.folderId)?.role === "sent" && String(email.recipients || "").toLowerCase().includes(address));
+  }
+
+  /** Spam-Bewertung einer Mail; Domains, die schon Spam geschickt haben, fallen schneller auf. */
+  checkSpam(sender, rawHeaders = "") {
+    if (this.settings.spamProtection === false) return { spam: false, reasons: [] };
+    const address = normalizeAddress(sender);
+    const result = assessSpam({ sender, address, rawHeaders, known: this.isKnownSender(address) });
+    if (!result.spam && address && result.score >= 1) {
+      const learned = (this.state.spamDomains || {})[baseDomain(address.split("@")[1])] || 0;
+      if (learned >= 1) {
+        result.score += 2;
+        result.reasons.push("Domain hat schon Spam geschickt");
+        result.spam = result.score >= 3;
+      }
+    }
+    return result;
+  }
+
+  learnSpamDomain(sender) {
+    const address = normalizeAddress(sender);
+    if (!address) return;
+    const domain = baseDomain(address.split("@")[1]);
+    this.state.spamDomains ||= {};
+    this.state.spamDomains[domain] = Math.min(1000, (this.state.spamDomains[domain] || 0) + 1);
+    const keys = Object.keys(this.state.spamDomains);
+    if (keys.length > 500) delete this.state.spamDomains[keys[0]];
+  }
+
+  /** Verschiebt erkannte Spam-Mails in den Spam-Ordner (oder Papierkorb, falls es keinen gibt). */
+  async moveEmailsToSpam(ids) {
+    let moved = 0;
+    for (const id of ids) {
+      const email = this.state.emails.find((item) => item.id === id);
+      if (!email) continue;
+      const target =
+        this.state.folders.find((folder) => folder.accountId === email.accountId && folder.role === "spam" && folder.serverAvailable !== false) ||
+        this.state.folders.find((folder) => folder.accountId === email.accountId && folder.role === "trash" && folder.serverAvailable !== false);
+      if (!target || email.folderId === target.id) continue;
+      await this.move_email({ id, targetFolderId: target.id });
+      moved += 1;
+    }
+    return moved;
+  }
+
+  /** Einmalige Prüfung bereits vorhandener Posteingangs-Mails, z. B. nach dem Update. */
+  async scanInboxForSpam() {
+    if (this.state.spamScanVersion === 1 || this.settings.spamProtection === false) return 0;
+    const ids = [];
+    for (const email of this.state.emails) {
+      if (email.deletedAt || email.spam || this.folder(email.folderId)?.role !== "inbox") continue;
+      const result = this.checkSpam(email.sender);
+      if (result.spam) {
+        email.spam = { reasons: result.reasons.slice(0, 5), detectedAt: new Date().toISOString() };
+        this.learnSpamDomain(email.sender);
+        ids.push(email.id);
+      }
+    }
+    this.state.spamScanVersion = 1;
+    await this.persist();
+    return ids.length ? this.moveEmailsToSpam(ids) : 0;
+  }
+
+  /** „Kein Spam“: Absender wird vertraut und die Mail wandert zurück in den Posteingang. */
+  async mark_not_spam({ id }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+    const address = normalizeAddress(email.sender);
+    this.state.trustedSenders ||= [];
+    if (address && !this.state.trustedSenders.includes(address)) this.state.trustedSenders.push(address);
+    if (address) {
+      const domain = baseDomain(address.split("@")[1]);
+      if (this.state.spamDomains?.[domain]) delete this.state.spamDomains[domain];
+    }
+    delete email.spam;
+    const inbox = this.state.folders.find((folder) => folder.accountId === email.accountId && folder.role === "inbox");
+    await this.persist();
+    if (inbox && email.folderId !== inbox.id) await this.move_email({ id: email.id, targetFolderId: inbox.id });
+    return { address };
+  }
+
+  /** Manuell als Spam melden: lernt die Domain und verschiebt die Mail. */
+  async mark_as_spam({ id }) {
+    const email = this.state.emails.find((item) => item.id === Number(id));
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+    const address = normalizeAddress(email.sender);
+    this.state.trustedSenders = (this.state.trustedSenders || []).filter((entry) => entry !== address);
+    email.spam = { reasons: ["Von dir als Spam gemeldet"], detectedAt: new Date().toISOString() };
+    this.learnSpamDomain(email.sender);
+    await this.persist();
+    return { moved: await this.moveEmailsToSpam([email.id]) };
   }
 
   /** Mails blockierter Absender wandern in den Papierkorb des jeweiligen Kontos (wie in Apple Mail). */
@@ -988,31 +1102,36 @@ export class LunaBackend {
     return [...(this.state.blockedSenders || [])].sort((a, b) => a.address.localeCompare(b.address));
   }
 
-  async block_sender({ sender, moveExisting = true }) {
+  async block_sender({ sender, moveExisting = true, scope = "address" }) {
     const address = normalizeAddress(sender);
     if (!address) throw new Error("Ungültige Absenderadresse.");
     if (this.state.accounts.some((account) => account.email.toLowerCase() === address)) {
       throw new Error("Eigene Adressen können nicht blockiert werden.");
     }
+    const type = scope === "domain" ? "domain" : "address";
+    const value = type === "domain" ? baseDomain(address.split("@")[1]) : address;
+    if (type === "domain" && this.state.accounts.some((account) => baseDomain(account.email.toLowerCase().split("@")[1]) === value)) {
+      throw new Error("Die Domain deines eigenen Kontos kann nicht blockiert werden.");
+    }
     this.state.blockedSenders ||= [];
-    if (!this.state.blockedSenders.some((entry) => entry.address === address)) {
-      const name = String(sender || "").replace(/<[^>]*>/g, "").replace(/["']/g, "").trim().slice(0, 200);
-      this.state.blockedSenders.push({ address, name: name && name.toLowerCase() !== address ? name : undefined, createdAt: new Date().toISOString() });
+    if (!this.state.blockedSenders.some((entry) => entry.address === value && (entry.type || "address") === type)) {
+      const name = type === "domain" ? undefined : String(sender || "").replace(/<[^>]*>/g, "").replace(/["']/g, "").trim().slice(0, 200);
+      this.state.blockedSenders.push({ address: value, type, name: name && name.toLowerCase() !== address ? name : undefined, createdAt: new Date().toISOString() });
       await this.persist();
     }
     let moved = 0;
     if (moveExisting) {
       const ids = this.state.emails
-        .filter((email) => !email.deletedAt && normalizeAddress(email.sender) === address && this.folder(email.folderId).role === "inbox")
+        .filter((email) => !email.deletedAt && this.folder(email.folderId)?.role === "inbox" && this.isBlockedSender(email.sender))
         .map((email) => email.id);
       moved = await this.moveEmailsOfBlockedSenders(ids);
     }
-    return { address, moved };
+    return { address: value, type, moved };
   }
 
   async unblock_sender({ address }) {
-    const normalized = normalizeAddress(address);
-    this.state.blockedSenders = (this.state.blockedSenders || []).filter((entry) => entry.address !== normalized);
+    const value = String(address || "").trim().toLowerCase();
+    this.state.blockedSenders = (this.state.blockedSenders || []).filter((entry) => entry.address !== value);
     await this.persist();
   }
 
@@ -1377,14 +1496,24 @@ export class LunaBackend {
       rules: this.state.rules,
       contacts: this.state.contacts,
       tags: this.state.tags,
-      blockedSenders: this.state.blockedSenders || []
+      blockedSenders: this.state.blockedSenders || [],
+      trustedSenders: this.state.trustedSenders || []
     };
   }
   async import_backup({ backup }) {
     this.state.settings = sanitizeSettings(backup.settings);
     this.state.blockedSenders = (Array.isArray(backup.blockedSenders) ? backup.blockedSenders : [])
-      .map((entry) => ({ address: normalizeAddress(entry?.address), name: typeof entry?.name === "string" ? entry.name.slice(0, 200) : undefined, createdAt: String(entry?.createdAt || new Date().toISOString()) }))
+      .map((entry) => {
+        const type = entry?.type === "domain" ? "domain" : "address";
+        const raw = String(entry?.address || "").trim().toLowerCase();
+        const address = type === "domain" ? (DOMAIN_PATTERN.test(raw) ? raw : "") : normalizeAddress(raw);
+        return { address, type, name: typeof entry?.name === "string" ? entry.name.slice(0, 200) : undefined, createdAt: String(entry?.createdAt || new Date().toISOString()) };
+      })
       .filter((entry) => entry.address);
+    this.state.trustedSenders = (Array.isArray(backup.trustedSenders) ? backup.trustedSenders : [])
+      .map((entry) => normalizeAddress(entry))
+      .filter(Boolean)
+      .slice(0, 5000);
     this.state.rules = backup.rules || [];
     this.state.contacts = backup.contacts || [];
     this.state.tags = backup.tags || [];
@@ -1515,6 +1644,15 @@ export class LunaBackend {
         await this.moveEmailsOfBlockedSenders(report.blockedIds).catch((error) => report.errors.push(`Blockierte Mails: ${error?.message || error}`));
         delete report.blockedIds;
       }
+      if (report.spamIds?.length) {
+        report.spamFiltered = await this.moveEmailsToSpam(report.spamIds).catch((error) => {
+          report.errors.push(`Spam-Schutz: ${error?.message || error}`);
+          return 0;
+        });
+        delete report.spamIds;
+      }
+      const scanned = await this.scanInboxForSpam().catch(() => 0);
+      if (scanned) report.spamFiltered = (report.spamFiltered || 0) + scanned;
       this.emit("sync-account-complete", report);
       this.notify(report);
       return report;
@@ -1645,6 +1783,14 @@ export class LunaBackend {
     };
     if (!email.unsubscribe.https && !email.unsubscribe.mailto) email.unsubscribe = { checked: true };
     const blocked = folder.role === "inbox" && this.isBlockedSender(email.sender);
+    if (!blocked && folder.role === "inbox") {
+      const rawHeaders = (parsed.headerLines || [])
+        .filter((item) => /^(authentication-results|arc-authentication-results|received-spf|x-spam-flag|x-spam-status)$/.test(item.key))
+        .map((item) => item.line)
+        .join("\r\n");
+      const verdict = this.checkSpam(email.sender, rawHeaders);
+      if (verdict.spam) email.spam = { reasons: verdict.reasons.slice(0, 5), detectedAt: new Date().toISOString() };
+    }
     email.bodyPath = await this.storeEmailBody(
       email.id,
       parsed.text || "",
@@ -1655,6 +1801,11 @@ export class LunaBackend {
     report.messagesSynced += 1;
     if (blocked) {
       (report.blockedIds ||= []).push(email.id);
+      return;
+    }
+    if (email.spam) {
+      this.learnSpamDomain(email.sender);
+      (report.spamIds ||= []).push(email.id);
       return;
     }
     if (folder.role === "inbox") {

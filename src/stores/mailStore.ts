@@ -2,7 +2,7 @@ import { transitionTheme } from "../hooks/useTheme";
 import { create } from "zustand";
 import { isDesktop, listenDesktop } from "../services/desktop";
 import type { Account, BlockedSender, Contact, Draft, Email, Folder, HealthStatus, MailCounts, MailRule, RuleInput, Settings, SmartCategory, SyncReport, Tag } from "../types";
-import { mailService, type BackendView, type MailQueryFilters } from "../services/mailService";
+import { mailService, type BlockScope, type BackendView, type MailQueryFilters } from "../services/mailService";
 import { ensureNotificationPermission, showDesktopNotification } from "../services/notifications";
 import { parseSearchQuery } from "../lib/searchParser";
 
@@ -70,7 +70,9 @@ type MailState = {
   quickReply: (body: string) => Promise<void>;
   blockedSenders: BlockedSender[];
   loadBlockedSenders: () => Promise<void>;
-  blockSender: (sender: string) => Promise<void>;
+  blockSender: (sender: string, scope?: BlockScope) => Promise<void>;
+  markNotSpam: (email: Email) => Promise<void>;
+  markAsSpam: (email: Email) => Promise<void>;
   unblockSender: (address: string) => Promise<void>;
   unsubscribeEmail: (email: Email) => Promise<boolean>;
   loadInitial: () => Promise<void>;
@@ -732,6 +734,9 @@ export const useMailStore = create<MailState>((set, get) => ({
           : "Synchronisation abgeschlossen",
       syncError: report.errors.length ? report.errors.join("\n") : undefined
     });
+    if (report.spamFiltered) {
+      get().showIsland({ kind: "success", message: `Spam-Schutz · ${report.spamFiltered} ${report.spamFiltered === 1 ? "Mail" : "Mails"} aussortiert` }, 5000);
+    }
     if (report.messagesSynced > 0 || (report.newMessages?.length ?? 0) > 0) {
       scheduleBackgroundRefresh(get, set);
     } else {
@@ -1052,22 +1057,46 @@ export const useMailStore = create<MailState>((set, get) => ({
   async loadBlockedSenders() {
     set({ blockedSenders: await mailService.getBlockedSenders() });
   },
-  async blockSender(sender) {
+  async blockSender(sender, scope = "address") {
     try {
-      const result = await mailService.blockSender(sender, true);
+      const result = await mailService.blockSender(sender, true, scope);
       const opened = get().selectedEmail;
-      if (opened && bareAddress(opened.sender) === result.address) set({ selectedEmail: undefined });
+      const openedAddress = opened ? bareAddress(opened.sender) : "";
+      if (opened && (openedAddress === result.address || (result.type === "domain" && (openedAddress.endsWith(`@${result.address}`) || openedAddress.endsWith(`.${result.address}`))))) {
+        set({ selectedEmail: undefined });
+      }
       await get().loadBlockedSenders();
+      const label = result.type === "domain" ? `${result.address} blockiert` : "Absender blockiert";
       get().showIsland({
         kind: "success",
         message: result.moved > 0
-          ? `Absender blockiert · ${result.moved} ${result.moved === 1 ? "Mail" : "Mails"} im Papierkorb`
-          : "Absender blockiert",
+          ? `${label} · ${result.moved} ${result.moved === 1 ? "Mail" : "Mails"} im Papierkorb`
+          : label,
         actionLabel: "Rückgängig",
         action: () => void get().unblockSender(result.address)
       }, 7000);
     } catch (error) {
       get().showIsland({ kind: "error", message: `Blockieren fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
+    }
+    await refreshVisibleEmails(get, set);
+  },
+  async markNotSpam(email) {
+    try {
+      await mailService.markNotSpam(email.id);
+      if (get().selectedEmail?.id === email.id) set({ selectedEmail: { ...email, spam: undefined } });
+      get().showIsland({ kind: "success", message: "Kein Spam · zurück im Posteingang" });
+    } catch (error) {
+      get().showIsland({ kind: "error", message: `Fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
+    }
+    await refreshVisibleEmails(get, set);
+  },
+  async markAsSpam(email) {
+    try {
+      await mailService.markAsSpam(email.id);
+      if (get().selectedEmail?.id === email.id) set({ selectedEmail: undefined });
+      get().showIsland({ kind: "success", message: "Als Spam gemeldet · ähnliche Mails werden aussortiert" });
+    } catch (error) {
+      get().showIsland({ kind: "error", message: `Fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}` });
     }
     await refreshVisibleEmails(get, set);
   },
