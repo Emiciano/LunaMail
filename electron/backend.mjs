@@ -1,4 +1,4 @@
-import { assessSpam, baseDomain } from "./spamFilter.mjs";
+import { assessSpam, baseDomain, isSharedMailDomain } from "./spamFilter.mjs";
 import { Notification, safeStorage } from "electron";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 import dns from "node:dns/promises";
@@ -1014,6 +1014,7 @@ export class LunaBackend {
     const address = normalizeAddress(sender);
     if (!address) return;
     const domain = baseDomain(address.split("@")[1]);
+    if (!domain || isSharedMailDomain(domain)) return;
     this.state.spamDomains ||= {};
     this.state.spamDomains[domain] = Math.min(1000, (this.state.spamDomains[domain] || 0) + 1);
     const keys = Object.keys(this.state.spamDomains);

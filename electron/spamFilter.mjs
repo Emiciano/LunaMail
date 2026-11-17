@@ -5,6 +5,19 @@ const VOWELS = new Set(["a", "e", "i", "o", "u", "y", "ä", "ö", "ü"]);
 // Typische zweiteilige Länder-Endungen, damit „firma.co.uk“ als Domain erkannt wird.
 const SECOND_LEVEL = new Set(["co", "com", "net", "org", "gov", "ac", "edu", "or", "ne", "go"]);
 
+// Große Freemail-Anbieter: hier teilen sich Millionen fremder Absender eine Domain,
+// deshalb darf eine einzelne Spam-Mail nicht die ganze Domain verdächtig machen.
+const SHARED_MAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "outlook.com", "outlook.de", "hotmail.com", "hotmail.de", "live.com", "live.de", "msn.com",
+  "yahoo.com", "yahoo.de", "icloud.com", "me.com", "mac.com", "aol.com", "aol.de", "gmx.de", "gmx.net", "gmx.at", "gmx.ch",
+  "gmx.com", "web.de", "t-online.de", "freenet.de", "posteo.de", "mailbox.org", "proton.me", "protonmail.com", "mail.de", "yandex.com"
+]);
+
+/** Gemeinsam genutzte Freemail-Domain, die nicht als Spam-Domain gelernt werden darf? */
+export function isSharedMailDomain(domain) {
+  return SHARED_MAIL_DOMAINS.has(String(domain || "").toLowerCase());
+}
+
 /** Registrierbare Domain, z. B. „s.sellluna.com“ → „sellluna.com“. */
 export function baseDomain(domain) {
   const labels = String(domain || "").toLowerCase().split(".").filter(Boolean);
